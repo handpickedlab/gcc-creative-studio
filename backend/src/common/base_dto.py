@@ -68,6 +68,7 @@ class GenerationModelEnum(str, Enum):
     VTO = "virtual-try-on-001"
 
     # Video-Specific Models
+    GEMINI_OMNI = "gemini-omni-flash-preview"
     VEO_3_1_FAST_GENERATE_001 = "veo-3.1-fast-generate-001"
     VEO_3_1_LITE_GENERATE_001 = "veo-3.1-lite-generate-001"
     VEO_3_1_GENERATE_001 = "veo-3.1-generate-001"

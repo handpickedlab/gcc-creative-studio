@@ -54,6 +54,37 @@ class GenAIModelSetup:
                 raise
         return cls._client
 
+    _omni_client: Client | None = None
+
+    @classmethod
+    def get_omni_client(cls) -> Client:
+        """Initializes and returns a shared Omni GenAI client instance for Vertex AI."""
+        if cls._omni_client is None:
+            try:
+                config = config_service
+                project_id = config.PROJECT_ID
+                if project_id is None:
+                    raise ValueError("Project ID must be set.")
+
+                logger.info(
+                    f"Initializing shared Gemini Omni GenAI client for project '{project_id}' in location 'global'",
+                )
+
+                cls._omni_client = Client(
+                    vertexai=True,
+                    project=project_id,
+                    location="global",
+                    http_options={
+                        "base_url": "https://aiplatform.googleapis.com"
+                    },
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to initialize Gemini Omni GenAI client: %s", e
+                )
+                raise
+        return cls._omni_client
+
     @staticmethod
     def init() -> Client:
         """Returns the shared client instance."""

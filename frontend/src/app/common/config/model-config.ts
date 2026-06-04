@@ -234,6 +234,22 @@ export const MODEL_CONFIGS: GenerationModelConfig[] = [
   },
   // --- Video Models ---
   {
+    value: 'gemini-omni-flash-preview',
+    viewValue: 'Gemini Omni \n (Multi-Modal Reference)',
+    type: 'VIDEO',
+    icon: 'layers',
+    capabilities: {
+      supportedModes: [
+        'Text to Video',
+        'Ingredients to Video',
+        'Frames to Video',
+      ],
+      maxReferenceImages: 3,
+      supportedAspectRatios: ['16:9', '9:16'],
+      supportsAudio: true,
+    },
+  },
+  {
     value: 'veo-3.1-generate-001',
     viewValue: 'Veo 3.1 \n (Beta Audio)',
     type: 'VIDEO',

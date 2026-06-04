@@ -81,6 +81,8 @@ class AssetRoleEnum(str, Enum):
     IMAGE_REFERENCE_ASSET = (
         "image_reference_asset"  # An input for R2V with asset type
     )
+    VIDEO_REFERENCE = "video_reference"  # Video used as omni input reference
+    AUDIO_REFERENCE = "audio_reference"  # Audio used as omni input reference
 
 
 class SourceAssetLink(BaseModel):

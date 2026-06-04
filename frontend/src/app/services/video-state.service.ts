@@ -41,7 +41,7 @@ export class VideoStateService {
   private initialState: VideoState = {
     prompt: '',
     aspectRatio: '16:9',
-    model: 'veo-3.1-generate-001',
+    model: 'gemini-omni-flash-preview',
     style: null,
     colorAndTone: null,
     lighting: null,

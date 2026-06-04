@@ -53,6 +53,12 @@ export interface ReferenceImageDto {
   referenceType: 'ASSET' | 'STYLE';
 }
 
+export interface AssetReferenceDto {
+  id: number;
+  type: 'source_asset' | 'media_item';
+  index?: number;
+}
+
 export type VeoRequest = {
   prompt: string;
   generationModel: string;
@@ -65,14 +71,17 @@ export type VeoRequest = {
   negativePrompt: string;
   generateAudio: boolean;
   durationSeconds: number;
-  startImageAssetId?: number;
-  endImageAssetId?: number;
-  sourceVideoAssetId?: number;
+  startImageAssetId?: AssetReferenceDto;
+  endImageAssetId?: AssetReferenceDto;
+  sourceVideoAssetId?: AssetReferenceDto;
   sourceMediaItems?: SourceMediaItemLink[];
   workspaceId?: number;
   useBrandGuidelines: boolean;
   enhancePrompt?: boolean;
   referenceImages?: ReferenceImageDto[];
+  referenceVideo?: AssetReferenceDto | null;
+  referenceAudio?: AssetReferenceDto | null;
+  parentMediaItemId?: number | null;
 };
 
 export type SearchResponse = {

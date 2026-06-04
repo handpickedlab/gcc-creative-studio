@@ -219,6 +219,17 @@
         *ngIf="isVideo"
         variant="primary"
         size="medium"
+        (click)="onEditWithOmniClick()"
+        matTooltip="Edit video with Omni"
+      >
+        <mat-icon>layers</mat-icon>
+        Edit with Omni
+      </studio-button>
+
+      <studio-button
+        *ngIf="isVideo"
+        variant="primary"
+        size="medium"
         (click)="onExtendWithAiClick()"
         matTooltip="Extend with AI"
       >

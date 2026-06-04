@@ -43,6 +43,17 @@ class ReferenceImageDto(BaseDto):
     )
 
 
+class AssetReferenceDto(BaseDto):
+    id: int = Field(description="The ID of the asset.")
+    type: str = Field(
+        description="The type of asset: 'source_asset' or 'media_item'."
+    )
+    index: int | None = Field(
+        default=0,
+        description="The index of the media in the media item (if applicable).",
+    )
+
+
 class CreateVeoDto(BaseDto):
     """The refactored request model. Defaults are defined here to make the API
     contract explicit and self-documenting.
@@ -98,17 +109,17 @@ class CreateVeoDto(BaseDto):
         le=8,
         description="Duration in seconds for the videos to generate (between 1 and 8 secs).",
     )
-    start_image_asset_id: int | None = Field(
+    start_image_asset_id: AssetReferenceDto | None = Field(
         default=None,
-        description="The ID of the SourceAsset to use as the starting image.",
+        description="Object containing ID and type of asset to use as the starting image.",
     )
-    end_image_asset_id: int | None = Field(
+    end_image_asset_id: AssetReferenceDto | None = Field(
         default=None,
-        description="The ID of the SourceAsset to use as the ending image.",
+        description="Object containing ID and type of asset to use as the ending image.",
     )
-    source_video_asset_id: int | None = Field(
+    source_video_asset_id: AssetReferenceDto | None = Field(
         default=None,
-        description="The ID of the SourceAsset to use as the source video.",
+        description="Object containing ID and type of asset to use as the source video.",
     )
     source_media_items: list[SourceMediaItemLink] | None = Field(
         default=None,
@@ -126,6 +137,18 @@ class CreateVeoDto(BaseDto):
         default=None,
         max_length=3,
         description="A list of reference images, each with an ID and a type (ASSET or STYLE).",
+    )
+    reference_video: AssetReferenceDto | None = Field(
+        default=None,
+        description="Object containing ID and type of asset to use as a reference video.",
+    )
+    reference_audio: AssetReferenceDto | None = Field(
+        default=None,
+        description="Object containing ID and type of asset to use as a reference audio.",
+    )
+    parent_media_item_id: int | None = Field(
+        default=None,
+        description="The ID of the parent media item for multi-turn conversation editing.",
     )
 
     @model_validator(mode="after")
@@ -161,7 +184,11 @@ class CreateVeoDto(BaseDto):
                 if item.role in reference_roles:
                     reference_roles_present = True
 
-        has_asset_references = bool(self.reference_images)
+        has_asset_references = (
+            bool(self.reference_images)
+            or bool(self.reference_video)
+            or bool(self.reference_audio)
+        )
         has_any_references = has_asset_references or reference_roles_present
 
         if has_any_references:
@@ -171,13 +198,15 @@ class CreateVeoDto(BaseDto):
                 and model != GenerationModelEnum.VEO_3_1_GENERATE_001
                 and model != GenerationModelEnum.VEO_3_1_LITE_GENERATE_001
                 and model != GenerationModelEnum.VEO_3_1_FAST_GENERATE_001
+                and model != GenerationModelEnum.GEMINI_OMNI
             ):
                 raise ValueError(
-                    "Reference images are only supported by the "
+                    "Reference images/media are only supported by the "
                     f"'{GenerationModelEnum.VEO_3_1_PREVIEW.value}' model, "
                     f"'{GenerationModelEnum.VEO_3_1_GENERATE_001.value}' model, "
-                    f"'{GenerationModelEnum.VEO_3_1_LITE_GENERATE_001.value}' model, or "
-                    f"'{GenerationModelEnum.VEO_3_1_FAST_GENERATE_001.value}' model.",
+                    f"'{GenerationModelEnum.VEO_3_1_LITE_GENERATE_001.value}' model, "
+                    f"'{GenerationModelEnum.VEO_3_1_FAST_GENERATE_001.value}' model, or "
+                    f"'{GenerationModelEnum.GEMINI_OMNI.value}' model.",
                 )
 
             start_image_present = bool(self.start_image_asset_id)
@@ -191,7 +220,7 @@ class CreateVeoDto(BaseDto):
                 or conflicting_roles_present
             ):
                 raise ValueError(
-                    "Reference images cannot be used at the same time as a start frame, end frame, or source video.",
+                    "Reference media cannot be used at the same time as a start frame, end frame, or source video.",
                 )
 
         return self
@@ -218,6 +247,7 @@ class CreateVeoDto(BaseDto):
     ) -> GenerationModelEnum:
         """Ensures that only supported generation models for video are used."""
         valid_video_ratios = [
+            GenerationModelEnum.GEMINI_OMNI,
             GenerationModelEnum.VEO_3_1_PREVIEW,
             GenerationModelEnum.VEO_3_1_GENERATE_001,
             GenerationModelEnum.VEO_3_1_LITE_GENERATE_001,

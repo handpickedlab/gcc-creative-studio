@@ -173,3 +173,43 @@ async def test_render_timeline_ffmpeg_failure(service):
 
             with pytest.raises(RuntimeError, match="FFmpeg failed"):
                 await service.render_timeline(request)
+
+
+@pytest.mark.anyio
+async def test_download_asset_empty_url(service):
+    with pytest.raises(ValueError, match="Empty URL"):
+        await service._download_asset("", "dest")
+
+
+@pytest.mark.anyio
+async def test_download_asset_blob_url(service):
+    with pytest.raises(ValueError, match="Cannot render local blob URLs"):
+        await service._download_asset("blob:http://example.com", "dest")
+
+
+@pytest.mark.anyio
+async def test_download_asset_unsupported_scheme(service):
+    with pytest.raises(ValueError, match="Unsupported URL scheme"):
+        await service._download_asset("ftp://example.com/video.mp4", "dest")
+
+
+@pytest.mark.anyio
+async def test_download_asset_gcs_success(service):
+    mock_bucket = MagicMock()
+    mock_blob = MagicMock()
+    service.storage_client.bucket.return_value = mock_bucket
+    mock_bucket.blob.return_value = mock_blob
+
+    await service._download_asset("gs://my-bucket/my-blob.mp4", "dest")
+    service.storage_client.bucket.assert_called_once_with("my-bucket")
+    mock_bucket.blob.assert_called_once_with("my-blob.mp4")
+    mock_blob.download_to_filename.assert_called_once_with("dest")
+
+
+@pytest.mark.anyio
+async def test_download_asset_gcs_failure(service):
+    service.storage_client.bucket.side_effect = Exception(
+        "GCS connection failure"
+    )
+    with pytest.raises(Exception, match="GCS connection failure"):
+        await service._download_asset("gs://my-bucket/my-blob.mp4", "dest")
