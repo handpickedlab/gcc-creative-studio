@@ -68,4 +68,8 @@ export class SettingsService {
       }),
     );
   }
+
+  getSetting(key: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/admin/${key}`);
+  }
 }

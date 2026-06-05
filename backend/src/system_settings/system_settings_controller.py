@@ -43,3 +43,13 @@ async def update_setting(
 ):
     """Updates a system setting by its key. Restricted to Administrators."""
     return await service.update_setting(id, dto.value)
+
+
+@router.get("/admin/{id}", response_model=SystemSettingModel)
+async def get_admin_setting(
+    id: str,
+    service: SystemSettingsService = Depends(),
+    current_user=Depends(RoleChecker(allowed_roles=[UserRoleEnum.ADMIN])),
+):
+    """Retrieves a system setting by its key. Restricted to Administrators."""
+    return await service.get_setting(id)

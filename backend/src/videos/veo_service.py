@@ -354,6 +354,24 @@ def _process_video_in_background(
                             )
                             vertex_client = GenAIModelSetup.get_omni_client()
 
+                            # Fetch custom model name from settings
+                            from src.system_settings.repository.system_settings_repository import (
+                                SystemSettingsRepository,
+                            )
+
+                            settings_repo = SystemSettingsRepository(db)
+                            omni_model_setting = await settings_repo.get_by_id(
+                                "gemini_omni_model_name"
+                            )
+                            model_name_for_api = (
+                                omni_model_setting.value
+                                if (
+                                    omni_model_setting
+                                    and omni_model_setting.value
+                                )
+                                else request_dto.generation_model.value
+                            )
+
                             interaction_id = None
                             thought_signature = None
 
@@ -592,14 +610,14 @@ def _process_video_in_background(
                                 if is_turn_2:
                                     interaction = await asyncio.to_thread(
                                         vertex_client.interactions.create,
-                                        model=request_dto.generation_model.value,
+                                        model=model_name_for_api,
                                         previous_interaction_id=interaction1_id,
                                         input=turn2_input,
                                     )
                                 else:
                                     interaction = await asyncio.to_thread(
                                         vertex_client.interactions.create,
-                                        model=request_dto.generation_model.value,
+                                        model=model_name_for_api,
                                         input=t1_inputs,
                                     )
 

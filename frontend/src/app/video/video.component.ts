@@ -236,14 +236,17 @@ export class VideoComponent implements OnInit, AfterViewInit {
   ) {
     const showOmni = this.settingsService.getShowGeminiOmni();
     this.generationModels = MODEL_CONFIGS.filter(
-      m => m.type === 'VIDEO' && (m.value !== 'gemini-omni-generate-preview' || showOmni),
+      m =>
+        m.type === 'VIDEO' &&
+        (m.value !== 'gemini-omni-generate-preview' || showOmni),
     );
     this.searchRequest.generationModel = showOmni
       ? 'gemini-omni-generate-preview'
       : 'veo-3.1-generate-001';
     this.selectedGenerationModel =
-      this.generationModels.find(m => m.value === 'gemini-omni-generate-preview')?.viewValue ||
-      this.generationModels[0].viewValue;
+      this.generationModels.find(
+        m => m.value === 'gemini-omni-generate-preview',
+      )?.viewValue || this.generationModels[0].viewValue;
 
     this.isBrowser = isPlatformBrowser(this.platformId);
     this.activeVideoJob$ = this.service.activeVideoJob$.pipe(
@@ -1424,7 +1427,9 @@ export class VideoComponent implements OnInit, AfterViewInit {
     this.currentMode = 'Ingredients to Video';
     this.selectedMode.set('Ingredients to Video');
 
-    const omniModel = this.generationModels.find(m => m.value === 'gemini-omni-generate-preview');
+    const omniModel = this.generationModels.find(
+      m => m.value === 'gemini-omni-generate-preview',
+    );
     if (omniModel) {
       this.selectModel(omniModel);
     }

@@ -65,6 +65,7 @@ export class AdminHomeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   isCleared = false;
   showGeminiOmni = false;
+  geminiOmniModelName = '';
   startDate = '';
   endDate = '';
   startCalendarDate: Date | null = null;
@@ -117,6 +118,7 @@ export class AdminHomeComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.showGeminiOmni = this.settingsService.getShowGeminiOmni();
+    this.loadGeminiOmniModelName();
   }
 
   toggleGeminiOmni(event: any): void {
@@ -136,6 +138,40 @@ export class AdminHomeComponent implements OnInit, AfterViewInit, OnDestroy {
           handleInfoSnackbar(
             this.snackBar,
             'Failed to update Gemini Omni visibility setting.',
+          );
+        },
+      });
+  }
+
+  loadGeminiOmniModelName(): void {
+    this.settingsService.getSetting('gemini_omni_model_name').subscribe({
+      next: setting => {
+        this.geminiOmniModelName = setting.value || '';
+      },
+      error: err => {
+        console.error('Failed to load Gemini Omni model name setting:', err);
+      },
+    });
+  }
+
+  saveGeminiOmniModelName(): void {
+    this.settingsService
+      .updateSetting('gemini_omni_model_name', this.geminiOmniModelName)
+      .subscribe({
+        next: () => {
+          handleInfoSnackbar(
+            this.snackBar,
+            'Gemini Omni model name updated successfully.',
+          );
+        },
+        error: err => {
+          console.error(
+            'Failed to update Gemini Omni model name setting:',
+            err,
+          );
+          handleInfoSnackbar(
+            this.snackBar,
+            'Failed to update Gemini Omni model name setting.',
           );
         },
       });
