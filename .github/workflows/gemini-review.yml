@@ -55,6 +55,8 @@ jobs:
         id: 'gemini_pr_review'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_debug: true
+          debug: true
           settings: |-
             {
               "maxSessionTurns": 25,
