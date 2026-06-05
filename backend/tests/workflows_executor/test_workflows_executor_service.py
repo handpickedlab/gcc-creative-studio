@@ -274,7 +274,7 @@ async def test_generate_video(service):
     request.inputs.input_images = [123]
     request.inputs.start_frame = None
     request.inputs.end_frame = None
-    request.config.model = "veo-2.0"
+    request.config.model = "veo-3.1-generate-001"
     request.config.brand_guidelines = False
 
     service.mock_rest_client.post.return_value = Response(200, json={"id": 777})

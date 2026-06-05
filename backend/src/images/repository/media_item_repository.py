@@ -53,7 +53,28 @@ class MediaRepository(BaseRepository[MediaItem, MediaItemModel]):
                 )
 
         if search_dto.model:
-            query = query.where(self.model.model == search_dto.model.value)
+            from src.common.base_dto import GenerationModelEnum
+
+            if search_dto.model == GenerationModelEnum.GEMINI_OMNI:
+                from src.system_settings.repository.system_settings_repository import (
+                    SystemSettingsRepository,
+                )
+
+                settings_repo = SystemSettingsRepository(self.db)
+                omni_model_setting = await settings_repo.get_by_id(
+                    "gemini_omni_model_name"
+                )
+                if omni_model_setting and omni_model_setting.value:
+                    query = query.where(
+                        (self.model.model == search_dto.model.value)
+                        | (self.model.model == omni_model_setting.value)
+                    )
+                else:
+                    query = query.where(
+                        self.model.model == search_dto.model.value
+                    )
+            else:
+                query = query.where(self.model.model == search_dto.model.value)
 
         if search_dto.status:
             query = query.where(self.model.status == search_dto.status.value)

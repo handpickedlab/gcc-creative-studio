@@ -342,6 +342,7 @@ def _process_video_in_background(
                         permanent_thumbnail_gcs_uris = []
                         final_gcs_uris = []
                         raw_data_dict = None
+                        model_name_for_api = None
 
                         start_time = time.monotonic()
 
@@ -365,11 +366,8 @@ def _process_video_in_background(
                             )
                             model_name_for_api = (
                                 omni_model_setting.value
-                                if (
-                                    omni_model_setting
-                                    and omni_model_setting.value
-                                )
-                                else request_dto.generation_model.value
+                                if omni_model_setting is not None
+                                else ""
                             )
 
                             interaction_id = None
@@ -889,6 +887,13 @@ def _process_video_in_background(
                         }
                         if raw_data_dict is not None:
                             update_data["raw_data"] = raw_data_dict
+
+                        if (
+                            request_dto.generation_model
+                            == GenerationModelEnum.GEMINI_OMNI
+                            and model_name_for_api
+                        ):
+                            update_data["model"] = model_name_for_api
 
                         await media_repo.update(media_item_id, update_data)
                         worker_logger.info(

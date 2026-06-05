@@ -26,8 +26,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c7691a33f1fd'
-down_revision: Union[str, None] = '5dac63588faa'
+revision: str = "c7691a33f1fd"
+down_revision: Union[str, None] = "5dac63588faa"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -36,7 +36,7 @@ def upgrade() -> None:
     # Seed default gemini_omni_model_name value
     op.execute(
         "INSERT INTO system_settings (id, value, description) VALUES "
-        "('gemini_omni_model_name', 'gemini-omni-generate-preview', 'Custom model name for Gemini Omni')"
+        "('gemini_omni_model_name', '', 'Custom model name for Gemini Omni')"
     )
 
 
@@ -44,4 +44,3 @@ def downgrade() -> None:
     op.execute(
         "DELETE FROM system_settings WHERE id = 'gemini_omni_model_name'"
     )
-

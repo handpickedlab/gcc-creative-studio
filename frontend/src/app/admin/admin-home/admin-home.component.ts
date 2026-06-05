@@ -66,6 +66,7 @@ export class AdminHomeComponent implements OnInit, AfterViewInit, OnDestroy {
   isCleared = false;
   showGeminiOmni = false;
   geminiOmniModelName = '';
+  showModelName = false;
   startDate = '';
   endDate = '';
   startCalendarDate: Date | null = null;

@@ -388,43 +388,25 @@ export class VideoComponent implements OnInit, AfterViewInit {
     this.searchRequest.generationModel = model.value;
     this.selectedGenerationModel = model.viewValue;
 
-    const isVeo2 =
-      model.value.includes('veo-2.0') && model.value !== 'veo-2.0-generate-exp';
-    const isVeo2Exp = model.value === 'veo-2.0-generate-exp';
+    this.clearOtherImage(1);
 
-    if (isVeo2) {
-      // Veo 2 models do not support audio.
-      this.isAudioGenerationDisabled = true;
-      this.searchRequest.generateAudio = false;
+    // Active video models (Veo 3.1 & Omni) support audio.
+    this.isAudioGenerationDisabled = false;
+    this.searchRequest.generateAudio = true;
 
-      // Re-enable all aspect ratios for Veo 2.
-      this.aspectRatioOptions.forEach(opt => (opt.disabled = false));
-    } else if (isVeo2Exp) {
-      // Veo 2 Exp model does not support audio.
-      this.isAudioGenerationDisabled = true;
-      this.searchRequest.generateAudio = false;
-      this.aspectRatioOptions.forEach(opt => (opt.disabled = false));
-    } else {
-      this.clearOtherImage(1);
-
-      // Veo 3 models support audio.
-      this.isAudioGenerationDisabled = false;
-      this.searchRequest.generateAudio = true;
-
-      // Veo 3 only supports 16:9 and 9:16 aspect ratios.
-      const supportedRatios = ['16:9', '9:16'];
-      if (!supportedRatios.includes(this.searchRequest.aspectRatio)) {
-        this.searchRequest.aspectRatio = '16:9';
-        const landscapeOption = this.aspectRatioOptions.find(
-          opt => opt.value === '16:9',
-        )!;
-        this.selectedAspectRatio = landscapeOption.viewValue;
-      }
-
-      this.aspectRatioOptions.forEach(opt => {
-        opt.disabled = !supportedRatios.includes(opt.value);
-      });
+    // These models only support 16:9 and 9:16 aspect ratios.
+    const supportedRatios = ['16:9', '9:16'];
+    if (!supportedRatios.includes(this.searchRequest.aspectRatio)) {
+      this.searchRequest.aspectRatio = '16:9';
+      const landscapeOption = this.aspectRatioOptions.find(
+        opt => opt.value === '16:9',
+      )!;
+      this.selectedAspectRatio = landscapeOption.viewValue;
     }
+
+    this.aspectRatioOptions.forEach(opt => {
+      opt.disabled = !supportedRatios.includes(opt.value);
+    });
   }
 
   selectAspectRatio(ratio: string | {value: string; viewValue: string}): void {

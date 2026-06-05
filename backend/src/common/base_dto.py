@@ -67,10 +67,6 @@ class GenerationModelEnum(str, Enum):
     VEO_3_QUALITY = "veo-3.0-generate-001"
     VEO_3_FAST_PREVIEW = "veo-3.0-fast-generate-preview"
     VEO_3_QUALITY_PREVIEW = "veo-3.0-generate-preview"
-    VEO_2_FAST = "veo-2.0-generate-001"
-    VEO_2_QUALITY = "veo-2.0-fast-generate-001"
-    VEO_2_GENERATE_EXP = "veo-2.0-generate-exp"
-
     # Audio-Specific Models
     LYRIA_002 = "lyria-002"
     CHIRP_3 = "chirp_3"
@@ -93,6 +89,9 @@ class GenerationModelEnum(str, Enum):
     IMAGEGEN_006 = "imagegeneration@006"
     IMAGEGEN_005 = "imagegeneration@005"
     IMAGEGEN_002 = "imagegeneration@002"
+    VEO_2_FAST = "veo-2.0-generate-001"
+    VEO_2_QUALITY = "veo-2.0-fast-generate-001"
+    VEO_2_GENERATE_EXP = "veo-2.0-generate-exp"
 
     @property
     def is_gemini_image_model(self) -> bool:

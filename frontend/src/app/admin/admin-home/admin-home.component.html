@@ -25,7 +25,8 @@
         <div class="flex items-center justify-between">
           <div class="flex flex-col">
             <span class="text-white font-semibold text-base">Enable Gemini Omni Model</span>
-            <span class="text-zinc-400 text-sm mt-0.5">Toggle visibility of Gemini Omni for video remixing workflows.</span>
+            <span class="text-zinc-400 text-sm mt-0.5">Note: This feature is exclusive to the Early Access Program (EAP)
+              participants. To check your status or request access, please contact your Google Account Executive.</span>
           </div>
           <mat-slide-toggle [checked]="showGeminiOmni" (change)="toggleGeminiOmni($event)">
           </mat-slide-toggle>
@@ -33,14 +34,25 @@
 
         <div *ngIf="showGeminiOmni" class="flex flex-col gap-2 border-t border-zinc-700 pt-4">
           <span class="text-white font-semibold text-sm">Gemini Omni Model Name</span>
-          <span class="text-zinc-400 text-xs mt-0.5">Specify the actual vertex model ID to target (defaults to gemini-omni-generate-preview).</span>
+          <span class="text-zinc-400 text-xs mt-0.5">Specify the actual vertex model ID to target (defaults to an empty string).</span>
           <div class="flex gap-3 items-center mt-2">
-            <input
-              type="text"
-              [(ngModel)]="geminiOmniModelName"
-              placeholder="e.g. custom-model-id"
-              class="bg-zinc-800 text-white border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 flex-grow"
-            />
+            <div class="relative flex-grow">
+              <input
+                [type]="showModelName ? 'text' : 'password'"
+                [(ngModel)]="geminiOmniModelName"
+                placeholder="e.g. custom-model-id"
+                class="bg-zinc-800 text-white border border-zinc-700 rounded pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-blue-500 w-full"
+              />
+              <button
+                type="button"
+                (click)="showModelName = !showModelName"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors focus:outline-none flex items-center justify-center"
+              >
+                <mat-icon class="!text-lg !w-5 !h-5 !leading-5">
+                  {{ showModelName ? 'visibility_off' : 'visibility' }}
+                </mat-icon>
+              </button>
+            </div>
             <button
               (click)="saveGeminiOmniModelName()"
               class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-semibold transition-colors"

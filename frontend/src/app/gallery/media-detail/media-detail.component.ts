@@ -444,7 +444,7 @@ export class MediaDetailComponent implements OnDestroy {
       // Since it's a video, we can use the thumbnail as a preview.
       startImagePreviewUrl:
         this.mediaItem.presignedThumbnailUrls?.[event.selectedIndex],
-      generationModel: 'veo-2.0-generate-001', // Switch to Veo 2 for video input
+      generationModel: 'veo-3.1-generate-001', // Switch to Veo 3.1 for video input
     };
 
     const navigationExtras: NavigationExtras = {

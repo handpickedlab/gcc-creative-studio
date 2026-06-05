@@ -193,8 +193,7 @@ class CreateVeoDto(BaseDto):
 
         if has_any_references:
             if (
-                model != GenerationModelEnum.VEO_2_GENERATE_EXP
-                and model != GenerationModelEnum.VEO_3_1_PREVIEW
+                model != GenerationModelEnum.VEO_3_1_PREVIEW
                 and model != GenerationModelEnum.VEO_3_1_GENERATE_001
                 and model != GenerationModelEnum.VEO_3_1_LITE_GENERATE_001
                 and model != GenerationModelEnum.VEO_3_1_FAST_GENERATE_001
@@ -256,9 +255,6 @@ class CreateVeoDto(BaseDto):
             GenerationModelEnum.VEO_3_QUALITY,
             GenerationModelEnum.VEO_3_FAST_PREVIEW,
             GenerationModelEnum.VEO_3_QUALITY_PREVIEW,
-            GenerationModelEnum.VEO_2_FAST,
-            GenerationModelEnum.VEO_2_QUALITY,
-            GenerationModelEnum.VEO_2_GENERATE_EXP,
         ]
         if value not in valid_video_ratios:
             raise ValueError("Invalid generation model for video.")

@@ -240,66 +240,7 @@ export const MODEL_CONFIGS: GenerationModelConfig[] = [
       supportsAudio: true,
     },
   },
-  {
-    value: 'veo-3.0-generate-001',
-    viewValue: 'Veo 3 Quality (deprecated) \n (Beta Audio)',
-    type: 'VIDEO',
-    icon: 'volume_up',
-    capabilities: {
-      supportedModes: ['Text to Video'],
-      maxReferenceImages: 3,
-      supportedAspectRatios: ['16:9', '9:16'],
-      supportsAudio: true,
-    },
-  },
-  {
-    value: 'veo-3.0-fast-generate-001',
-    viewValue: 'Veo 3 Fast (deprecated) \n (Beta Audio)',
-    type: 'VIDEO',
-    icon: 'volume_up',
-    capabilities: {
-      supportedModes: ['Text to Video'],
-      maxReferenceImages: 3,
-      supportedAspectRatios: ['16:9', '9:16'],
-      supportsAudio: true,
-    },
-  },
-  {
-    value: 'veo-2.0-generate-001',
-    viewValue: 'Veo 2 Quality (deprecated) \n (No Audio)',
-    type: 'VIDEO',
-    icon: 'videocam_off',
-    capabilities: {
-      supportedModes: ['Text to Video'],
-      maxReferenceImages: 3,
-      supportedAspectRatios: ['16:9', '9:16'],
-      supportsAudio: false,
-    },
-  },
-  {
-    value: 'veo-2.0-fast-generate-001',
-    viewValue: 'Veo 2 Fast (deprecated) \n (No Audio)',
-    type: 'VIDEO',
-    icon: 'videocam_off',
-    capabilities: {
-      supportedModes: ['Text to Video'],
-      maxReferenceImages: 3,
-      supportedAspectRatios: ['16:9', '9:16'],
-      supportsAudio: false,
-    },
-  },
-  {
-    value: 'veo-2.0-generate-exp',
-    viewValue: 'Veo 2 Exp (deprecated) \n (Reference Image)',
-    type: 'VIDEO',
-    icon: 'image',
-    capabilities: {
-      supportedModes: ['Text to Video', 'Ingredients to Video'],
-      maxReferenceImages: 3,
-      supportedAspectRatios: ['16:9', '9:16'],
-      supportsAudio: false,
-    },
-  },
+
   // --- Audio Models ---
   {
     value: 'lyria-002',
