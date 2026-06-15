@@ -29,9 +29,14 @@ class GlossaryRepository(BaseRepository[GlossaryTerm, GlossaryTermModel]):
     def __init__(self, db: AsyncSession = Depends(get_db)):
         super().__init__(model=GlossaryTerm, schema=GlossaryTermModel, db=db)
 
-    async def get_by_source(self, source: str) -> GlossaryTermModel | None:
-        """Finds a glossary term by its (unique) source word."""
-        query = select(self.model).where(self.model.source == source)
+    async def get_by_language_and_source(
+        self, language: str, source: str
+    ) -> GlossaryTermModel | None:
+        """Finds a glossary term by its unique (language, source) pair."""
+        query = select(self.model).where(
+            self.model.language == language,
+            self.model.source == source,
+        )
         result = await self.db.execute(query)
         item = result.scalar_one_or_none()
         if not item:

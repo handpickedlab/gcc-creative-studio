@@ -14,7 +14,7 @@
 
 import datetime
 from pydantic import Field
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from src.common.base_repository import BaseDocument
 from src.database import Base
@@ -23,15 +23,21 @@ from src.database import Base
 class GlossaryTerm(Base):
     """SQLAlchemy model for the 'glossary_terms' table.
 
-    A glossary term is a global override: whenever `source` appears in the
-    text to translate, the model is instructed to render it as `target`,
-    regardless of the target language.
+    Each glossary term belongs to a specific target `language`: whenever
+    `source` appears in the text to translate into that language, the model
+    is instructed to render it as `target`. Each language has its own
+    dictionary, so the same source term may map to different targets per
+    language. The pair (language, source) is unique.
     """
 
     __tablename__ = "glossary_terms"
+    __table_args__ = (
+        UniqueConstraint("language", "source", name="uq_glossary_terms_lang_source"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    source: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    language: Mapped[str] = mapped_column(String, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
     target: Mapped[str] = mapped_column(String, nullable=False)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -51,6 +57,9 @@ class GlossaryTermModel(BaseDocument):
     """Pydantic model representing a glossary term."""
 
     id: int = Field(description="The auto-generated ID of the glossary term.")
+    language: str = Field(
+        description="The target language this dictionary entry applies to."
+    )
     source: str = Field(description="The source word/term to match in the text.")
     target: str = Field(
         description="The fixed translation to always use for the source term."

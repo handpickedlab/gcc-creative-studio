@@ -21,6 +21,7 @@ import {environment} from '../../environments/environment';
 
 export interface GlossaryTerm {
   id: number;
+  language: string;
   source: string;
   target: string;
 }
@@ -60,6 +61,7 @@ export class TranslationService {
   }
 
   createTerm(payload: {
+    language: string;
     source: string;
     target: string;
   }): Observable<GlossaryTerm> {
@@ -68,7 +70,7 @@ export class TranslationService {
 
   updateTerm(
     id: number,
-    payload: {source?: string; target?: string},
+    payload: {language?: string; source?: string; target?: string},
   ): Observable<GlossaryTerm> {
     return this.http.put<GlossaryTerm>(
       `${this.baseUrl}/glossary/${id}`,
