@@ -49,11 +49,16 @@ class TranslationService:
     async def create_term(
         self, dto: GlossaryTermCreateDto
     ) -> GlossaryTermModel:
-        existing = await self.repo.get_by_source(dto.source)
+        existing = await self.repo.get_by_language_and_source(
+            dto.language, dto.source
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"A glossary term for '{dto.source}' already exists.",
+                detail=(
+                    f"A glossary term for '{dto.source}' already exists "
+                    f"in the {dto.language} dictionary."
+                ),
             )
         return await self.repo.create(dto)
 
@@ -109,10 +114,12 @@ class TranslationService:
     async def translate(
         self, request: TranslateRequestDto
     ) -> TranslateResponseDto:
-        glossary = await self.repo.find_all(limit=1000)
+        all_terms = await self.repo.find_all(limit=1000)
 
         results: list[TranslationResult] = []
         for language in request.target_languages:
+            # Each language uses only its own dictionary.
+            glossary = [t for t in all_terms if t.language == language]
             prompt = self._build_prompt(
                 request.text, language, glossary, request.tone
             )

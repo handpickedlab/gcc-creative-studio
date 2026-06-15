@@ -14,10 +14,21 @@
  * limitations under the License.
  */
 
+:host {
+  display: block;
+  color: #e8e8ed;
+  font-family: 'Google Sans', 'Helvetica Neue', sans-serif;
+}
+
 .translations-page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
+  --max-container-width: 1200px;
+  max-width: var(--max-container-width);
+  margin-top: calc(8vh);
+  margin-bottom: 6vh;
+  // Clear the floating circular nav on the left, center otherwise.
+  margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--max-container-width) / 2));
+  margin-right: 5vw;
+  padding-bottom: 48px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -25,23 +36,27 @@
 
 .page-header {
   h1 {
-    font-size: 28px;
-    font-weight: 600;
+    font-size: 32px;
+    font-weight: 500;
     margin: 0;
+    letter-spacing: -0.01em;
   }
 
   p {
-    margin: 4px 0 0;
-    color: rgba(0, 0, 0, 0.6);
+    margin: 6px 0 0;
+    color: rgba(232, 232, 237, 0.6);
+    font-size: 15px;
   }
 }
 
-.card {
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 16px;
+/* Shared glassmorphism card matching the app shell */
+.glass-card {
+  background: rgba(40, 40, 56, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
 }
 
 .full-width {
@@ -56,38 +71,85 @@
   .languages-field {
     flex: 1;
   }
+}
 
-  .translate-btn {
-    height: 56px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+/* Gradient pill button, same accent as the rest of the app */
+.gradient-btn {
+  height: 56px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 9999px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(to right, #3b82f6, #8b5cf6, #f87171);
+  transition: filter 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &.small {
+    height: 48px;
+    padding: 0 20px;
+    font-size: 14px;
+  }
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(232, 232, 237, 0.7);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
   }
 }
 
 .loading {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 12px;
-  color: rgba(0, 0, 0, 0.6);
+  padding: 8px 0;
 
   &.small {
     justify-content: flex-start;
-    margin-top: 8px;
   }
 }
 
-.results-grid {
+/* Results: one column per language, side by side */
+.results-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+  align-items: start;
 }
 
 .result-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  min-height: 120px;
 
   .result-header {
     display: flex;
@@ -96,27 +158,44 @@
 
     .result-language {
       font-weight: 600;
+      font-size: 15px;
+      background: linear-gradient(to right, #4fa0ff, #8b5cf6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
   }
 
   .result-text {
     margin: 0;
     white-space: pre-wrap;
-    line-height: 1.5;
+    line-height: 1.6;
+    color: #e8e8ed;
   }
 }
 
-.glossary-card {
+/* Glossary */
+.glossary-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+
   h2 {
     font-size: 20px;
-    font-weight: 600;
-    margin: 0 0 4px;
+    font-weight: 500;
+    margin: 0;
   }
 
   .glossary-hint {
-    margin: 0 0 16px;
-    color: rgba(0, 0, 0, 0.6);
+    margin: 4px 0 0;
+    color: rgba(232, 232, 237, 0.55);
     font-size: 14px;
+  }
+
+  .dict-lang-field {
+    min-width: 200px;
   }
 }
 
@@ -127,11 +206,7 @@
   flex-wrap: wrap;
 
   .arrow {
-    color: rgba(0, 0, 0, 0.4);
-  }
-
-  button {
-    height: 56px;
+    color: rgba(232, 232, 237, 0.4);
   }
 }
 
@@ -143,15 +218,20 @@
   th,
   td {
     text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   th {
-    font-size: 13px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: rgba(0, 0, 0, 0.5);
+    letter-spacing: 0.06em;
+    color: rgba(232, 232, 237, 0.45);
+    font-weight: 600;
+  }
+
+  td {
+    color: #e8e8ed;
   }
 
   .actions {
@@ -161,6 +241,7 @@
 }
 
 .glossary-empty {
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(232, 232, 237, 0.45);
   font-style: italic;
+  margin-top: 12px;
 }

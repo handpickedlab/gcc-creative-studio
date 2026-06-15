@@ -54,11 +54,17 @@ export class TranslationsComponent implements OnInit {
   results: TranslationResult[] = [];
   isTranslating = false;
 
-  // Glossary
+  // Glossary (each language has its own dictionary)
   glossary: GlossaryTerm[] = [];
   isLoadingGlossary = false;
+  glossaryLanguage = 'Dutch';
   newSource = '';
   newTarget = '';
+
+  /** Terms belonging to the currently selected dictionary language. */
+  get glossaryForLanguage(): GlossaryTerm[] {
+    return this.glossary.filter(t => t.language === this.glossaryLanguage);
+  }
 
   constructor(
     private translationService: TranslationService,
@@ -120,7 +126,9 @@ export class TranslationsComponent implements OnInit {
     if (!source || !target) {
       return;
     }
-    this.translationService.createTerm({source, target}).subscribe({
+    this.translationService
+      .createTerm({language: this.glossaryLanguage, source, target})
+      .subscribe({
       next: term => {
         this.glossary = [...this.glossary, term];
         this.newSource = '';

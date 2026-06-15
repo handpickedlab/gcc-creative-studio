@@ -16,8 +16,9 @@ from pydantic import BaseModel, Field
 
 
 class GlossaryTermCreateDto(BaseModel):
-    """Payload to create a glossary term."""
+    """Payload to create a glossary term in a language's dictionary."""
 
+    language: str = Field(description="Target language this entry applies to.")
     source: str = Field(description="The source word/term to match.")
     target: str = Field(description="The fixed translation to always use.")
 
@@ -25,6 +26,7 @@ class GlossaryTermCreateDto(BaseModel):
 class GlossaryTermUpdateDto(BaseModel):
     """Payload to update a glossary term. Fields are optional (partial update)."""
 
+    language: str | None = Field(default=None, description="New target language.")
     source: str | None = Field(default=None, description="New source word/term.")
     target: str | None = Field(default=None, description="New fixed translation.")
 
