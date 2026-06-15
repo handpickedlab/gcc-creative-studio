@@ -16,39 +16,119 @@
 
 <div class="translations-page">
   <header class="page-header">
-    <h1>Translations</h1>
-    <p>Translate text into multiple languages — each with its own dictionary.</p>
+    <h1>Briefing Translations</h1>
+    <p>Upload a briefing, translate it per market, review in tabs and export.</p>
   </header>
 
-  <!-- Input -->
-  <section class="glass-card input-card">
-    <mat-form-field appearance="outline" class="full-width">
-      <mat-label>Text to translate</mat-label>
-      <textarea
-        matInput
-        rows="5"
-        [(ngModel)]="sourceText"
-        placeholder="Enter the text you want to translate..."
-      ></textarea>
-    </mat-form-field>
+  <!-- 1. Upload -->
+  <section class="glass-card">
+    <div class="upload-row">
+      <input
+        #fileInput
+        type="file"
+        accept=".xlsx"
+        hidden
+        (change)="onFileSelected($event)"
+      />
+      <button class="gradient-btn" (click)="fileInput.click()">
+        <mat-icon>upload_file</mat-icon>
+        <span>{{ selectedFile ? 'Change file' : 'Upload briefing (.xlsx)' }}</span>
+      </button>
+      <span class="file-name" *ngIf="selectedFile">{{ selectedFile.name }}</span>
+      <span class="spacer"></span>
+      <button
+        class="ghost-btn"
+        *ngIf="selectedFile"
+        [disabled]="isImportingTm"
+        matTooltip="Import the 'Translation Memories' sheet as the glossary"
+        (click)="importTm()"
+      >
+        <mat-icon>menu_book</mat-icon>
+        <span>{{ isImportingTm ? 'Importing…' : 'Import translation memory' }}</span>
+      </button>
+    </div>
 
-    <div class="input-row">
-      <mat-form-field appearance="outline" class="languages-field">
-        <mat-label>Target languages</mat-label>
-        <mat-select [(ngModel)]="selectedLanguages" multiple>
-          <mat-option *ngFor="let lang of availableLanguages" [value]="lang">
-            {{ lang }}
+    <div *ngIf="isUploading" class="loading">
+      <mat-progress-spinner mode="indeterminate" diameter="28"></mat-progress-spinner>
+    </div>
+
+    <!-- Sheet + request selection -->
+    <div class="select-row" *ngIf="parse && !isUploading">
+      <mat-form-field appearance="outline">
+        <mat-label>Sheet</mat-label>
+        <mat-select [(ngModel)]="selectedSheet" (selectionChange)="onSheetChange()">
+          <mat-option *ngFor="let s of parse.sheets" [value]="s">{{ s }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" *ngIf="parse.requests.length">
+        <mat-label>Request</mat-label>
+        <mat-select [(ngModel)]="selectedRequestIndex">
+          <mat-option *ngFor="let r of parse.requests" [value]="r.index">
+            {{ r.label }}
           </mat-option>
         </mat-select>
       </mat-form-field>
 
       <button
         class="gradient-btn"
-        [disabled]="
-          isTranslating ||
-          !sourceText.trim() ||
-          selectedLanguages.length === 0
-        "
+        [disabled]="selectedRequestIndex == null || isLoadingRequest"
+        (click)="loadRequest()"
+      >
+        <mat-icon>article</mat-icon>
+        <span>{{ isLoadingRequest ? 'Loading…' : 'Load request' }}</span>
+      </button>
+
+      <span class="hint" *ngIf="!parse.requests.length">
+        No “Request nr.” rows found in this sheet.
+      </span>
+    </div>
+  </section>
+
+  <!-- 2. Briefing + markets -->
+  <section class="glass-card" *ngIf="briefing">
+    <div class="briefing-head">
+      <div>
+        <h2>{{ briefing.name }}</h2>
+        <p class="meta-line">
+          <span *ngIf="briefing.meta.requestor">Requestor: {{ briefing.meta.requestor }} · </span>
+          <span *ngIf="briefing.meta.due">Due: {{ briefing.meta.due }} · </span>
+          <span>{{ briefing.segments.length }} copy fields</span>
+        </p>
+        <p class="notes" *ngIf="briefing.meta.notes">📝 {{ briefing.meta.notes }}</p>
+      </div>
+    </div>
+
+    <table class="seg-table">
+      <thead>
+        <tr><th>Field</th><th>Source (EN)</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let seg of briefing.segments">
+          <td class="field-cell">
+            <span class="block-tag" *ngIf="seg.block">{{ seg.block }}</span>
+            {{ seg.field }}
+            <span class="limit" *ngIf="seg.charLimit">≤{{ seg.charLimit }}</span>
+          </td>
+          <td>
+            <textarea class="cell-input" rows="1" [(ngModel)]="seg.text"></textarea>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="translate-row">
+      <mat-form-field appearance="outline" class="markets-field">
+        <mat-label>Target markets</mat-label>
+        <mat-select [(ngModel)]="selectedMarkets" multiple>
+          <mat-option *ngFor="let m of targetMarkets" [value]="m.code">
+            {{ m.code }} — {{ m.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+      <button
+        class="gradient-btn"
+        [disabled]="selectedMarkets.length === 0 || isTranslating"
         (click)="translate()"
       >
         <mat-icon>translate</mat-icon>
@@ -57,107 +137,52 @@
     </div>
   </section>
 
-  <!-- Loading -->
-  <div *ngIf="isTranslating" class="loading">
-    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
-  </div>
-
-  <!-- Results side by side, one column per language -->
-  <section *ngIf="results.length > 0" class="results-row">
-    <article *ngFor="let result of results" class="glass-card result-card">
-      <div class="result-header">
-        <span class="result-language">{{ result.language }}</span>
-        <button
-          class="icon-btn"
-          matTooltip="Copy"
-          (click)="copyResult(result)"
-        >
-          <mat-icon>content_copy</mat-icon>
+  <!-- 3. Translations: one tab per market -->
+  <section class="glass-card" *ngIf="translations.length">
+    <div class="results-head">
+      <h2>Translations</h2>
+      <div class="actions">
+        <button class="ghost-btn" [disabled]="isExporting" (click)="exportXlsx()">
+          <mat-icon>download</mat-icon>
+          <span>{{ isExporting ? 'Exporting…' : 'Export .xlsx' }}</span>
+        </button>
+        <button class="gradient-btn small" [disabled]="isSaving" (click)="save()">
+          <mat-icon>save</mat-icon>
+          <span>{{ isSaving ? 'Saving…' : 'Save' }}</span>
         </button>
       </div>
-      <p class="result-text">{{ result.translation }}</p>
-    </article>
-  </section>
-
-  <!-- Glossary -->
-  <section class="glass-card glossary-card">
-    <div class="glossary-head">
-      <div>
-        <h2>Dictionary</h2>
-        <p class="glossary-hint">
-          Terms are applied only when translating into the selected language.
-        </p>
-      </div>
-      <mat-form-field appearance="outline" class="dict-lang-field">
-        <mat-label>Dictionary language</mat-label>
-        <mat-select [(ngModel)]="glossaryLanguage">
-          <mat-option *ngFor="let lang of availableLanguages" [value]="lang">
-            {{ lang }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
     </div>
 
-    <div class="glossary-add">
-      <mat-form-field appearance="outline">
-        <mat-label>Source term</mat-label>
-        <input
-          matInput
-          [(ngModel)]="newSource"
-          (keyup.enter)="addTerm()"
-          placeholder="e.g. Creative Studio"
-        />
-      </mat-form-field>
-      <mat-icon class="arrow">arrow_forward</mat-icon>
-      <mat-form-field appearance="outline">
-        <mat-label>{{ glossaryLanguage }} translation</mat-label>
-        <input
-          matInput
-          [(ngModel)]="newTarget"
-          (keyup.enter)="addTerm()"
-          placeholder="Fixed translation"
-        />
-      </mat-form-field>
-      <button
-        class="gradient-btn small"
-        [disabled]="!newSource.trim() || !newTarget.trim()"
-        (click)="addTerm()"
-      >
-        <mat-icon>add</mat-icon>
-        <span>Add</span>
-      </button>
-    </div>
-
-    <div *ngIf="isLoadingGlossary" class="loading small">
-      <mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner>
-    </div>
-
-    <table *ngIf="glossaryForLanguage.length > 0" class="glossary-table">
-      <thead>
-        <tr>
-          <th>Source</th>
-          <th>{{ glossaryLanguage }} translation</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let term of glossaryForLanguage">
-          <td>{{ term.source }}</td>
-          <td>{{ term.target }}</td>
-          <td class="actions">
-            <button class="icon-btn" matTooltip="Delete" (click)="deleteTerm(term)">
-              <mat-icon>delete_outline</mat-icon>
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p
-      *ngIf="!isLoadingGlossary && glossaryForLanguage.length === 0"
-      class="glossary-empty"
-    >
-      No terms in the {{ glossaryLanguage }} dictionary yet.
-    </p>
+    <mat-tab-group [(selectedIndex)]="activeTab" animationDuration="150ms">
+      <mat-tab *ngFor="let tr of translations" [label]="tr.market">
+        <ng-template matTabContent>
+          <table class="seg-table tr-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Source (EN)</th>
+                <th>{{ marketLabel(tr.market) }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let seg of tr.segments; let i = index">
+                <td class="field-cell">
+                  <span class="block-tag" *ngIf="seg.block">{{ seg.block }}</span>
+                  {{ seg.field }}
+                  <span class="limit" *ngIf="seg.charLimit">≤{{ seg.charLimit }}</span>
+                </td>
+                <td class="source-cell">{{ sourceText(i) }}</td>
+                <td>
+                  <textarea class="cell-input" rows="1" [(ngModel)]="seg.text"></textarea>
+                  <span class="count" [class.over]="over(seg)" *ngIf="seg.charLimit">
+                    {{ seg.text.length }}/{{ seg.charLimit }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </ng-template>
+      </mat-tab>
+    </mat-tab-group>
   </section>
 </div>

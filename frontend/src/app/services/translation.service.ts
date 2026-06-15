@@ -19,66 +19,116 @@ import {Injectable} from '@angular/core';
 import {Observable} from 'rxjs';
 import {environment} from '../../environments/environment';
 
-export interface GlossaryTerm {
-  id: number;
-  language: string;
-  source: string;
-  target: string;
+export interface Market {
+  code: string;
+  label: string;
 }
 
-export interface TranslationResult {
-  language: string;
-  translation: string;
-}
-
-export interface TranslateResponse {
-  results: TranslationResult[];
-}
-
-export interface TranslateRequest {
+export interface BriefingSegment {
+  block: string | null;
+  field: string;
+  label: string;
+  charLimit: number | null;
   text: string;
-  target_languages: string[];
-  tone?: string | null;
+}
+
+export interface BriefingMeta {
+  requestLabel?: string | null;
+  email?: string | null;
+  requestor?: string | null;
+  dateEmail?: string | null;
+  due?: string | null;
+  notes?: string | null;
+}
+
+export interface Briefing {
+  name: string;
+  sourceMarket: string;
+  meta: BriefingMeta;
+  segments: BriefingSegment[];
+}
+
+export interface ParseResult {
+  sheets: string[];
+  selectedSheet: string | null;
+  requests: {index: number; label: string}[];
+  briefingName: string | null;
+  meta: BriefingMeta | null;
+  segments: BriefingSegment[];
+}
+
+export interface MarketTranslation {
+  market: string;
+  segments: BriefingSegment[];
 }
 
 @Injectable({
   providedIn: 'root',
 })
 export class TranslationService {
-  private readonly baseUrl = `${environment.backendURL}/translations`;
+  private readonly baseUrl = `${environment.backendURL}/briefings`;
 
   constructor(private http: HttpClient) {}
 
-  translate(payload: TranslateRequest): Observable<TranslateResponse> {
-    return this.http.post<TranslateResponse>(
+  getMarkets(): Observable<Market[]> {
+    return this.http.get<Market[]>(`${this.baseUrl}/markets`);
+  }
+
+  /** Upload an xlsx. Without requestIndex returns sheets+requests (discovery);
+   * with sheet+requestIndex returns the parsed briefing. */
+  upload(
+    file: File,
+    sheetName?: string,
+    requestIndex?: number,
+  ): Observable<ParseResult> {
+    const form = new FormData();
+    form.append('file', file);
+    if (sheetName != null) form.append('sheet_name', sheetName);
+    if (requestIndex != null) {
+      form.append('request_index', String(requestIndex));
+    }
+    return this.http.post<ParseResult>(`${this.baseUrl}/upload`, form);
+  }
+
+  importTranslationMemory(
+    file: File,
+  ): Observable<{imported: number; markets: string[]}> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<{imported: number; markets: string[]}>(
+      `${this.baseUrl}/import-tm`,
+      form,
+    );
+  }
+
+  translate(
+    briefing: Briefing,
+    markets: string[],
+  ): Observable<{translations: MarketTranslation[]}> {
+    return this.http.post<{translations: MarketTranslation[]}>(
       `${this.baseUrl}/translate`,
-      payload,
+      {briefing, markets},
     );
   }
 
-  getGlossary(): Observable<GlossaryTerm[]> {
-    return this.http.get<GlossaryTerm[]>(`${this.baseUrl}/glossary`);
+  save(
+    briefing: Briefing,
+    translations: MarketTranslation[],
+  ): Observable<{id: number}> {
+    return this.http.post<{id: number}>(`${this.baseUrl}`, {
+      briefing,
+      translations,
+    });
   }
 
-  createTerm(payload: {
-    language: string;
-    source: string;
-    target: string;
-  }): Observable<GlossaryTerm> {
-    return this.http.post<GlossaryTerm>(`${this.baseUrl}/glossary`, payload);
-  }
-
-  updateTerm(
-    id: number,
-    payload: {language?: string; source?: string; target?: string},
-  ): Observable<GlossaryTerm> {
-    return this.http.put<GlossaryTerm>(
-      `${this.baseUrl}/glossary/${id}`,
-      payload,
+  exportXlsx(
+    briefing: Briefing,
+    translations: MarketTranslation[],
+  ): Observable<Blob> {
+    return this.http.post(
+      `${this.baseUrl}/export`,
+      {briefing, translations},
+      {responseType: 'blob'},
     );
-  }
-
-  deleteTerm(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/glossary/${id}`);
   }
 }

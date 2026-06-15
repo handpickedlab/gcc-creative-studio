@@ -14,6 +14,7 @@
 
 from fastapi import Depends
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.common.base_repository import BaseRepository
 from src.database import get_db
@@ -42,3 +43,26 @@ class GlossaryRepository(BaseRepository[GlossaryTerm, GlossaryTermModel]):
         if not item:
             return None
         return self.schema.model_validate(item)
+
+    async def get_by_languages(
+        self, languages: list[str]
+    ) -> list[GlossaryTermModel]:
+        """Returns all glossary terms for the given language/market codes."""
+        if not languages:
+            return []
+        query = select(self.model).where(self.model.language.in_(languages))
+        result = await self.db.execute(query)
+        return [self.schema.model_validate(i) for i in result.scalars().all()]
+
+    async def bulk_upsert(self, entries: list[dict]) -> int:
+        """Bulk-inserts {language, source, target} rows, ignoring duplicates
+        on the (language, source) unique constraint. Returns rows inserted."""
+        if not entries:
+            return 0
+        stmt = pg_insert(self.model).values(entries)
+        stmt = stmt.on_conflict_do_nothing(
+            constraint="uq_glossary_terms_lang_source"
+        )
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount or 0

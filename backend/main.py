@@ -49,6 +49,7 @@ from src.source_assets.source_asset_controller import (
     router as source_asset_router,
 )
 from src.tags.tags_controller import router as tags_router
+from src.translations.briefing_controller import router as briefings_router
 from src.translations.translation_controller import (
     router as translations_router,
 )
@@ -189,3 +190,4 @@ app.include_router(workflows_executor_router)
 app.include_router(workbench_router)
 app.include_router(system_settings_router)
 app.include_router(translations_router)
+app.include_router(briefings_router)
