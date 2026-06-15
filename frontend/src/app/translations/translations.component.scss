@@ -352,6 +352,47 @@
   }
 }
 
+.name-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e8e8ed;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  padding: 2px 0;
+  width: 100%;
+  max-width: 480px;
+  &:focus {
+    outline: none;
+    border-bottom-color: #4fa0ff;
+  }
+}
+
+.edit-table {
+  .cell-input.narrow {
+    min-width: 70px;
+    width: 70px;
+  }
+  .cell-input.mid {
+    min-width: 130px;
+    width: 130px;
+  }
+  .cell-input.tiny {
+    min-width: 60px;
+    width: 60px;
+  }
+}
+
+.add-field {
+  margin-top: 12px;
+}
+
+.loading span {
+  margin-left: 10px;
+  color: rgba(232, 232, 237, 0.7);
+}
+
 .empty-hint {
   display: flex;
   align-items: center;

@@ -34,6 +34,10 @@
         <mat-icon>upload_file</mat-icon>
         <span>{{ selectedFile ? 'Change file' : 'Upload briefing (.xlsx)' }}</span>
       </button>
+      <button class="ghost-btn" (click)="startBlank()">
+        <mat-icon>add</mat-icon>
+        <span>Start blank</span>
+      </button>
       <span class="file-name" *ngIf="selectedFile">{{ selectedFile.name }}</span>
       <span class="spacer"></span>
       <button
@@ -160,7 +164,7 @@
   <section class="glass-card" *ngIf="briefing">
     <div class="briefing-head">
       <div>
-        <h2>{{ briefing.name }}</h2>
+        <input class="name-input" [(ngModel)]="briefing.name" placeholder="Briefing name" />
         <p class="meta-line">
           <span *ngIf="briefing.meta.requestor">Requestor: {{ briefing.meta.requestor }} · </span>
           <span *ngIf="briefing.meta.due">Due: {{ briefing.meta.due }} · </span>
@@ -176,23 +180,29 @@
       Pick a sheet/request that actually contains text (e.g. a “Week …” sheet).
     </div>
 
-    <table class="seg-table">
+    <table class="seg-table edit-table">
       <thead>
-        <tr><th>Field</th><th>Source (EN)</th></tr>
+        <tr>
+          <th>Block</th><th>Field</th><th>Max</th><th>Source (EN)</th><th></th>
+        </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let seg of briefing.segments">
-          <td class="field-cell">
-            <span class="block-tag" *ngIf="seg.block">{{ seg.block }}</span>
-            {{ seg.field }}
-            <span class="limit" *ngIf="seg.charLimit">≤{{ seg.charLimit }}</span>
-          </td>
-          <td>
-            <textarea class="cell-input" rows="1" [(ngModel)]="seg.text"></textarea>
+        <tr *ngFor="let seg of briefing.segments; let i = index">
+          <td><input class="cell-input narrow" [(ngModel)]="seg.block" placeholder="—" /></td>
+          <td><input class="cell-input mid" [(ngModel)]="seg.field" /></td>
+          <td><input class="cell-input tiny" type="number" [(ngModel)]="seg.charLimit" /></td>
+          <td><textarea class="cell-input" rows="1" [(ngModel)]="seg.text"></textarea></td>
+          <td class="actions">
+            <button class="icon-btn" matTooltip="Remove field" (click)="removeSegment(i)">
+              <mat-icon>delete_outline</mat-icon>
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
+    <button class="ghost-btn small add-field" (click)="addSegment()">
+      <mat-icon>add</mat-icon><span>Add field</span>
+    </button>
 
     <div class="translate-row">
       <mat-form-field appearance="outline" class="markets-field">
@@ -219,11 +229,11 @@
     <div class="results-head">
       <h2>Translations</h2>
       <div class="actions">
-        <button class="ghost-btn" [disabled]="isExporting" (click)="exportXlsx()">
+        <button class="ghost-btn" [disabled]="isExporting || isTranslating" (click)="exportXlsx()">
           <mat-icon>download</mat-icon>
           <span>{{ isExporting ? 'Exporting…' : 'Export .xlsx' }}</span>
         </button>
-        <button class="gradient-btn small" [disabled]="isSaving" (click)="save()">
+        <button class="gradient-btn small" [disabled]="isSaving || isTranslating" (click)="save()">
           <mat-icon>save</mat-icon>
           <span>{{ isSaving ? 'Saving…' : 'Save' }}</span>
         </button>
@@ -231,9 +241,13 @@
     </div>
 
     <mat-tab-group [(selectedIndex)]="activeTab" animationDuration="150ms">
-      <mat-tab *ngFor="let tr of translations" [label]="tr.market">
+      <mat-tab *ngFor="let tr of translations" [label]="tr.loading ? tr.market + ' …' : tr.market">
         <ng-template matTabContent>
-          <table class="seg-table tr-table">
+          <div *ngIf="tr.loading" class="loading">
+            <mat-progress-spinner mode="indeterminate" diameter="32"></mat-progress-spinner>
+            <span>Translating {{ marketLabel(tr.market) }}…</span>
+          </div>
+          <table class="seg-table tr-table" *ngIf="!tr.loading">
             <thead>
               <tr>
                 <th>Field</th>
