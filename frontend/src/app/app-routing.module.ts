@@ -24,6 +24,7 @@ import {MediaDetailComponent} from './gallery/media-detail/media-detail.componen
 import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
+import {TranslationsComponent} from './translations/translations.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
 import {ExecutionHistoryComponent} from './workflows/execution-history/execution-history.component';
@@ -44,6 +45,11 @@ const routes: Routes = [
   {path: 'video', component: VideoComponent, canActivate: [AuthGuardService]},
   {path: 'vto', component: VtoComponent, canActivate: [AuthGuardService]},
   {path: 'audio', component: AudioComponent, canActivate: [AuthGuardService]},
+  {
+    path: 'translations',
+    component: TranslationsComponent,
+    canActivate: [AuthGuardService],
+  },
   {
     path: 'workbench',
     component: WorkbenchComponent,

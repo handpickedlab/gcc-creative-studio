@@ -1,0 +1,160 @@
+<!--
+ Copyright 2026 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="translations-page">
+  <header class="page-header">
+    <h1>Translations</h1>
+    <p>Translate text into multiple languages with a shared glossary.</p>
+  </header>
+
+  <!-- Input -->
+  <section class="card input-card">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Text to translate</mat-label>
+      <textarea
+        matInput
+        rows="5"
+        [(ngModel)]="sourceText"
+        placeholder="Enter the text you want to translate..."
+      ></textarea>
+    </mat-form-field>
+
+    <div class="input-row">
+      <mat-form-field appearance="outline" class="languages-field">
+        <mat-label>Target languages</mat-label>
+        <mat-select [(ngModel)]="selectedLanguages" multiple>
+          <mat-option *ngFor="let lang of availableLanguages" [value]="lang">
+            {{ lang }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <button
+        mat-flat-button
+        color="primary"
+        class="translate-btn"
+        [disabled]="
+          isTranslating ||
+          !sourceText.trim() ||
+          selectedLanguages.length === 0
+        "
+        (click)="translate()"
+      >
+        <mat-icon>translate</mat-icon>
+        <span>Translate</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Loading -->
+  <div *ngIf="isTranslating" class="loading">
+    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+    <span>Translating…</span>
+  </div>
+
+  <!-- Results side by side -->
+  <section *ngIf="results.length > 0" class="results-grid">
+    <mat-card *ngFor="let result of results" class="result-card">
+      <div class="result-header">
+        <span class="result-language">{{ result.language }}</span>
+        <button
+          mat-icon-button
+          matTooltip="Copy"
+          (click)="copyResult(result)"
+        >
+          <mat-icon>content_copy</mat-icon>
+        </button>
+      </div>
+      <p class="result-text">{{ result.translation }}</p>
+    </mat-card>
+  </section>
+
+  <!-- Glossary -->
+  <section class="card glossary-card">
+    <h2>Glossary</h2>
+    <p class="glossary-hint">
+      Terms here are always translated exactly as specified, for every
+      language.
+    </p>
+
+    <div class="glossary-add">
+      <mat-form-field appearance="outline">
+        <mat-label>Source term</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newSource"
+          (keyup.enter)="addTerm()"
+          placeholder="e.g. Creative Studio"
+        />
+      </mat-form-field>
+      <mat-icon class="arrow">arrow_forward</mat-icon>
+      <mat-form-field appearance="outline">
+        <mat-label>Fixed translation</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newTarget"
+          (keyup.enter)="addTerm()"
+          placeholder="e.g. Creative Studio"
+        />
+      </mat-form-field>
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="!newSource.trim() || !newTarget.trim()"
+        (click)="addTerm()"
+      >
+        <mat-icon>add</mat-icon>
+        Add
+      </button>
+    </div>
+
+    <div *ngIf="isLoadingGlossary" class="loading small">
+      <mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner>
+    </div>
+
+    <table *ngIf="glossary.length > 0" class="glossary-table">
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Translation</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let term of glossary">
+          <td>{{ term.source }}</td>
+          <td>{{ term.target }}</td>
+          <td class="actions">
+            <button
+              mat-icon-button
+              matTooltip="Delete"
+              (click)="deleteTerm(term)"
+            >
+              <mat-icon>delete_outline</mat-icon>
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p
+      *ngIf="!isLoadingGlossary && glossary.length === 0"
+      class="glossary-empty"
+    >
+      No glossary terms yet.
+    </p>
+  </section>
+</div>
