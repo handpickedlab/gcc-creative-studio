@@ -90,15 +90,22 @@ async def get_current_user(
             )
 
         # If ALLOWED_ORGS is configured, check the user's organization.
+        # Identity Platform tokens do not carry Google's `hd` (hosted domain)
+        # claim, so we match primarily on the email domain and accept `hd`
+        # when it happens to be present.
         if config_service.ALLOWED_ORGS:
-            if (
-                not token_info_hd
-                or token_info_hd not in config_service.ALLOWED_ORGS
-            ):
+            email_domain = (
+                email.rsplit("@", 1)[-1].lower() if "@" in email else None
+            )
+            is_allowed = (
+                token_info_hd in config_service.ALLOWED_ORGS
+                or email_domain in config_service.ALLOWED_ORGS
+            )
+            if not is_allowed:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail=(
-                        f"User from '{token_info_hd}' is not part of an "
+                        f"User from '{email_domain}' is not part of an "
                         "allowed organization."
                     ),
                 )
