@@ -121,6 +121,16 @@ async def lifespan(app: FastAPI):
         # We might want to stop startup here if migrations fail
         raise e
 
+    # Seed the default glossary once (guarded by a flag inside the seeder).
+    try:
+        from src.database import async_session_local
+        from src.translations.glossary_seed import seed_default_glossary
+
+        async with async_session_local() as session:
+            await seed_default_glossary(session)
+    except Exception as e:
+        logger.error(f"Failed to seed default glossary: {e}")
+
     logger.info("Creating ThreadPoolExecutor...")
     # Create the pool and attach it to the app's state
     app.state.executor = ThreadPoolExecutor(max_workers=4)

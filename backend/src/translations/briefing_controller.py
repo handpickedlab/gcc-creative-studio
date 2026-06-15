@@ -12,12 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 
 from src.auth.auth_guard import RoleChecker
 from src.translations.briefing_service import BriefingService
 from src.translations.dto.briefing_dto import (
     BriefingInputDto,
+    GlossarySummaryDto,
+    GlossaryTermInputDto,
+    GlossaryTermUpdateDto,
     MarketInfo,
     ParseResultDto,
     SaveBriefingRequestDto,
@@ -27,6 +39,7 @@ from src.translations.dto.briefing_dto import (
 )
 from src.translations.markets import MARKETS
 from src.translations.schema.briefing_model import BriefingModel
+from src.translations.schema.glossary_term_model import GlossaryTermModel
 from src.users.user_model import UserRoleEnum
 
 router = APIRouter(
@@ -66,6 +79,51 @@ async def import_translation_memories(
 ):
     content = await file.read()
     return await service.import_translation_memories(content)
+
+
+@router.get("/glossary/summary", response_model=GlossarySummaryDto)
+async def glossary_summary(service: BriefingService = Depends()):
+    return await service.glossary_summary()
+
+
+@router.get("/glossary", response_model=list[GlossaryTermModel])
+async def list_glossary(
+    market: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    service: BriefingService = Depends(),
+):
+    return await service.list_glossary(market, q)
+
+
+@router.post(
+    "/glossary",
+    response_model=GlossaryTermModel,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_glossary_term(
+    dto: GlossaryTermInputDto,
+    service: BriefingService = Depends(),
+):
+    return await service.create_glossary_term(dto.market, dto.source, dto.target)
+
+
+@router.put("/glossary/{term_id}", response_model=GlossaryTermModel)
+async def update_glossary_term(
+    term_id: int,
+    dto: GlossaryTermUpdateDto,
+    service: BriefingService = Depends(),
+):
+    return await service.update_glossary_term(
+        term_id, dto.model_dump(exclude_none=True)
+    )
+
+
+@router.delete("/glossary/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_glossary_term(
+    term_id: int,
+    service: BriefingService = Depends(),
+):
+    await service.delete_glossary_term(term_id)
 
 
 @router.post("/translate", response_model=TranslateBriefingResponseDto)

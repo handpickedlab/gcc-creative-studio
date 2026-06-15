@@ -51,7 +51,7 @@ export interface Briefing {
 export interface ParseResult {
   sheets: string[];
   selectedSheet: string | null;
-  requests: {index: number; label: string}[];
+  requests: {index: number; label: string; filled: number}[];
   briefingName: string | null;
   meta: BriefingMeta | null;
   segments: BriefingSegment[];
@@ -60,6 +60,22 @@ export interface ParseResult {
 export interface MarketTranslation {
   market: string;
   segments: BriefingSegment[];
+}
+
+export interface GlossarySummary {
+  total: number;
+  perMarket: {
+    market: string;
+    count: number;
+    samples: {source: string; target: string}[];
+  }[];
+}
+
+export interface GlossaryTerm {
+  id: number;
+  language: string; // market code
+  source: string;
+  target: string;
 }
 
 @Injectable({
@@ -99,6 +115,39 @@ export class TranslationService {
       `${this.baseUrl}/import-tm`,
       form,
     );
+  }
+
+  getGlossarySummary(): Observable<GlossarySummary> {
+    return this.http.get<GlossarySummary>(`${this.baseUrl}/glossary/summary`);
+  }
+
+  getGlossaryTerms(market: string, q?: string): Observable<GlossaryTerm[]> {
+    let url = `${this.baseUrl}/glossary?market=${encodeURIComponent(market)}`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    return this.http.get<GlossaryTerm[]>(url);
+  }
+
+  createGlossaryTerm(
+    market: string,
+    source: string,
+    target: string,
+  ): Observable<GlossaryTerm> {
+    return this.http.post<GlossaryTerm>(`${this.baseUrl}/glossary`, {
+      market,
+      source,
+      target,
+    });
+  }
+
+  updateGlossaryTerm(
+    id: number,
+    data: {source?: string; target?: string},
+  ): Observable<GlossaryTerm> {
+    return this.http.put<GlossaryTerm>(`${this.baseUrl}/glossary/${id}`, data);
+  }
+
+  deleteGlossaryTerm(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/glossary/${id}`);
   }
 
   translate(
