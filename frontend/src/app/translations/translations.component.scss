@@ -253,6 +253,63 @@
   }
 }
 
+/* Dictionary panel */
+.dict-card {
+  .dict-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    color: #e8e8ed;
+    margin-bottom: 14px;
+    strong {
+      color: #4fa0ff;
+    }
+  }
+  .dict-markets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px 16px;
+  }
+  .dict-market {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+    .dm-code {
+      font-weight: 700;
+      color: #4fa0ff;
+      min-width: 48px;
+    }
+    .dm-count {
+      color: rgba(232, 232, 237, 0.55);
+      min-width: 44px;
+    }
+    .dm-sample {
+      color: rgba(232, 232, 237, 0.7);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+}
+
+.empty-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
 /* Dark tweaks for Material tabs */
 ::ng-deep .mat-mdc-tab-group {
   --mdc-secondary-navigation-tab-container-height: 44px;

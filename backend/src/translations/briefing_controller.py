@@ -18,6 +18,7 @@ from src.auth.auth_guard import RoleChecker
 from src.translations.briefing_service import BriefingService
 from src.translations.dto.briefing_dto import (
     BriefingInputDto,
+    GlossarySummaryDto,
     MarketInfo,
     ParseResultDto,
     SaveBriefingRequestDto,
@@ -66,6 +67,11 @@ async def import_translation_memories(
 ):
     content = await file.read()
     return await service.import_translation_memories(content)
+
+
+@router.get("/glossary/summary", response_model=GlossarySummaryDto)
+async def glossary_summary(service: BriefingService = Depends()):
+    return await service.glossary_summary()
 
 
 @router.post("/translate", response_model=TranslateBriefingResponseDto)

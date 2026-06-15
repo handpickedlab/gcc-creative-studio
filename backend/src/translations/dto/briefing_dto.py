@@ -32,6 +32,23 @@ class ParsedRequestInfo(_CamelModel):
 
     index: int
     label: str
+    filled: int = 0  # number of source fields that actually contain copy
+
+
+class GlossarySample(_CamelModel):
+    source: str
+    target: str
+
+
+class GlossaryMarketSummary(_CamelModel):
+    market: str
+    count: int
+    samples: list[GlossarySample] = Field(default_factory=list)
+
+
+class GlossarySummaryDto(_CamelModel):
+    total: int
+    per_market: list[GlossaryMarketSummary] = Field(default_factory=list)
 
 
 class ParseResultDto(_CamelModel):

@@ -18,6 +18,7 @@ import {Component, OnInit} from '@angular/core';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {
   Briefing,
+  GlossarySummary,
   Market,
   MarketTranslation,
   ParseResult,
@@ -46,6 +47,8 @@ export class TranslationsComponent implements OnInit {
   translations: MarketTranslation[] = [];
   activeTab = 0;
 
+  glossary: GlossarySummary | null = null;
+
   isUploading = false;
   isLoadingRequest = false;
   isTranslating = false;
@@ -64,10 +67,25 @@ export class TranslationsComponent implements OnInit {
       error: err =>
         handleErrorSnackbar(this.snackBar, err, 'Could not load markets'),
     });
+    this.loadGlossarySummary();
   }
 
   get targetMarkets(): Market[] {
     return this.markets.filter(m => m.code !== 'EN');
+  }
+
+  /** True once a request is loaded but it has no source copy at all. */
+  get briefingIsEmpty(): boolean {
+    return (
+      !!this.briefing && !this.briefing.segments.some(s => !!s.text?.trim())
+    );
+  }
+
+  loadGlossarySummary(): void {
+    this.service.getGlossarySummary().subscribe({
+      next: s => (this.glossary = s),
+      error: () => {},
+    });
   }
 
   // --- Upload / discovery ---------------------------------------------
@@ -86,10 +104,34 @@ export class TranslationsComponent implements OnInit {
         this.parse = res;
         this.selectedSheet = res.selectedSheet ?? res.sheets[0] ?? '';
         this.isUploading = false;
+        // Auto-load the dictionary from the Translation Memories sheet.
+        if (res.sheets.includes('Translation Memories')) {
+          this.autoImportTm(file);
+        }
       },
       error: err => {
         this.isUploading = false;
         handleErrorSnackbar(this.snackBar, err, 'Upload failed');
+      },
+    });
+  }
+
+  private autoImportTm(file: File): void {
+    this.isImportingTm = true;
+    this.service.importTranslationMemory(file).subscribe({
+      next: res => {
+        this.isImportingTm = false;
+        if (res.imported > 0) {
+          handleSuccessSnackbar(
+            this.snackBar,
+            `Dictionary loaded: ${res.imported} new terms`,
+          );
+        }
+        this.loadGlossarySummary();
+      },
+      error: () => {
+        this.isImportingTm = false;
+        this.loadGlossarySummary();
       },
     });
   }

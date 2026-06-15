@@ -90,9 +90,17 @@ class BriefingService:
                 detail=f"Could not parse sheet '{sheet_name}': {e}",
             )
 
-        req_infos = [
-            {"index": r["index"], "label": r["label"]} for r in requests
-        ]
+        req_infos = []
+        for r in requests:
+            filled = 0
+            try:
+                parsed = parser.parse_request(file_bytes, sheet_name, r["index"])
+                filled = sum(1 for s in parsed["segments"] if s.get("text"))
+            except Exception:
+                filled = 0
+            req_infos.append(
+                {"index": r["index"], "label": r["label"], "filled": filled}
+            )
 
         result = ParseResultDto(
             sheets=sheets, selected_sheet=sheet_name, requests=req_infos
@@ -289,6 +297,33 @@ class BriefingService:
             for t in translations
         ]
         return build_briefing_xlsx(briefing_dict, tr_dicts)
+
+    async def glossary_summary(self):
+        from src.translations.dto.briefing_dto import (
+            GlossaryMarketSummary,
+            GlossarySample,
+            GlossarySummaryDto,
+        )
+
+        terms = await self.glossary_repo.find_all(limit=100000)
+        by_market: dict[str, list] = {}
+        for t in terms:
+            by_market.setdefault(t.language, []).append(t)
+
+        per_market = []
+        for market in sorted(by_market):
+            items = by_market[market]
+            per_market.append(
+                GlossaryMarketSummary(
+                    market=market,
+                    count=len(items),
+                    samples=[
+                        GlossarySample(source=i.source, target=i.target)
+                        for i in items[:3]
+                    ],
+                )
+            )
+        return GlossarySummaryDto(total=len(terms), per_market=per_market)
 
     async def list_briefings(self):
         return await self.repo.list_briefings()

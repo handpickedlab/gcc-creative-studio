@@ -65,7 +65,7 @@
         <mat-label>Request</mat-label>
         <mat-select [(ngModel)]="selectedRequestIndex">
           <mat-option *ngFor="let r of parse.requests" [value]="r.index">
-            {{ r.label }}
+            {{ r.label }} — {{ r.filled }} field{{ r.filled === 1 ? '' : 's' }}{{ r.filled === 0 ? ' (empty)' : '' }}
           </mat-option>
         </mat-select>
       </mat-form-field>
@@ -85,6 +85,24 @@
     </div>
   </section>
 
+  <!-- Dictionary (auto-loaded from Translation Memories) -->
+  <section class="glass-card dict-card" *ngIf="glossary && glossary.total > 0">
+    <div class="dict-head">
+      <mat-icon>menu_book</mat-icon>
+      <span><strong>{{ glossary.total }}</strong> dictionary terms across
+        {{ glossary.perMarket.length }} markets</span>
+    </div>
+    <div class="dict-markets">
+      <div class="dict-market" *ngFor="let pm of glossary.perMarket">
+        <span class="dm-code">{{ pm.market }}</span>
+        <span class="dm-count">{{ pm.count }}</span>
+        <span class="dm-sample" *ngIf="pm.samples.length">
+          “{{ pm.samples[0].source }}” → “{{ pm.samples[0].target }}”
+        </span>
+      </div>
+    </div>
+  </section>
+
   <!-- 2. Briefing + markets -->
   <section class="glass-card" *ngIf="briefing">
     <div class="briefing-head">
@@ -97,6 +115,12 @@
         </p>
         <p class="notes" *ngIf="briefing.meta.notes">📝 {{ briefing.meta.notes }}</p>
       </div>
+    </div>
+
+    <div class="empty-hint" *ngIf="briefingIsEmpty">
+      <mat-icon>info</mat-icon>
+      This request has no source copy — it looks like an empty template.
+      Pick a sheet/request that actually contains text (e.g. a “Week …” sheet).
     </div>
 
     <table class="seg-table">
