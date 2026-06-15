@@ -325,6 +325,55 @@ class BriefingService:
             )
         return GlossarySummaryDto(total=len(terms), per_market=per_market)
 
+    # --- Glossary management (configurable by end users) -----------------
+
+    async def list_glossary(self, market: str | None, q: str | None):
+        if market:
+            terms = await self.glossary_repo.get_by_languages([market])
+        else:
+            terms = await self.glossary_repo.find_all(limit=100000)
+        if q:
+            ql = q.lower()
+            terms = [
+                t
+                for t in terms
+                if ql in t.source.lower() or ql in t.target.lower()
+            ]
+        return sorted(terms, key=lambda t: t.source.lower())[:500]
+
+    async def create_glossary_term(self, market: str, source: str, target: str):
+        existing = await self.glossary_repo.get_by_language_and_source(
+            market, source
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"'{source}' already exists in the {market} dictionary.",
+            )
+        return await self.glossary_repo.create(
+            {"language": market, "source": source, "target": target}
+        )
+
+    async def update_glossary_term(self, term_id: int, data: dict):
+        # Map external 'market' onto the stored 'language' column.
+        if "market" in data:
+            data["language"] = data.pop("market")
+        updated = await self.glossary_repo.update(term_id, data)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Glossary term {term_id} not found.",
+            )
+        return updated
+
+    async def delete_glossary_term(self, term_id: int) -> None:
+        deleted = await self.glossary_repo.delete(term_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Glossary term {term_id} not found.",
+            )
+
     async def list_briefings(self):
         return await self.repo.list_briefings()
 

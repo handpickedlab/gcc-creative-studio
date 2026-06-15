@@ -85,14 +85,20 @@
     </div>
   </section>
 
-  <!-- Dictionary (auto-loaded from Translation Memories) -->
-  <section class="glass-card dict-card" *ngIf="glossary && glossary.total > 0">
+  <!-- Dictionary (default seeded + auto-loaded from Translation Memories) -->
+  <section class="glass-card dict-card" *ngIf="glossary">
     <div class="dict-head">
       <mat-icon>menu_book</mat-icon>
       <span><strong>{{ glossary.total }}</strong> dictionary terms across
         {{ glossary.perMarket.length }} markets</span>
+      <span class="spacer"></span>
+      <button class="ghost-btn small" (click)="toggleGlossaryManager()">
+        <mat-icon>{{ showGlossaryManager ? 'expand_less' : 'tune' }}</mat-icon>
+        <span>{{ showGlossaryManager ? 'Close' : 'Manage dictionary' }}</span>
+      </button>
     </div>
-    <div class="dict-markets">
+
+    <div class="dict-markets" *ngIf="!showGlossaryManager">
       <div class="dict-market" *ngFor="let pm of glossary.perMarket">
         <span class="dm-code">{{ pm.market }}</span>
         <span class="dm-count">{{ pm.count }}</span>
@@ -100,6 +106,53 @@
           “{{ pm.samples[0].source }}” → “{{ pm.samples[0].target }}”
         </span>
       </div>
+    </div>
+
+    <!-- Manager -->
+    <div class="dict-manager" *ngIf="showGlossaryManager">
+      <div class="manager-controls">
+        <mat-form-field appearance="outline">
+          <mat-label>Market</mat-label>
+          <mat-select [(ngModel)]="glossaryMarket" (selectionChange)="loadGlossaryTerms()">
+            <mat-option *ngFor="let m of targetMarkets" [value]="m.code">
+              {{ m.code }} — {{ m.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="search">
+          <mat-label>Search</mat-label>
+          <input matInput [(ngModel)]="glossaryQuery" (keyup.enter)="loadGlossaryTerms()" />
+        </mat-form-field>
+      </div>
+
+      <div class="manager-add">
+        <input class="cell-input" placeholder="Source (EN)" [(ngModel)]="newTermSource" (keyup.enter)="addGlossaryTerm()" />
+        <mat-icon class="arrow">arrow_forward</mat-icon>
+        <input class="cell-input" placeholder="{{ glossaryMarket }} translation" [(ngModel)]="newTermTarget" (keyup.enter)="addGlossaryTerm()" />
+        <button class="gradient-btn small" [disabled]="!newTermSource.trim() || !newTermTarget.trim()" (click)="addGlossaryTerm()">
+          <mat-icon>add</mat-icon><span>Add</span>
+        </button>
+      </div>
+
+      <div *ngIf="isLoadingTerms" class="loading"><mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner></div>
+
+      <table class="seg-table" *ngIf="!isLoadingTerms && glossaryTerms.length">
+        <thead><tr><th>Source (EN)</th><th>{{ glossaryMarket }}</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let t of glossaryTerms">
+            <td><input class="cell-input" [(ngModel)]="t.source" (blur)="saveGlossaryTerm(t)" /></td>
+            <td><input class="cell-input" [(ngModel)]="t.target" (blur)="saveGlossaryTerm(t)" /></td>
+            <td class="actions">
+              <button class="icon-btn" matTooltip="Delete" (click)="deleteGlossaryTerm(t)">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="hint" *ngIf="!isLoadingTerms && !glossaryTerms.length">
+        No terms for {{ glossaryMarket }} yet.
+      </p>
     </div>
   </section>
 

@@ -297,6 +297,61 @@
   }
 }
 
+.ghost-btn.small {
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(232, 232, 237, 0.7);
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+}
+
+.dict-head .spacer {
+  flex: 1;
+}
+
+.dict-manager {
+  margin-top: 8px;
+
+  .manager-controls {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    .search {
+      flex: 1;
+      min-width: 220px;
+    }
+  }
+  .manager-add {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0 16px;
+    flex-wrap: wrap;
+    .cell-input {
+      flex: 1;
+      min-width: 200px;
+    }
+    .arrow {
+      color: rgba(232, 232, 237, 0.4);
+    }
+  }
+}
+
 .empty-hint {
   display: flex;
   align-items: center;

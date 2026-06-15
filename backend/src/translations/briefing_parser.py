@@ -143,24 +143,45 @@ def parse_request(file_bytes: bytes, sheet_name: str, request_index: int) -> dic
     return {"name": name, "meta": meta, "segments": segments}
 
 
-def parse_translation_memories(
-    file_bytes: bytes, sheet_name: str = "Translation Memories"
-) -> list[dict]:
-    """Parses the TM sheet into glossary rows: {market, source, target}."""
-    rows = _load_sheet_rows(file_bytes, sheet_name)
+def _parse_glossary_rows(rows: list[list[str]]) -> list[dict]:
+    """Extracts {market, source, target} from rows that have an EN header."""
     header_idx, market_cols = _market_columns(rows)
     en_col = market_cols[SOURCE_MARKET]
     target_cols = {m: c for m, c in market_cols.items() if m != SOURCE_MARKET}
 
     entries: list[dict] = []
+    seen: set[tuple[str, str]] = set()
     for row in rows[header_idx + 1 :]:
         source = row[en_col] if len(row) > en_col else ""
         if not source:
             continue
         for market, col in target_cols.items():
             target = row[col] if len(row) > col else ""
-            if target and target != source:
+            if target and target != source and (market, source) not in seen:
+                seen.add((market, source))
                 entries.append(
                     {"market": market, "source": source, "target": target}
                 )
     return entries
+
+
+def parse_translation_memories(
+    file_bytes: bytes, sheet_name: str = "Translation Memories"
+) -> list[dict]:
+    """Parses one TM sheet into glossary rows: {market, source, target}."""
+    return _parse_glossary_rows(_load_sheet_rows(file_bytes, sheet_name))
+
+
+def parse_glossary_workbook(file_bytes: bytes) -> list[dict]:
+    """Parses every glossary-style sheet (those with an EN column) in a
+    workbook into {market, source, target} rows. Sheets without an EN header
+    (e.g. free-form grids) are skipped. Later sheets win on duplicates."""
+    entries: dict[tuple[str, str], dict] = {}
+    for sheet in list_sheets(file_bytes):
+        try:
+            rows = _load_sheet_rows(file_bytes, sheet)
+            for e in _parse_glossary_rows(rows):
+                entries[(e["market"], e["source"])] = e
+        except Exception:
+            continue  # skip non-glossary sheets
+    return list(entries.values())

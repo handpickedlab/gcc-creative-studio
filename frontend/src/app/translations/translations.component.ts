@@ -19,6 +19,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {
   Briefing,
   GlossarySummary,
+  GlossaryTerm,
   Market,
   MarketTranslation,
   ParseResult,
@@ -48,6 +49,15 @@ export class TranslationsComponent implements OnInit {
   activeTab = 0;
 
   glossary: GlossarySummary | null = null;
+
+  // Glossary manager (configurable dictionary)
+  showGlossaryManager = false;
+  glossaryMarket = '';
+  glossaryTerms: GlossaryTerm[] = [];
+  glossaryQuery = '';
+  isLoadingTerms = false;
+  newTermSource = '';
+  newTermTarget = '';
 
   isUploading = false;
   isLoadingRequest = false;
@@ -85,6 +95,72 @@ export class TranslationsComponent implements OnInit {
     this.service.getGlossarySummary().subscribe({
       next: s => (this.glossary = s),
       error: () => {},
+    });
+  }
+
+  // --- Glossary manager ------------------------------------------------
+
+  toggleGlossaryManager(): void {
+    this.showGlossaryManager = !this.showGlossaryManager;
+    if (this.showGlossaryManager && !this.glossaryMarket) {
+      this.glossaryMarket =
+        this.glossary?.perMarket?.[0]?.market ?? this.targetMarkets[0]?.code ?? 'NL';
+      this.loadGlossaryTerms();
+    }
+  }
+
+  loadGlossaryTerms(): void {
+    if (!this.glossaryMarket) return;
+    this.isLoadingTerms = true;
+    this.service
+      .getGlossaryTerms(this.glossaryMarket, this.glossaryQuery || undefined)
+      .subscribe({
+        next: t => {
+          this.glossaryTerms = t;
+          this.isLoadingTerms = false;
+        },
+        error: err => {
+          this.isLoadingTerms = false;
+          handleErrorSnackbar(this.snackBar, err, 'Could not load dictionary');
+        },
+      });
+  }
+
+  addGlossaryTerm(): void {
+    const source = this.newTermSource.trim();
+    const target = this.newTermTarget.trim();
+    if (!source || !target || !this.glossaryMarket) return;
+    this.service
+      .createGlossaryTerm(this.glossaryMarket, source, target)
+      .subscribe({
+        next: term => {
+          this.glossaryTerms = [term, ...this.glossaryTerms];
+          this.newTermSource = '';
+          this.newTermTarget = '';
+          this.loadGlossarySummary();
+        },
+        error: err => handleErrorSnackbar(this.snackBar, err, 'Could not add term'),
+      });
+  }
+
+  saveGlossaryTerm(term: GlossaryTerm): void {
+    this.service
+      .updateGlossaryTerm(term.id, {source: term.source, target: term.target})
+      .subscribe({
+        next: () => handleSuccessSnackbar(this.snackBar, 'Term updated'),
+        error: err =>
+          handleErrorSnackbar(this.snackBar, err, 'Could not update term'),
+      });
+  }
+
+  deleteGlossaryTerm(term: GlossaryTerm): void {
+    this.service.deleteGlossaryTerm(term.id).subscribe({
+      next: () => {
+        this.glossaryTerms = this.glossaryTerms.filter(t => t.id !== term.id);
+        this.loadGlossarySummary();
+      },
+      error: err =>
+        handleErrorSnackbar(this.snackBar, err, 'Could not delete term'),
     });
   }
 

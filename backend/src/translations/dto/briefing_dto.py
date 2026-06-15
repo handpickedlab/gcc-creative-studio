@@ -97,3 +97,15 @@ class SaveBriefingRequestDto(_CamelModel):
 class TmImportResultDto(_CamelModel):
     imported: int
     markets: list[str]
+
+
+class GlossaryTermInputDto(_CamelModel):
+    market: str
+    source: str
+    target: str
+
+
+class GlossaryTermUpdateDto(_CamelModel):
+    market: str | None = None
+    source: str | None = None
+    target: str | None = None

@@ -71,6 +71,13 @@ export interface GlossarySummary {
   }[];
 }
 
+export interface GlossaryTerm {
+  id: number;
+  language: string; // market code
+  source: string;
+  target: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -112,6 +119,35 @@ export class TranslationService {
 
   getGlossarySummary(): Observable<GlossarySummary> {
     return this.http.get<GlossarySummary>(`${this.baseUrl}/glossary/summary`);
+  }
+
+  getGlossaryTerms(market: string, q?: string): Observable<GlossaryTerm[]> {
+    let url = `${this.baseUrl}/glossary?market=${encodeURIComponent(market)}`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    return this.http.get<GlossaryTerm[]>(url);
+  }
+
+  createGlossaryTerm(
+    market: string,
+    source: string,
+    target: string,
+  ): Observable<GlossaryTerm> {
+    return this.http.post<GlossaryTerm>(`${this.baseUrl}/glossary`, {
+      market,
+      source,
+      target,
+    });
+  }
+
+  updateGlossaryTerm(
+    id: number,
+    data: {source?: string; target?: string},
+  ): Observable<GlossaryTerm> {
+    return this.http.put<GlossaryTerm>(`${this.baseUrl}/glossary/${id}`, data);
+  }
+
+  deleteGlossaryTerm(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/glossary/${id}`);
   }
 
   translate(
