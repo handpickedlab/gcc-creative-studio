@@ -45,7 +45,7 @@ export class TranslationsComponent implements OnInit {
 
   briefing: Briefing | null = null;
   selectedMarkets: string[] = [];
-  translations: MarketTranslation[] = [];
+  translations: (MarketTranslation & {loading?: boolean})[] = [];
   activeTab = 0;
 
   glossary: GlossarySummary | null = null;
@@ -61,7 +61,6 @@ export class TranslationsComponent implements OnInit {
 
   isUploading = false;
   isLoadingRequest = false;
-  isTranslating = false;
   isImportingTm = false;
   isSaving = false;
   isExporting = false;
@@ -89,6 +88,40 @@ export class TranslationsComponent implements OnInit {
     return (
       !!this.briefing && !this.briefing.segments.some(s => !!s.text?.trim())
     );
+  }
+
+  // --- Manual mode (no xlsx) ------------------------------------------
+
+  startBlank(): void {
+    this.parse = null;
+    this.selectedFile = null;
+    this.translations = [];
+    this.briefing = {
+      name: 'New briefing',
+      sourceMarket: 'EN',
+      meta: {},
+      segments: [
+        {block: null, field: 'Subject line', label: 'Subject line', charLimit: 40, text: ''},
+        {block: null, field: 'Pre header', label: 'Pre header', charLimit: 90, text: ''},
+        {block: 'B1', field: 'Header', label: 'Header', charLimit: null, text: ''},
+        {block: 'B1', field: 'Body', label: 'Body', charLimit: null, text: ''},
+        {block: 'B1', field: 'CTA', label: 'CTA', charLimit: 18, text: ''},
+      ],
+    };
+  }
+
+  addSegment(): void {
+    this.briefing?.segments.push({
+      block: null,
+      field: 'New field',
+      label: 'New field',
+      charLimit: null,
+      text: '',
+    });
+  }
+
+  removeSegment(i: number): void {
+    this.briefing?.segments.splice(i, 1);
   }
 
   loadGlossarySummary(): void {
@@ -277,19 +310,37 @@ export class TranslationsComponent implements OnInit {
 
   // --- Translate ------------------------------------------------------
 
+  get isTranslating(): boolean {
+    return this.translations.some(t => t.loading);
+  }
+
+  /** Fire one request per market in parallel; tabs fill in as each returns. */
   translate(): void {
     if (!this.briefing || this.selectedMarkets.length === 0) return;
-    this.isTranslating = true;
-    this.service.translate(this.briefing, this.selectedMarkets).subscribe({
-      next: res => {
-        this.translations = res.translations;
-        this.activeTab = 0;
-        this.isTranslating = false;
-      },
-      error: err => {
-        this.isTranslating = false;
-        handleErrorSnackbar(this.snackBar, err, 'Translation failed');
-      },
+    // Seed a tab per market in loading state so results stream in.
+    this.translations = this.selectedMarkets.map(m => ({
+      market: m,
+      segments: [],
+      loading: true,
+    }));
+    this.activeTab = 0;
+    const briefing = this.briefing;
+    this.selectedMarkets.forEach(market => {
+      this.service.translate(briefing, [market]).subscribe({
+        next: res => {
+          const entry = this.translations.find(t => t.market === market);
+          const tr = res.translations[0];
+          if (entry && tr) {
+            entry.segments = tr.segments;
+          }
+          if (entry) entry.loading = false;
+        },
+        error: err => {
+          const entry = this.translations.find(t => t.market === market);
+          if (entry) entry.loading = false;
+          handleErrorSnackbar(this.snackBar, err, `Translation to ${market} failed`);
+        },
+      });
     });
   }
 
