@@ -1,0 +1,166 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.translations-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page-header {
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+.card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.full-width {
+  width: 100%;
+}
+
+.input-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+
+  .languages-field {
+    flex: 1;
+  }
+
+  .translate-btn {
+    height: 56px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: rgba(0, 0, 0, 0.6);
+
+  &.small {
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .result-language {
+      font-weight: 600;
+    }
+  }
+
+  .result-text {
+    margin: 0;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+}
+
+.glossary-card {
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+
+  .glossary-hint {
+    margin: 0 0 16px;
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 14px;
+  }
+}
+
+.glossary-add {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .arrow {
+    color: rgba(0, 0, 0, 0.4);
+  }
+
+  button {
+    height: 56px;
+  }
+}
+
+.glossary-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  th {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .actions {
+    text-align: right;
+    width: 56px;
+  }
+}
+
+.glossary-empty {
+  color: rgba(0, 0, 0, 0.5);
+  font-style: italic;
+}
