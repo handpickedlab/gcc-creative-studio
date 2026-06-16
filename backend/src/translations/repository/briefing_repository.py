@@ -44,8 +44,29 @@ class BriefingRepository:
         await self.db.refresh(item)
         return BriefingModel.model_validate(item)
 
+    async def update_briefing(
+        self, briefing_id: int, name: str, meta: dict, segments: list[dict]
+    ) -> BriefingModel | None:
+        result = await self.db.execute(
+            select(Briefing).where(Briefing.id == briefing_id)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            return None
+        item.name = name
+        item.meta = meta
+        item.segments = segments
+        await self.db.commit()
+        await self.db.refresh(item)
+        return BriefingModel.model_validate(item)
+
     async def upsert_translation(
-        self, briefing_id: int, market: str, segments: list[dict]
+        self,
+        briefing_id: int,
+        market: str,
+        segments: list[dict],
+        status: str = "draft",
+        comment: str | None = None,
     ) -> None:
         # Replace any existing translation for this (briefing, market).
         await self.db.execute(
@@ -56,7 +77,11 @@ class BriefingRepository:
         )
         self.db.add(
             BriefingTranslation(
-                briefing_id=briefing_id, market=market, segments=segments
+                briefing_id=briefing_id,
+                market=market,
+                segments=segments,
+                status=status,
+                comment=comment,
             )
         )
 

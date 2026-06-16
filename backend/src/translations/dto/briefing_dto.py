@@ -67,8 +67,9 @@ class ParseResultDto(_CamelModel):
 
 
 class BriefingInputDto(_CamelModel):
-    """A briefing payload coming from the client (not yet persisted)."""
+    """A briefing payload coming from the client (id set → update existing)."""
 
+    id: int | None = None
     name: str
     source_market: str = "EN"
     meta: BriefingMeta = Field(default_factory=BriefingMeta)
@@ -78,6 +79,8 @@ class BriefingInputDto(_CamelModel):
 class MarketTranslationDto(_CamelModel):
     market: str
     segments: list[BriefingSegment]
+    approval: str | None = None
+    comment: str | None = None
 
 
 class TranslateBriefingRequestDto(_CamelModel):
