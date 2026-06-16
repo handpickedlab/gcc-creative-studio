@@ -32,6 +32,7 @@ from src.translations.dto.briefing_dto import (
     GlossaryTermUpdateDto,
     MarketInfo,
     ParseResultDto,
+    RenameBriefingDto,
     SaveBriefingRequestDto,
     TmImportResultDto,
     TranslateBriefingRequestDto,
@@ -132,7 +133,7 @@ async def translate_briefing(
     service: BriefingService = Depends(),
 ):
     translations = await service.translate_briefing(
-        request.briefing, request.markets
+        request.briefing, request.markets, request.tone
     )
     return TranslateBriefingResponseDto(translations=translations)
 
@@ -172,3 +173,19 @@ async def list_briefings(service: BriefingService = Depends()):
 @router.get("/{briefing_id}")
 async def get_briefing(briefing_id: int, service: BriefingService = Depends()):
     return await service.get_briefing_with_translations(briefing_id)
+
+
+@router.patch("/{briefing_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def rename_briefing(
+    briefing_id: int,
+    dto: RenameBriefingDto,
+    service: BriefingService = Depends(),
+):
+    await service.rename_briefing(briefing_id, dto.name)
+
+
+@router.delete("/{briefing_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_briefing(
+    briefing_id: int, service: BriefingService = Depends()
+):
+    await service.delete_briefing(briefing_id)

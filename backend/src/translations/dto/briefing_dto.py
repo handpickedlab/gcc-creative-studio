@@ -83,6 +83,11 @@ class MarketTranslationDto(_CamelModel):
 class TranslateBriefingRequestDto(_CamelModel):
     briefing: BriefingInputDto
     markets: list[str] = Field(min_length=1)
+    tone: str | None = None
+
+
+class RenameBriefingDto(_CamelModel):
+    name: str
 
 
 class TranslateBriefingResponseDto(_CamelModel):

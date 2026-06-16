@@ -162,7 +162,11 @@ class BriefingService:
         return hits[:_MAX_GLOSSARY_HINTS]
 
     def _build_market_prompt(
-        self, segments: list[BriefingSegment], market: str, glossary: list
+        self,
+        segments: list[BriefingSegment],
+        market: str,
+        glossary: list,
+        tone: str | None = None,
     ) -> str:
         language = language_for_market(market)
         lines = [
@@ -175,6 +179,10 @@ class BriefingService:
             "- Respect the max character limit when one is given.",
             "- Do not translate the field names; only the text values.",
         ]
+        if tone:
+            lines.append(
+                f"- Use a {tone} tone of voice / form of address."
+            )
         if glossary:
             lines.append(
                 "- Use these established translations for specific terms:"
@@ -195,7 +203,11 @@ class BriefingService:
         return "\n".join(lines)
 
     def _translate_market(
-        self, segments: list[BriefingSegment], market: str, terms: list
+        self,
+        segments: list[BriefingSegment],
+        market: str,
+        terms: list,
+        tone: str | None = None,
     ) -> list[BriefingSegment]:
         # Indices that actually have source text.
         idx_with_text = [i for i, s in enumerate(segments) if s.text.strip()]
@@ -205,7 +217,7 @@ class BriefingService:
 
         translatable = [segments[i] for i in idx_with_text]
         glossary = self._relevant_glossary(translatable, terms)
-        prompt = self._build_market_prompt(translatable, market, glossary)
+        prompt = self._build_market_prompt(translatable, market, glossary, tone)
 
         try:
             raw = self.gemini_service.generate_text(prompt)
@@ -242,7 +254,10 @@ class BriefingService:
         return out
 
     async def translate_briefing(
-        self, briefing: BriefingInputDto, markets: list[str]
+        self,
+        briefing: BriefingInputDto,
+        markets: list[str],
+        tone: str | None = None,
     ) -> list[MarketTranslationDto]:
         invalid = [m for m in markets if not is_valid_market(m)]
         if invalid:
@@ -260,7 +275,7 @@ class BriefingService:
             if market == SOURCE_MARKET:
                 continue
             translated = self._translate_market(
-                briefing.segments, market, by_market.get(market, [])
+                briefing.segments, market, by_market.get(market, []), tone
             )
             results.append(
                 MarketTranslationDto(market=market, segments=translated)
@@ -376,6 +391,22 @@ class BriefingService:
 
     async def list_briefings(self):
         return await self.repo.list_briefings()
+
+    async def rename_briefing(self, briefing_id: int, name: str) -> None:
+        ok = await self.repo.rename_briefing(briefing_id, name)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Briefing {briefing_id} not found.",
+            )
+
+    async def delete_briefing(self, briefing_id: int) -> None:
+        ok = await self.repo.delete_briefing(briefing_id)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Briefing {briefing_id} not found.",
+            )
 
     async def get_briefing_with_translations(self, briefing_id: int):
         briefing = await self.repo.get_briefing(briefing_id)
