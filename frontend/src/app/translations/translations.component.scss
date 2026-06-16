@@ -37,7 +37,18 @@
 .serif { font-family: 'Cormorant Garamond', serif; }
 .mono { font-family: 'DM Mono', ui-monospace, monospace; }
 
-.page { height: 100%; display: flex; flex-direction: column; background: var(--bg); }
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  /* Respect the floating studio nav rail (left) + workspace pill (top). */
+  padding-left: max(calc(5vw + 4.5rem + 16px), 100px);
+  padding-top: 72px;
+}
+@media (min-width: 1400px) {
+  .page { padding-left: max(calc(3vw + 4.5rem + 16px), 100px); }
+}
 
 /* ---- header ---- */
 .hdr {
