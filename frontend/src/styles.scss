@@ -78,6 +78,8 @@ $creative-studio-theme: mat.define-theme(
 /* You can add global styles to this file, and also import other style files */
 
 @import url(//fonts.googleapis.com/css2?family=Google+Sans);
+// Hunkemöller editorial pairing — used by the Translations (Vertalingen) page.
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
 
 html,
 body {

@@ -153,11 +153,34 @@ export class TranslationService {
   translate(
     briefing: Briefing,
     markets: string[],
+    tone?: string,
   ): Observable<{translations: MarketTranslation[]}> {
     return this.http.post<{translations: MarketTranslation[]}>(
       `${this.baseUrl}/translate`,
-      {briefing, markets},
+      {briefing, markets, tone},
     );
+  }
+
+  listBriefings(): Observable<(Briefing & {id: number; createdAt?: string})[]> {
+    return this.http.get<(Briefing & {id: number; createdAt?: string})[]>(
+      `${this.baseUrl}`,
+    );
+  }
+
+  getBriefing(
+    id: number,
+  ): Observable<{briefing: Briefing; translations: MarketTranslation[]}> {
+    return this.http.get<{briefing: Briefing; translations: MarketTranslation[]}>(
+      `${this.baseUrl}/${id}`,
+    );
+  }
+
+  renameBriefing(id: number, name: string): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/${id}`, {name});
+  }
+
+  deleteBriefing(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 
   save(

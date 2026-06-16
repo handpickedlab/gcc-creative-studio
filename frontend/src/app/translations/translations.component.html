@@ -1,279 +1,302 @@
-<!--
- Copyright 2026 Google LLC
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
--->
-
-<div class="translations-page">
-  <header class="page-header">
-    <h1>Briefing Translations</h1>
-    <p>Upload a briefing, translate it per market, review in tabs and export.</p>
-  </header>
-
-  <!-- 1. Upload -->
-  <section class="glass-card">
-    <div class="upload-row">
-      <input
-        #fileInput
-        type="file"
-        accept=".xlsx"
-        hidden
-        (change)="onFileSelected($event)"
-      />
-      <button class="gradient-btn" (click)="fileInput.click()">
-        <mat-icon>upload_file</mat-icon>
-        <span>{{ selectedFile ? 'Change file' : 'Upload briefing (.xlsx)' }}</span>
-      </button>
-      <button class="ghost-btn" (click)="startBlank()">
-        <mat-icon>add</mat-icon>
-        <span>Start blank</span>
-      </button>
-      <span class="file-name" *ngIf="selectedFile">{{ selectedFile.name }}</span>
-      <span class="spacer"></span>
-      <button
-        class="ghost-btn"
-        *ngIf="selectedFile"
-        [disabled]="isImportingTm"
-        matTooltip="Import the 'Translation Memories' sheet as the glossary"
-        (click)="importTm()"
-      >
-        <mat-icon>menu_book</mat-icon>
-        <span>{{ isImportingTm ? 'Importing…' : 'Import translation memory' }}</span>
-      </button>
+<!-- Copyright 2026 Google LLC — Apache-2.0. Hunkemöller "Vertalingen". -->
+<div class="page">
+  <!-- Header -->
+  <div class="hdr">
+    <div class="brand">
+      <span class="logo">HKM</span>
+      <span class="kicker">AI TOOLBOX</span>
+      <ng-container *ngIf="view === 'work' && briefing">
+        <span class="sep">/</span><span class="crumb">Vertalingen</span>
+        <span class="sep">/</span><span class="crumb cur">{{ briefing.name }}</span>
+      </ng-container>
     </div>
+    <span class="crumb cur">Vertalingen</span>
+  </div>
 
-    <div *ngIf="isUploading" class="loading">
-      <mat-progress-spinner mode="indeterminate" diameter="28"></mat-progress-spinner>
-    </div>
-
-    <!-- Sheet + request selection -->
-    <div class="select-row" *ngIf="parse && !isUploading">
-      <mat-form-field appearance="outline">
-        <mat-label>Sheet</mat-label>
-        <mat-select [(ngModel)]="selectedSheet" (selectionChange)="onSheetChange()">
-          <mat-option *ngFor="let s of parse.sheets" [value]="s">{{ s }}</mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" *ngIf="parse.requests.length">
-        <mat-label>Request</mat-label>
-        <mat-select [(ngModel)]="selectedRequestIndex">
-          <mat-option *ngFor="let r of parse.requests" [value]="r.index">
-            {{ r.label }} — {{ r.filled }} field{{ r.filled === 1 ? '' : 's' }}{{ r.filled === 0 ? ' (empty)' : '' }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <button
-        class="gradient-btn"
-        [disabled]="selectedRequestIndex == null || isLoadingRequest"
-        (click)="loadRequest()"
-      >
-        <mat-icon>article</mat-icon>
-        <span>{{ isLoadingRequest ? 'Loading…' : 'Load request' }}</span>
-      </button>
-
-      <span class="hint" *ngIf="!parse.requests.length">
-        No “Request nr.” rows found in this sheet.
-      </span>
-    </div>
-  </section>
-
-  <!-- Dictionary (default seeded + auto-loaded from Translation Memories) -->
-  <section class="glass-card dict-card" *ngIf="glossary">
-    <div class="dict-head">
-      <mat-icon>menu_book</mat-icon>
-      <span><strong>{{ glossary.total }}</strong> dictionary terms across
-        {{ glossary.perMarket.length }} markets</span>
-      <span class="spacer"></span>
-      <button class="ghost-btn small" (click)="toggleGlossaryManager()">
-        <mat-icon>{{ showGlossaryManager ? 'expand_less' : 'tune' }}</mat-icon>
-        <span>{{ showGlossaryManager ? 'Close' : 'Manage dictionary' }}</span>
-      </button>
-    </div>
-
-    <div class="dict-markets" *ngIf="!showGlossaryManager">
-      <div class="dict-market" *ngFor="let pm of glossary.perMarket">
-        <span class="dm-code">{{ pm.market }}</span>
-        <span class="dm-count">{{ pm.count }}</span>
-        <span class="dm-sample" *ngIf="pm.samples.length">
-          “{{ pm.samples[0].source }}” → “{{ pm.samples[0].target }}”
-        </span>
+  <div class="body">
+    <!-- Rail -->
+    <div class="rail">
+      <div class="rail-sec">
+        <div class="rail-label" style="margin-bottom:11px">Nieuwe briefing</div>
+        <div style="display:flex; gap:7px">
+          <input #fileInput type="file" accept=".xlsx" hidden (change)="onFileSelected($event)" />
+          <button class="btn primary sm full" style="flex:1" (click)="fileInput.click()">Upload .xlsx</button>
+          <button class="btn ghost sm" (click)="startBlank()">Blanco</button>
+        </div>
       </div>
-    </div>
+      <div class="rail-divider"></div>
 
-    <!-- Manager -->
-    <div class="dict-manager" *ngIf="showGlossaryManager">
-      <div class="manager-controls">
-        <mat-form-field appearance="outline">
-          <mat-label>Market</mat-label>
-          <mat-select [(ngModel)]="glossaryMarket" (selectionChange)="loadGlossaryTerms()">
-            <mat-option *ngFor="let m of targetMarkets" [value]="m.code">
-              {{ m.code }} — {{ m.label }}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="search">
-          <mat-label>Search</mat-label>
-          <input matInput [(ngModel)]="glossaryQuery" (keyup.enter)="loadGlossaryTerms()" />
-        </mat-form-field>
+      <div class="rail-sec" style="padding-bottom:9px">
+        <div style="display:flex; align-items:baseline; justify-content:space-between">
+          <span class="rail-label">Bibliotheek</span>
+          <span class="mono" style="font-size:10px; color:var(--text-s)">{{ library.length }}</span>
+        </div>
+        <div class="search-wrap">
+          <svg class="ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          <input [(ngModel)]="librarySearch" placeholder="Zoek briefing…" />
+        </div>
       </div>
 
-      <div class="manager-add">
-        <input class="cell-input" placeholder="Source (EN)" [(ngModel)]="newTermSource" (keyup.enter)="addGlossaryTerm()" />
-        <mat-icon class="arrow">arrow_forward</mat-icon>
-        <input class="cell-input" placeholder="{{ glossaryMarket }} translation" [(ngModel)]="newTermTarget" (keyup.enter)="addGlossaryTerm()" />
-        <button class="gradient-btn small" [disabled]="!newTermSource.trim() || !newTermTarget.trim()" (click)="addGlossaryTerm()">
-          <mat-icon>add</mat-icon><span>Add</span>
-        </button>
-      </div>
-
-      <div *ngIf="isLoadingTerms" class="loading"><mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner></div>
-
-      <table class="seg-table" *ngIf="!isLoadingTerms && glossaryTerms.length">
-        <thead><tr><th>Source (EN)</th><th>{{ glossaryMarket }}</th><th></th></tr></thead>
-        <tbody>
-          <tr *ngFor="let t of glossaryTerms">
-            <td><input class="cell-input" [(ngModel)]="t.source" (blur)="saveGlossaryTerm(t)" /></td>
-            <td><input class="cell-input" [(ngModel)]="t.target" (blur)="saveGlossaryTerm(t)" /></td>
-            <td class="actions">
-              <button class="icon-btn" matTooltip="Delete" (click)="deleteGlossaryTerm(t)">
-                <mat-icon>delete_outline</mat-icon>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="hint" *ngIf="!isLoadingTerms && !glossaryTerms.length">
-        No terms for {{ glossaryMarket }} yet.
-      </p>
-    </div>
-  </section>
-
-  <!-- 2. Briefing + markets -->
-  <section class="glass-card" *ngIf="briefing">
-    <div class="briefing-head">
-      <div>
-        <input class="name-input" [(ngModel)]="briefing.name" placeholder="Briefing name" />
-        <p class="meta-line">
-          <span *ngIf="briefing.meta.requestor">Requestor: {{ briefing.meta.requestor }} · </span>
-          <span *ngIf="briefing.meta.due">Due: {{ briefing.meta.due }} · </span>
-          <span>{{ briefing.segments.length }} copy fields</span>
-        </p>
-        <p class="notes" *ngIf="briefing.meta.notes">📝 {{ briefing.meta.notes }}</p>
-      </div>
-    </div>
-
-    <div class="empty-hint" *ngIf="briefingIsEmpty">
-      <mat-icon>info</mat-icon>
-      This request has no source copy — it looks like an empty template.
-      Pick a sheet/request that actually contains text (e.g. a “Week …” sheet).
-    </div>
-
-    <table class="seg-table edit-table">
-      <thead>
-        <tr>
-          <th>Block</th><th>Field</th><th>Max</th><th>Source (EN)</th><th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let seg of briefing.segments; let i = index">
-          <td><input class="cell-input narrow" [(ngModel)]="seg.block" placeholder="—" /></td>
-          <td><input class="cell-input mid" [(ngModel)]="seg.field" /></td>
-          <td><input class="cell-input tiny" type="number" [(ngModel)]="seg.charLimit" /></td>
-          <td><textarea class="cell-input" rows="1" [(ngModel)]="seg.text"></textarea></td>
-          <td class="actions">
-            <button class="icon-btn" matTooltip="Remove field" (click)="removeSegment(i)">
-              <mat-icon>delete_outline</mat-icon>
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <button class="ghost-btn small add-field" (click)="addSegment()">
-      <mat-icon>add</mat-icon><span>Add field</span>
-    </button>
-
-    <div class="translate-row">
-      <mat-form-field appearance="outline" class="markets-field">
-        <mat-label>Target markets</mat-label>
-        <mat-select [(ngModel)]="selectedMarkets" multiple>
-          <mat-option *ngFor="let m of targetMarkets" [value]="m.code">
-            {{ m.code }} — {{ m.label }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
-      <button
-        class="gradient-btn"
-        [disabled]="selectedMarkets.length === 0 || isTranslating"
-        (click)="translate()"
-      >
-        <mat-icon>translate</mat-icon>
-        <span>{{ isTranslating ? 'Translating…' : 'Translate' }}</span>
-      </button>
-    </div>
-  </section>
-
-  <!-- 3. Translations: one tab per market -->
-  <section class="glass-card" *ngIf="translations.length">
-    <div class="results-head">
-      <h2>Translations</h2>
-      <div class="actions">
-        <button class="ghost-btn" [disabled]="isExporting || isTranslating" (click)="exportXlsx()">
-          <mat-icon>download</mat-icon>
-          <span>{{ isExporting ? 'Exporting…' : 'Export .xlsx' }}</span>
-        </button>
-        <button class="gradient-btn small" [disabled]="isSaving || isTranslating" (click)="save()">
-          <mat-icon>save</mat-icon>
-          <span>{{ isSaving ? 'Saving…' : 'Save' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <mat-tab-group [(selectedIndex)]="activeTab" animationDuration="150ms">
-      <mat-tab *ngFor="let tr of translations" [label]="tr.loading ? tr.market + ' …' : tr.market">
-        <ng-template matTabContent>
-          <div *ngIf="tr.loading" class="loading">
-            <mat-progress-spinner mode="indeterminate" diameter="32"></mat-progress-spinner>
-            <span>Translating {{ marketLabel(tr.market) }}…</span>
+      <div class="rail-list">
+        <div *ngIf="!filteredLibrary.length" style="padding:24px 12px; text-align:center; font-size:11px; color:var(--text-s)">Nog geen opgeslagen briefings.</div>
+        <div *ngFor="let b of filteredLibrary" class="brow" [class.active]="view==='work' && briefing?.id===b.id" (click)="renamingId===b.id ? null : openBriefing(b.id)">
+          <div class="top">
+            <span class="dot" style="background:var(--text-s)"></span>
+            <input *ngIf="renamingId===b.id" class="rename" [(ngModel)]="renameValue" (click)="$event.stopPropagation()" (blur)="commitRename(b)" (keydown.enter)="commitRename(b)" />
+            <span *ngIf="renamingId!==b.id" class="nm">{{ b.name }}</span>
+            <div class="row-acts" *ngIf="renamingId!==b.id">
+              <button class="iconbtn" title="Hernoemen" (click)="startRename(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L5 11l-2.5.5L3 9l6.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+              <button class="iconbtn" title="Dupliceren" (click)="duplicateBriefing(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 5.5H2.5a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.2"/></svg></button>
+              <button class="iconbtn danger" title="Verwijderen" (click)="deleteBriefing(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
           </div>
-          <table class="seg-table tr-table" *ngIf="!tr.loading">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>Source (EN)</th>
-                <th>{{ marketLabel(tr.market) }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let seg of tr.segments; let i = index">
-                <td class="field-cell">
-                  <span class="block-tag" *ngIf="seg.block">{{ seg.block }}</span>
-                  {{ seg.field }}
-                  <span class="limit" *ngIf="seg.charLimit">≤{{ seg.charLimit }}</span>
-                </td>
-                <td class="source-cell">{{ sourceText(i) }}</td>
-                <td>
-                  <textarea class="cell-input" rows="1" [(ngModel)]="seg.text"></textarea>
-                  <span class="count" [class.over]="over(seg)" *ngIf="seg.charLimit">
-                    {{ seg.text.length }}/{{ seg.charLimit }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </ng-template>
-      </mat-tab>
-    </mat-tab-group>
-  </section>
+          <div class="meta">{{ b.fields }} velden · {{ b.date }}</div>
+        </div>
+      </div>
+
+      <div class="rail-divider"></div>
+      <div class="rail-sec" style="padding:10px 12px">
+        <button class="dict-link" [class.active]="view==='dict'" (click)="openDict()">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7a1.5 1.5 0 011.5 1.5v9.5L8 12l-3.5 1.5V4A1.5 1.5 0 016 2.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></span>
+          <div style="flex:1"><div class="t1">Woordenboek</div><div class="t2">{{ glossaryTotal }} termen · {{ glossaryPerMarket.length }} markten</div></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas">
+      <!-- EMPTY -->
+      <div *ngIf="view==='empty'" class="empty">
+        <h1>Vertalingen</h1>
+        <p>Upload een briefing of begin blanco. Vertaal je campagne-copy per markt, beoordeel per tab en exporteer terug naar Excel.</p>
+        <div class="acts">
+          <button class="btn primary" (click)="fileInput.click()">Upload .xlsx</button>
+          <button class="btn ghost" (click)="startBlank()">Begin blanco</button>
+        </div>
+      </div>
+
+      <!-- INTAKE -->
+      <div *ngIf="view==='intake'" class="canvas-inner intake" style="max-width:680px">
+        <div style="font-size:9px; font-weight:600; color:var(--ok); letter-spacing:.12em; font-family:'DM Mono',monospace; margin-bottom:6px">✓ INGELEZEN</div>
+        <h2>{{ fileName }}</h2>
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:24px">{{ sheets.length }} sheets gevonden · kies het blad en de request.</p>
+        <div class="field-stack">
+          <div>
+            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Blad</span></div><p class="hint">Selecteer het tabblad met de briefingvelden.</p></div>
+            <select class="sel" [(ngModel)]="selectedSheet" (change)="onSheetChange()">
+              <option *ngFor="let s of sheets" [value]="s">{{ s }}</option>
+            </select>
+          </div>
+          <div>
+            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Request</span></div><p class="hint">Elke request toont hoeveel velden tekst bevatten.</p></div>
+            <div style="display:flex; flex-direction:column; gap:7px">
+              <button *ngFor="let r of requests" class="req-btn" [class.on]="selectedRequestIndex===r.index" [class.empty]="r.filled===0" (click)="selectedRequestIndex=r.index">
+                <span class="lbl">{{ r.label }}</span>
+                <div style="display:flex; align-items:center; gap:7px">
+                  <div class="fill-bars"><span *ngFor="let i of bars" [class.f]="i < r.filled"></span></div>
+                  <span class="req-count">{{ r.filled }} velden</span>
+                </div>
+              </button>
+            </div>
+            <div *ngIf="selectedRequest?.filled===0" class="warn-box" style="margin-top:11px">
+              <div><div class="t1">Lege request</div><p>Deze request bevat geen ingevulde velden — kies een andere of begin blanco.</p></div>
+            </div>
+          </div>
+          <div class="dict-box" *ngIf="glossaryTotal">
+            <div><div style="font-size:12.5px; font-weight:500">Woordenboek geladen</div><p>Vertaalgeheugen samengevoegd — <b style="color:var(--text)">{{ glossaryTotal }} termen</b> over {{ glossaryPerMarket.length }} markten.</p></div>
+          </div>
+          <div style="display:flex; gap:9px">
+            <button class="btn ghost" (click)="view = briefing ? 'work' : 'empty'">Annuleren</button>
+            <button class="btn primary full" style="flex:1" [disabled]="selectedRequestIndex==null || selectedRequest?.filled===0 || isUploading" (click)="confirmIntake()">
+              {{ isUploading ? 'Laden…' : (selectedRequest?.filled===0 ? 'Kies een gevulde request' : 'Open briefing') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DICTIONARY -->
+      <div *ngIf="view==='dict'" class="canvas-inner">
+        <button class="btn ghost sm" (click)="view = briefing ? 'work' : 'empty'" style="margin-bottom:18px">← Terug</button>
+        <h2 class="serif" style="font-size:26px; font-weight:600; letter-spacing:-.02em; margin-bottom:4px">Woordenboek</h2>
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">{{ glossaryTotal }} termen · vertaalgeheugen per markt. Bewerk vrij — termen sturen toekomstige vertalingen.</p>
+        <div style="display:flex; gap:14px; margin-bottom:16px; flex-wrap:wrap">
+          <select class="sel" style="max-width:240px" [(ngModel)]="dictMarket" (change)="loadDictTerms()">
+            <option *ngFor="let m of targets" [value]="m.code">{{ m.code }} — {{ m.label }}</option>
+          </select>
+          <input class="tinput" style="max-width:240px" [(ngModel)]="dictQuery" (keydown.enter)="loadDictTerms()" placeholder="Zoek term…" />
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px">
+          <input class="tinput" [(ngModel)]="newSource" placeholder="Bron (EN)" (keydown.enter)="addDictTerm()" />
+          <span style="color:var(--text-s)">→</span>
+          <input class="tinput" [(ngModel)]="newTarget" placeholder="{{ dictMarket }}-vertaling" (keydown.enter)="addDictTerm()" />
+          <button class="btn primary sm" [disabled]="!newSource.trim() || !newTarget.trim()" (click)="addDictTerm()">Toevoegen</button>
+        </div>
+        <table class="gloss-tbl" *ngIf="dictTerms.length">
+          <thead><tr><th>Bron (EN)</th><th>{{ dictMarket }}</th><th></th></tr></thead>
+          <tbody>
+            <tr *ngFor="let t of dictTerms">
+              <td><input [(ngModel)]="t.source" (blur)="saveDictTerm(t)" /></td>
+              <td><input [(ngModel)]="t.target" (blur)="saveDictTerm(t)" /></td>
+              <td style="width:40px; text-align:right"><button class="iconbtn danger" (click)="deleteDictTerm(t)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>
+            </tr>
+          </tbody>
+        </table>
+        <p *ngIf="!dictTerms.length" style="color:var(--text-s); font-style:italic">Nog geen termen voor {{ dictMarket }}.</p>
+      </div>
+
+      <!-- WORK -->
+      <div *ngIf="view==='work' && briefing" class="canvas-inner wide">
+        <!-- Meta bar -->
+        <div class="metabar">
+          <div style="display:flex; align-items:flex-start; gap:14px">
+            <div style="flex:1; min-width:0">
+              <input class="name" [(ngModel)]="briefing.name" />
+              <div class="mrow">
+                <span>{{ briefing.fields.length }} velden</span><span style="color:var(--border)">·</span>
+                <span>Aanvrager <b>{{ briefing.requestor || '—' }}</b></span><span style="color:var(--border)">·</span>
+                <span>Deadline <b>{{ briefing.due || '—' }}</b></span>
+              </div>
+            </div>
+            <button class="btn soft sm" (click)="metaOpen=!metaOpen">{{ metaOpen ? 'Verbergen' : 'Details' }}</button>
+          </div>
+          <div class="meta-grid" *ngIf="metaOpen">
+            <div><div class="fld-label">Aanvrager</div><input class="tinput" [(ngModel)]="briefing.requestor" placeholder="bijv. Sanne de Vries" /></div>
+            <div><div class="fld-label">Deadline</div><input class="tinput" [(ngModel)]="briefing.due" placeholder="bijv. 24 mrt 2026" /></div>
+            <div class="full"><div class="fld-label">Notities</div><textarea class="tinput" rows="2" [(ngModel)]="briefing.notes" placeholder="Context, tone-of-voice, merkrichtlijnen…"></textarea></div>
+          </div>
+        </div>
+
+        <!-- Tab toggle -->
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px">
+          <div class="seg-toggle">
+            <button [class.on]="workTab==='briefing'" (click)="workTab='briefing'">Briefing</button>
+            <button [class.on]="workTab==='results'" (click)="goResults()" [disabled]="!hasResults">Resultaten</button>
+          </div>
+          <span *ngIf="hasResults" class="mono" style="font-size:11px; color:var(--text-m)">{{ doneCount }}/{{ selected.length }} klaar · {{ apprCount }} goedgekeurd</span>
+        </div>
+
+        <!-- BRIEFING TAB -->
+        <div *ngIf="workTab==='briefing'" class="work-grid">
+          <!-- editor -->
+          <div class="panel">
+            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Bronvelden</span><span class="r">bron · EN</span></div><p class="hint">Bewerk de Engelse brontekst. HTML-tags en placeholders blijven behouden.</p></div>
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div *ngFor="let block of blocks">
+                <div class="block-head"><span class="bl">Blok {{ block }}</span><div class="ln"></div></div>
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div *ngFor="let f of fieldsInBlock(block)" class="fieldrow">
+                    <div class="head">
+                      <span class="btag">{{ f.block }}</span>
+                      <input class="fname" [(ngModel)]="f.name" />
+                      <span style="font-size:10px; color:var(--text-s)">limiet</span>
+                      <input class="limit-in" type="number" [(ngModel)]="f.limit" />
+                      <button class="iconbtn danger" title="Veld verwijderen" (click)="removeField(f)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    </div>
+                    <textarea class="fta" [rows]="f.name==='Body'?3:1" [(ngModel)]="f.text"></textarea>
+                    <div class="fmeta"><span></span><span class="count" [class.over]="!!f.limit && f.text.length > f.limit">{{ f.text.length }}/{{ f.limit || '∞' }}</span></div>
+                  </div>
+                  <button class="addline" (click)="addField(block)">+ Veld toevoegen aan {{ block }}</button>
+                </div>
+              </div>
+              <button class="addblock" (click)="addBlock()">+ Blok toevoegen</button>
+            </div>
+          </div>
+
+          <!-- controls -->
+          <div class="panel">
+            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Doelmarkten</span><span class="r">{{ selected.length }}/14</span></div><p class="hint">Kies één of meer markten. Elke markt wordt een eigen tab.</p></div>
+            <div style="display:flex; gap:8px; margin-bottom:11px; align-items:center">
+              <input class="tinput" [(ngModel)]="marketFilter" placeholder="Filter markten…" />
+              <button class="pill tiny" [class.active]="allSelected" (click)="selectAllMarkets()">Alles</button>
+            </div>
+            <div *ngFor="let g of groups" style="margin-bottom:11px">
+              <ng-container *ngIf="groupTargets(g).length">
+                <div class="fld-label">{{ g }}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px">
+                  <button *ngFor="let m of groupTargets(g)" class="mchip" [class.on]="isSelected(m.code)" [title]="m.label" (click)="toggleMarket(m.code)">
+                    <span class="code">{{ m.code }}</span><span *ngIf="m.variant" class="vdot"></span>
+                  </button>
+                </div>
+              </ng-container>
+            </div>
+            <div class="divider"></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:20px">
+              <div><div style="font-size:12px; font-weight:500">Tone of voice</div><div style="font-size:11px; color:var(--text-m); margin-top:2px">Aanspreekvorm</div></div>
+              <div class="seg-toggle">
+                <button [class.on]="tone==='informeel'" (click)="tone='informeel'">Informeel</button>
+                <button [class.on]="tone==='formeel'" (click)="tone='formeel'">Formeel</button>
+              </div>
+            </div>
+            <button class="btn primary lg full" [disabled]="!selected.length || isTranslating" (click)="translate()">
+              {{ isTranslating ? 'Bezig met vertalen…' : (selected.length ? 'Vertaal naar ' + selected.length + ' markt(en)' : 'Kies minimaal één markt') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- RESULTS TAB -->
+        <div *ngIf="workTab==='results'">
+          <div class="res-head">
+            <div style="display:flex; align-items:baseline"><h3>Resultaten</h3><span class="sub">{{ doneCount }}/{{ selected.length }} klaar · {{ apprCount }} goedgekeurd</span></div>
+            <button class="btn ghost sm" [disabled]="isTranslating" (click)="exportXlsx()">Export .xlsx</button>
+          </div>
+
+          <div class="tabs">
+            <button *ngFor="let code of selected" class="tab" [class.on]="active===code" (click)="mstate[code]?.status!=='loading' && (active=code)">
+              <span class="code">{{ code }}</span>
+              <span class="sdot" [class.pulse]="mstate[code]?.status==='loading'" [style.background]="mstate[code]?.status==='loading' ? '#D99A40' : mstate[code]?.status==='error' ? '#C77' : approvalDot(code)"></span>
+            </button>
+          </div>
+
+          <ng-container *ngIf="mstate[active] as st">
+            <!-- loading skeleton -->
+            <div *ngIf="st.status==='loading'" style="display:flex; flex-direction:column; gap:10px">
+              <div *ngFor="let f of briefing.fields" class="frow"><div></div><div class="src">{{ f.text }}</div><div class="tcell"><div class="skel"></div></div><div></div></div>
+            </div>
+
+            <!-- error -->
+            <div *ngIf="st.status==='error'" class="center-load">
+              <div style="font-size:14px; color:var(--text); font-weight:500">Vertaling mislukt voor {{ active }}</div>
+              <p style="max-width:300px; text-align:center">De AI gaf een fout terug. De andere markten zijn klaar — probeer {{ active }} opnieuw.</p>
+              <button class="btn primary sm" (click)="retryMarket(active)">{{ active }} opnieuw vertalen</button>
+            </div>
+
+            <!-- done -->
+            <ng-container *ngIf="st.status==='done'">
+              <div class="appr-bar">
+                <span class="stat" [style.color]="approvalDot(active)"><span class="d" [style.background]="approvalDot(active)"></span>{{ active }} · {{ approvalLabel(active) }}</span>
+                <div class="acts">
+                  <button class="btn sm" [class.primary]="st.approval==='approved'" [class.soft]="st.approval!=='approved'" (click)="approveMarket(active)">Goedkeuren</button>
+                  <button class="btn soft sm" (click)="startComment()">Wijziging vragen</button>
+                  <button class="btn ghost sm" (click)="rejectMarket(active)">Afkeuren</button>
+                </div>
+              </div>
+              <div *ngIf="commentingMarket" class="commentbox">
+                <textarea rows="2" [(ngModel)]="commentDraft" placeholder="Beschrijf de gevraagde wijziging…"></textarea>
+                <div style="display:flex; gap:7px; margin-top:8px"><button class="btn primary sm" [disabled]="!commentDraft.trim()" (click)="saveComment()">Wijziging vragen</button><button class="btn ghost sm" (click)="commentingMarket=false">Annuleren</button></div>
+              </div>
+              <div *ngIf="st.approval==='changes' && st.comment && !commentingMarket" class="changenote">
+                <div><span class="k">Wijziging gevraagd</span><p>{{ st.comment }}</p></div>
+              </div>
+
+              <div class="tbl-head"><span>Veld</span><span>Bron · EN</span><span>Vertaling · {{ active }}</span><span></span></div>
+              <div *ngFor="let f of briefing.fields" class="frow">
+                <div><div class="fl-block"><span class="btag">{{ f.block }}</span></div><div class="fl-name">{{ f.name }}</div></div>
+                <div class="src">{{ f.text }}</div>
+                <div class="tcell">
+                  <div *ngIf="isRetranslating(active, f)" class="skel"></div>
+                  <ng-container *ngIf="!isRetranslating(active, f)">
+                    <textarea [rows]="f.name==='Body'?3:1" [class.over]="over(active, f)" [ngModel]="textFor(active,f)" (ngModelChange)="setTextFor(active, f, $event)"></textarea>
+                    <div class="row2"><span class="count" [class.over]="over(active,f)" style="margin-left:auto">{{ textFor(active,f).length }}/{{ f.limit || '∞' }}{{ over(active,f) ? ' · te lang' : '' }}</span></div>
+                  </ng-container>
+                </div>
+                <div class="acts"><button class="iconbtn" title="Veld opnieuw vertalen" (click)="retranslateField(active, f)"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M12 3v3H9M2 11V8h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.2 6A4.2 4.2 0 003.5 4.8M2.8 8a4.2 4.2 0 007.7 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button></div>
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" *ngIf="toast">{{ toast }}</div>
 </div>

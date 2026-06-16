@@ -76,6 +76,24 @@ class BriefingRepository:
         item = result.scalar_one_or_none()
         return BriefingModel.model_validate(item) if item else None
 
+    async def rename_briefing(self, briefing_id: int, name: str) -> bool:
+        result = await self.db.execute(
+            select(Briefing).where(Briefing.id == briefing_id)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            return False
+        item.name = name
+        await self.db.commit()
+        return True
+
+    async def delete_briefing(self, briefing_id: int) -> bool:
+        result = await self.db.execute(
+            delete(Briefing).where(Briefing.id == briefing_id)
+        )
+        await self.db.commit()
+        return (result.rowcount or 0) > 0
+
     async def get_translations(
         self, briefing_id: int
     ) -> list[BriefingTranslationModel]:
