@@ -24,30 +24,34 @@
   --bad: #c77;
 
   display: block;
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
   color: var(--text);
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  z-index: 1;
 }
 
 * { box-sizing: border-box; }
 .serif { font-family: 'Cormorant Garamond', serif; }
 .mono { font-family: 'DM Mono', ui-monospace, monospace; }
 
+/* Match the studio's standard content grid (same as .home-margin elsewhere):
+   clears the floating nav rail (left) and the workspace pill (top). */
 .page {
-  height: 100%;
+  --maxw: 1400px;
+  max-width: var(--maxw);
+  margin-top: 10vh;
+  margin-bottom: 5vh;
+  margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--maxw) / 2));
+  margin-right: 5vw;
+  min-height: 78vh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  /* Respect the floating studio nav rail (left) + workspace pill (top). */
-  padding-left: max(calc(5vw + 4.5rem + 16px), 100px);
-  padding-top: 72px;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--rl);
+  overflow: hidden;
 }
 @media (min-width: 1400px) {
-  .page { padding-left: max(calc(3vw + 4.5rem + 16px), 100px); }
+  .page { margin-left: max(calc(3vw + 4.5rem), calc(50% - var(--maxw) / 2)); }
 }
 
 /* ---- header ---- */
@@ -62,15 +66,15 @@
   .crumb.cur { color: var(--text); font-weight: 500; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
-.body { flex: 1; display: flex; overflow: hidden; }
+.body { flex: 1; display: flex; min-height: 0; }
 
 /* ---- rail ---- */
 .rail { width: 288px; flex-shrink: 0; background: var(--bg-sub); border-right: 1px solid var(--border-lt);
-  display: flex; flex-direction: column; height: 100%; }
+  display: flex; flex-direction: column; }
 .rail-sec { padding: 16px; flex-shrink: 0; }
 .rail-label { font-size: 9px; font-weight: 600; color: var(--text-s); letter-spacing: 0.14em; text-transform: uppercase; }
 .rail-divider { height: 1px; background: var(--border-lt); }
-.rail-list { flex: 1; overflow-y: auto; padding: 0 10px 12px; }
+.rail-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 12px; }
 .search-wrap { position: relative; margin-top: 10px; }
 .search-wrap input { width: 100%; padding: 7px 10px 7px 28px; border: 1.5px solid var(--border-lt); border-radius: var(--r);
   background: var(--surface); color: var(--text); font-family: inherit; font-size: 11.5px; }
@@ -96,7 +100,7 @@
 .dict-link .t2 { font-size: 10px; color: var(--text-s); margin-top: 1px; }
 
 /* ---- canvas ---- */
-.canvas { flex: 1; overflow-y: auto; }
+.canvas { flex: 1; min-width: 0; overflow-y: auto; }
 .canvas-inner { max-width: 980px; margin: 0 auto; padding: 36px; }
 .canvas-inner.wide { max-width: 1180px; }
 
