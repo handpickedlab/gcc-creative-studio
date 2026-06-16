@@ -187,9 +187,14 @@ export class TranslationsComponent implements OnInit {
         const codes: string[] = [];
         (res.translations || []).forEach(tr => {
           codes.push(tr.market);
+          const stored = (tr as any).status as string | undefined;
+          const approval = (['approved', 'changes', 'rejected'].includes(stored ?? '')
+            ? stored
+            : 'pending') as MarketState['approval'];
           this.mstate[tr.market] = {
             status: 'done',
-            approval: 'pending',
+            approval,
+            comment: (tr as any).comment ?? undefined,
             texts: this.textsFromSegments(tr.segments),
           };
         });
@@ -438,9 +443,11 @@ export class TranslationsComponent implements OnInit {
             approval: 'pending',
             texts: tr ? this.textsFromSegments(tr.segments) : {},
           };
+          if (!this.isTranslating) this.persist(true); // save once all done
         },
         error: () => {
           this.mstate[code] = {status: 'error', approval: 'pending', texts: {}};
+          if (!this.isTranslating) this.persist(true);
         },
       });
     });
@@ -499,10 +506,12 @@ export class TranslationsComponent implements OnInit {
   // ── approval (client-side, market scope) ───────────────────────
   approveMarket(code: string): void {
     if (this.mstate[code]) this.mstate[code].approval = 'approved';
-    this.flash(`${code} goedgekeurd`);
+    this.flash(`${code} goedgekeurd · opgeslagen`);
+    this.persist(true);
   }
   rejectMarket(code: string): void {
     if (this.mstate[code]) this.mstate[code].approval = 'rejected';
+    this.persist(true);
   }
   startComment(): void {
     this.commentingMarket = true;
@@ -514,6 +523,7 @@ export class TranslationsComponent implements OnInit {
       this.mstate[this.active].comment = this.commentDraft;
     }
     this.commentingMarket = false;
+    this.persist(true);
   }
 
   approvalLabel(code: string): string {
@@ -537,6 +547,8 @@ export class TranslationsComponent implements OnInit {
       .filter(c => this.mstate[c]?.status === 'done')
       .map(c => ({
         market: c,
+        approval: this.mstate[c].approval,
+        comment: this.mstate[c].comment,
         segments: (this.briefing?.fields ?? []).map(f => ({
           block: f.block,
           field: f.name,
@@ -547,15 +559,23 @@ export class TranslationsComponent implements OnInit {
       }));
   }
 
-  save(): void {
+  /** Persist the briefing + translations. silent → no toast (auto-save). */
+  private persist(silent = false): void {
     if (!this.briefing) return;
     this.service.save(this.toBackend(this.briefing), this.translationsPayload()).subscribe({
-      next: () => {
-        this.flash('Briefing opgeslagen');
+      next: res => {
+        if (res?.id != null && this.briefing) this.briefing.id = res.id;
+        if (!silent) this.flash('Briefing opgeslagen');
         this.loadLibrary();
       },
-      error: err => handleErr(this.snackBar, err, 'Opslaan mislukt'),
+      error: err => {
+        if (!silent) handleErr(this.snackBar, err, 'Opslaan mislukt');
+      },
     });
+  }
+
+  save(): void {
+    this.persist(false);
   }
 
   exportXlsx(): void {
@@ -613,6 +633,7 @@ export class TranslationsComponent implements OnInit {
   // ── mapping helpers ────────────────────────────────────────────
   private toBackend(vm: BriefingVM): Briefing {
     return {
+      id: vm.id ?? undefined,
       name: vm.name,
       sourceMarket: 'EN',
       meta: {requestor: vm.requestor, due: vm.due, notes: vm.notes},

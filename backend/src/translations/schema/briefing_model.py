@@ -112,6 +112,7 @@ class BriefingTranslation(Base):
     status: Mapped[str] = mapped_column(
         String, nullable=False, server_default="draft"
     )
+    comment: Mapped[str | None] = mapped_column(String, nullable=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), insert_default=func.now(), server_default=func.now()
@@ -133,6 +134,7 @@ class BriefingTranslationModel(BaseDocument):
     market: str
     segments: list[BriefingSegment]
     status: str = "draft"
+    comment: str | None = None
 
 
 class BriefingModel(BaseDocument):

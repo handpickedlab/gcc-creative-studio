@@ -42,6 +42,7 @@ export interface BriefingMeta {
 }
 
 export interface Briefing {
+  id?: number;
   name: string;
   sourceMarket: string;
   meta: BriefingMeta;
@@ -60,6 +61,8 @@ export interface ParseResult {
 export interface MarketTranslation {
   market: string;
   segments: BriefingSegment[];
+  approval?: string;
+  comment?: string;
 }
 
 export interface GlossarySummary {

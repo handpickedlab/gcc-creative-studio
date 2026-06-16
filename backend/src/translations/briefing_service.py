@@ -286,18 +286,29 @@ class BriefingService:
 
     async def save_briefing(self, dto: SaveBriefingRequestDto):
         b = dto.briefing
-        created = await self.repo.create_briefing(
-            name=b.name,
-            source_market=b.source_market,
-            meta=b.meta.model_dump(),
-            segments=[s.model_dump() for s in b.segments],
-        )
+        meta = b.meta.model_dump()
+        segments = [s.model_dump() for s in b.segments]
+        # Upsert: update when an id is supplied, otherwise create.
+        saved = None
+        if b.id is not None:
+            saved = await self.repo.update_briefing(b.id, b.name, meta, segments)
+        if saved is None:
+            saved = await self.repo.create_briefing(
+                name=b.name,
+                source_market=b.source_market,
+                meta=meta,
+                segments=segments,
+            )
         for tr in dto.translations:
             await self.repo.upsert_translation(
-                created.id, tr.market, [s.model_dump() for s in tr.segments]
+                saved.id,
+                tr.market,
+                [s.model_dump() for s in tr.segments],
+                status=tr.approval or "draft",
+                comment=tr.comment,
             )
         await self.repo.commit()
-        return created
+        return saved
 
     def export_xlsx(
         self, briefing: BriefingInputDto, translations: list[MarketTranslationDto]
