@@ -4,19 +4,19 @@
  */
 
 :host {
-  /* HKM light tokens (scoped — the rest of the studio stays dark) */
-  --bg: #faf8f5;
-  --bg-sub: #f3ede6;
-  --surface: #ede5dc;
-  --surf-h: #e4d9ce;
-  --border: #cebfaf;
-  --border-lt: #e0d6ca;
-  --text: #1c1714;
-  --text-m: #8a7968;
-  --text-s: #afa090;
-  --accent: #c4a882;
-  --accent-h: #ae9070;
-  --accent-lt: #ede5d8;
+  /* HKM dark "noir" tokens (from the design) — fits the dark studio shell */
+  --bg: #19160f;
+  --bg-sub: #211d16;
+  --surface: #2a251d;
+  --surf-h: #342e26;
+  --border: #403830;
+  --border-lt: #34302a;
+  --text: #f0e8df;
+  --text-m: #9a8a7a;
+  --text-s: #635850;
+  --accent: #d4b896;
+  --accent-h: #e2c8a8;
+  --accent-lt: #2a1e12;
   --r: 4px;
   --rl: 8px;
   --ok: #7aae88;
