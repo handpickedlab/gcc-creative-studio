@@ -8,6 +8,12 @@ local/
 .aider*
 .vscode
 
+# Local-only Docker Compose overrides (may reference local secret-key paths)
+docker-compose.override.yml
+# Service-account key files
+*-key.json
+*-service-account*.json
+
 # Terraform state and providers
 /.terraform/
 

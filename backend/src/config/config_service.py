@@ -41,6 +41,15 @@ class ConfigService(BaseSettings):
     # --- Core Project Settings ---
     PROJECT_ID: str = ""
     LOCATION: str = "global"
+
+    # --- Vertex AI / GenMedia targeting ---
+    # Project that Vertex/GenMedia calls (Gemini, Imagen, Veo, Lyria) run in.
+    # Defaults to PROJECT_ID. Set this to route GenMedia to a separate project
+    # (e.g. a client's project) while storage/auth stay in PROJECT_ID.
+    VERTEX_PROJECT_ID: str = ""
+    # Path to a service-account key JSON used ONLY for Vertex/GenMedia calls.
+    # Leave empty to use Application Default Credentials (local dev default).
+    VERTEX_CREDENTIALS_FILE: str = ""
     ENVIRONMENT: str = "development"
     FRONTEND_URL: str = "http://localhost:4200"
     BACKEND_URL: str = "http://localhost:8080"
@@ -128,6 +137,10 @@ class ConfigService(BaseSettings):
         # If these fields were not set by environment variables, set their default now.
         if not self.GENMEDIA_BUCKET:
             self.GENMEDIA_BUCKET = f"{self.PROJECT_ID}-assets"
+
+        # Vertex/GenMedia defaults to the application project unless overridden.
+        if not self.VERTEX_PROJECT_ID:
+            self.VERTEX_PROJECT_ID = self.PROJECT_ID
 
         return self
 

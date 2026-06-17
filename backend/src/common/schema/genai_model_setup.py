@@ -18,6 +18,10 @@ import logging
 
 from google.genai import Client
 
+from src.common.vertex_credentials import (
+    get_vertex_credentials,
+    get_vertex_project,
+)
 from src.config.config_service import config_service
 
 logger = logging.getLogger(__name__)
@@ -42,7 +46,7 @@ class GenAIModelSetup:
         if cls._client is None:
             try:
                 config = config_service
-                project_id = config.PROJECT_ID
+                project_id = get_vertex_project()
                 location = config.LOCATION
                 if None in [project_id, location]:
                     raise ValueError("All parameters must be set.")
@@ -55,6 +59,7 @@ class GenAIModelSetup:
                     project=project_id,
                     location=location,
                     vertexai=config.INIT_VERTEX,
+                    credentials=get_vertex_credentials(),
                     http_options={
                         "headers": {
                             "user-agent": f"creative-studio/{VERSION} (+https://github.com/GoogleCloudPlatform/gcc-creative-studio)"
@@ -73,8 +78,7 @@ class GenAIModelSetup:
         """Initializes and returns a shared Omni GenAI client instance for Vertex AI."""
         if cls._omni_client is None:
             try:
-                config = config_service
-                project_id = config.PROJECT_ID
+                project_id = get_vertex_project()
                 if project_id is None:
                     raise ValueError("Project ID must be set.")
 
@@ -86,6 +90,7 @@ class GenAIModelSetup:
                     vertexai=True,
                     project=project_id,
                     location="global",
+                    credentials=get_vertex_credentials(),
                     http_options={
                         "base_url": "https://aiplatform.googleapis.com",
                         "headers": {
