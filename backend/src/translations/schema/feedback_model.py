@@ -25,6 +25,7 @@ Two tables, both keyed on the briefing + target market (never on the
 import datetime
 from typing import Literal
 
+from pydantic import Field
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
@@ -171,6 +172,11 @@ class FeedbackTicketModel(BaseDocument):
     status: TicketStatus = "open"
     resolution_note: str | None = None
     status_changed_at: datetime.datetime | None = None
+    # Internal: used by the read path to detect drift; not serialized out.
+    content_hash: str | None = Field(default=None, exclude=True)
+    # Transient (not persisted): set by the read path when the underlying
+    # segment changed since this ticket was written (re-translation drift).
+    item_changed: bool = False
 
 
 class FeedbackRequestModel(BaseDocument):
