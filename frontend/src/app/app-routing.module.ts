@@ -25,6 +25,7 @@ import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.compo
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {TranslationsComponent} from './translations/translations.component';
+import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
 import {ExecutionHistoryComponent} from './workflows/execution-history/execution-history.component';
@@ -36,6 +37,8 @@ import {UserRolesEnum} from './common/models/user.model';
 
 const routes: Routes = [
   {path: 'login', component: LoginComponent},
+  // Public, token-gated translator feedback page — intentionally NO guard.
+  {path: 'feedback/:token', component: TranslatorFeedbackComponent},
   {path: '', component: HomeComponent, canActivate: [AuthGuardService]},
   {
     path: 'fun-templates',

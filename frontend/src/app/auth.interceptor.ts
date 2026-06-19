@@ -21,11 +21,20 @@ import {
   HttpEvent,
   HttpInterceptor,
   HttpErrorResponse,
+  HttpContextToken,
 } from '@angular/common/http';
 import {Observable, throwError} from 'rxjs';
 import {catchError, switchMap} from 'rxjs/operators';
 import {AuthService} from './common/services/auth.service';
-import {environment} from '../environments/environment';
+
+/**
+ * Opt a request out of authentication. Requests that set this context token are
+ * sent WITHOUT an Authorization header and never trigger a logout on failure.
+ * This is the only sanctioned way to bypass auth — used by the public
+ * translator-feedback endpoints. We deliberately do NOT match on URL substrings
+ * (e.g. "/public/"), which would be a fragile, accidental coupling.
+ */
+export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
 
 @Injectable()
 export class AuthInterceptor implements HttpInterceptor {
@@ -35,6 +44,11 @@ export class AuthInterceptor implements HttpInterceptor {
     request: HttpRequest<unknown>,
     next: HttpHandler,
   ): Observable<HttpEvent<unknown>> {
+    // Explicitly unauthenticated requests pass straight through.
+    if (request.context.get(SKIP_AUTH)) {
+      return next.handle(request);
+    }
+
     // Asynchronously get a valid token. This will use the cache or trigger a silent refresh.
     return this.authService.getValidIdentityPlatformToken$().pipe(
       switchMap(token => {

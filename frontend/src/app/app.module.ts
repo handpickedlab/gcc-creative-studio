@@ -92,6 +92,7 @@ import {HeaderComponent} from './header/header.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {TranslationsComponent} from './translations/translations.component';
+import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
 import {WorkbenchComponent} from './workbench/workbench.component';
@@ -142,6 +143,7 @@ import {UpscaleComponent} from './upscale/upscale.component';
     BatchExecutionModalComponent,
     UpscaleComponent,
     TranslationsComponent,
+    TranslatorFeedbackComponent,
   ],
   imports: [
     BrowserModule,
