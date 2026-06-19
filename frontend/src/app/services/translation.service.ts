@@ -78,6 +78,53 @@ export interface GlossaryTerm {
   target: string;
 }
 
+// --- Feedback loop ---
+
+export type ReviewState = 'draft' | 'in_review' | 'done';
+export type FeedbackStatus = 'open' | 'in_progress' | 'resolved';
+export type LinkStatus = 'none' | 'active' | 'expired' | 'revoked';
+
+export interface FeedbackTicket {
+  id: number;
+  briefingId: number;
+  market: string;
+  segmentIndex: number;
+  fieldSnapshot?: string | null;
+  sourceSnapshot?: string | null;
+  authorName: string;
+  authorRole: 'content_manager' | 'translator';
+  body: string;
+  status: FeedbackStatus;
+  resolutionNote?: string | null;
+  statusChangedAt?: string | null;
+  createdAt?: string;
+  itemChanged: boolean;
+}
+
+export interface MarketCounts {
+  open: number;
+  inProgress: number;
+  resolved: number;
+}
+
+export interface MarketOverview {
+  market: string;
+  reviewState: ReviewState;
+  linkStatus: LinkStatus;
+  expiresAt?: string | null;
+  counts: MarketCounts;
+}
+
+export interface BriefingFeedback {
+  markets: MarketOverview[];
+  tickets: FeedbackTicket[];
+}
+
+export interface ShareLink {
+  token: string;
+  expiresAt: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -201,6 +248,59 @@ export class TranslationService {
       `${this.baseUrl}/export`,
       {briefing, translations},
       {responseType: 'blob'},
+    );
+  }
+
+  // --- Feedback loop (content-manager side) ---
+
+  getFeedback(briefingId: number): Observable<BriefingFeedback> {
+    return this.http.get<BriefingFeedback>(
+      `${this.baseUrl}/${briefingId}/feedback`,
+    );
+  }
+
+  createTicket(
+    briefingId: number,
+    market: string,
+    payload: {segmentIndex: number; body: string},
+  ): Observable<FeedbackTicket> {
+    return this.http.post<FeedbackTicket>(
+      `${this.baseUrl}/${briefingId}/markets/${encodeURIComponent(market)}/tickets`,
+      payload,
+    );
+  }
+
+  updateTicket(
+    ticketId: number,
+    payload: {status: FeedbackStatus; resolutionNote?: string | null},
+  ): Observable<FeedbackTicket> {
+    return this.http.patch<FeedbackTicket>(
+      `${this.baseUrl}/tickets/${ticketId}`,
+      payload,
+    );
+  }
+
+  setReviewState(
+    briefingId: number,
+    market: string,
+    reviewState: ReviewState,
+  ): Observable<MarketOverview> {
+    return this.http.patch<MarketOverview>(
+      `${this.baseUrl}/${briefingId}/markets/${encodeURIComponent(market)}/review-state`,
+      {reviewState},
+    );
+  }
+
+  createShareLink(briefingId: number, market: string): Observable<ShareLink> {
+    return this.http.post<ShareLink>(
+      `${this.baseUrl}/${briefingId}/markets/${encodeURIComponent(market)}/share-link`,
+      {},
+    );
+  }
+
+  revokeShareLink(briefingId: number, market: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/${briefingId}/markets/${encodeURIComponent(market)}/share-link`,
     );
   }
 }
