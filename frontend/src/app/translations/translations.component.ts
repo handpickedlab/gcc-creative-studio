@@ -7,7 +7,11 @@ import {Component, OnInit} from '@angular/core';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {
   Briefing,
+  BriefingFeedback,
   BriefingSegment,
+  FeedbackStatus,
+  FeedbackTicket,
+  MarketOverview,
   MarketTranslation,
   TranslationService,
 } from '../services/translation.service';
@@ -116,6 +120,13 @@ export class TranslationsComponent implements OnInit {
   commentingMarket = false;
   commentDraft = '';
 
+  // feedback loop (persisted, per item + per market)
+  feedback: BriefingFeedback | null = null;
+  ticketFilter: 'all' | FeedbackStatus = 'all';
+  ticketDrafts: Record<string, string> = {}; // `${market}:${index}` -> draft
+  // Minted links, kept client-side: the raw token is only returned once.
+  shareInfo: Record<string, {url: string; expiresAt: string}> = {};
+
   // dictionary
   glossaryTotal = 0;
   glossaryPerMarket: {market: string; count: number}[] = [];
@@ -197,6 +208,9 @@ export class TranslationsComponent implements OnInit {
         this.active = codes[0] ?? '';
         this.workTab = codes.length ? 'results' : 'briefing';
         this.view = 'work';
+        this.feedback = null;
+        this.shareInfo = {};
+        this.loadFeedback();
       },
       error: err => handleErr(this.snackBar, err, 'Kon briefing niet openen'),
     });
@@ -516,6 +530,181 @@ export class TranslationsComponent implements OnInit {
     this.commentingMarket = false;
   }
 
+  // ── feedback loop (persisted tickets + share links) ─────────────
+  /** Feedback requires a saved briefing (needs an id for the API). */
+  get feedbackReady(): boolean {
+    return !!this.briefing?.id;
+  }
+
+  loadFeedback(): void {
+    if (!this.briefing?.id) {
+      this.feedback = null;
+      return;
+    }
+    this.service.getFeedback(this.briefing.id).subscribe({
+      next: fb => (this.feedback = fb),
+      error: () => (this.feedback = null),
+    });
+  }
+
+  marketOverview(code: string): MarketOverview | undefined {
+    return this.feedback?.markets.find(m => m.market === code);
+  }
+
+  reviewStateLabel(code: string): string {
+    const s = this.marketOverview(code)?.reviewState;
+    return s === 'in_review' ? 'In review' : s === 'done' ? 'Afgerond' : 'Concept';
+  }
+
+  linkStatusLabel(code: string): string {
+    const s = this.marketOverview(code)?.linkStatus;
+    return s === 'active'
+      ? 'Link actief'
+      : s === 'expired'
+        ? 'Link verlopen'
+        : s === 'revoked'
+          ? 'Link ingetrokken'
+          : 'Geen actieve link';
+  }
+
+  draftKey(code: string, index: number): string {
+    return `${code}:${index}`;
+  }
+
+  allTicketsFor(code: string, index: number): FeedbackTicket[] {
+    return (this.feedback?.tickets ?? []).filter(
+      t => t.market === code && t.segmentIndex === index,
+    );
+  }
+
+  ticketsFor(code: string, index: number): FeedbackTicket[] {
+    const all = this.allTicketsFor(code, index);
+    return this.ticketFilter === 'all'
+      ? all
+      : all.filter(t => t.status === this.ticketFilter);
+  }
+
+  openCountFor(code: string, index: number): number {
+    return this.allTicketsFor(code, index).filter(
+      t => t.status !== 'resolved',
+    ).length;
+  }
+
+  resolvedCountFor(code: string, index: number): number {
+    return this.allTicketsFor(code, index).filter(t => t.status === 'resolved')
+      .length;
+  }
+
+  addTicket(code: string, index: number): void {
+    if (!this.briefing?.id) {
+      this.flash('Sla de briefing eerst op');
+      return;
+    }
+    const key = this.draftKey(code, index);
+    const body = (this.ticketDrafts[key] ?? '').trim();
+    if (!body) return;
+    this.service
+      .createTicket(this.briefing.id, code, {segmentIndex: index, body})
+      .subscribe({
+        next: () => {
+          this.ticketDrafts[key] = '';
+          this.loadFeedback();
+        },
+        error: err => handleErr(this.snackBar, err, 'Comment toevoegen mislukt'),
+      });
+  }
+
+  setTicketStatus(t: FeedbackTicket, status: FeedbackStatus): void {
+    this.service.updateTicket(t.id, {status}).subscribe({
+      next: () => this.loadFeedback(),
+      error: err => handleErr(this.snackBar, err, 'Status bijwerken mislukt'),
+    });
+  }
+
+  ticketStatusLabel(s: FeedbackStatus): string {
+    return s === 'open' ? 'Open' : s === 'in_progress' ? 'Opgepakt' : 'Opgelost';
+  }
+
+  ticketStatusColor(s: FeedbackStatus): string {
+    return s === 'resolved' ? '#7AAE88' : s === 'in_progress' ? '#D99A40' : '#C77';
+  }
+
+  requestLink(code: string): void {
+    if (!this.briefing?.id) {
+      this.flash('Sla de briefing eerst op');
+      return;
+    }
+    this.service.createShareLink(this.briefing.id, code).subscribe({
+      next: link => {
+        const url = `${window.location.origin}/feedback/${link.token}`;
+        this.shareInfo[code] = {url, expiresAt: link.expiresAt};
+        this.copyText(url);
+        this.flash('Vertaler-link gekopieerd · 3 dagen geldig');
+        this.loadFeedback();
+      },
+      error: err => handleErr(this.snackBar, err, 'Link aanmaken mislukt'),
+    });
+  }
+
+  copyLink(code: string): void {
+    const url = this.shareInfo[code]?.url;
+    if (url) {
+      this.copyText(url);
+      this.flash('Link gekopieerd');
+    }
+  }
+
+  revokeLink(code: string): void {
+    if (!this.briefing?.id) return;
+    this.service.revokeShareLink(this.briefing.id, code).subscribe({
+      next: () => {
+        delete this.shareInfo[code];
+        this.flash('Link ingetrokken');
+        this.loadFeedback();
+      },
+      error: err => handleErr(this.snackBar, err, 'Intrekken mislukt'),
+    });
+  }
+
+  markReviewDone(code: string): void {
+    if (!this.briefing?.id) return;
+    this.service.setReviewState(this.briefing.id, code, 'done').subscribe({
+      next: () => this.loadFeedback(),
+      error: err => handleErr(this.snackBar, err, 'Bijwerken mislukt'),
+    });
+  }
+
+  /** Tab-separated copy of the active market, ready to paste into Excel. */
+  copyTsv(): void {
+    if (!this.briefing) return;
+    const esc = (s: string | number | null) =>
+      String(s ?? '')
+        .replace(/\t/g, ' ')
+        .replace(/\r?\n/g, ' ');
+    const rows = [
+      ['Blok', 'Veld', 'Label', 'Limiet', 'Bron (EN)', `Vertaling ${this.active}`]
+        .join('\t'),
+    ];
+    for (const f of this.briefing.fields) {
+      rows.push(
+        [
+          f.block,
+          f.name,
+          f.name,
+          f.limit ?? '',
+          esc(f.text),
+          esc(this.textFor(this.active, f)),
+        ].join('\t'),
+      );
+    }
+    this.copyText(rows.join('\n'));
+    this.flash('Gekopieerd — plak in Excel');
+  }
+
+  private copyText(text: string): void {
+    void navigator.clipboard?.writeText(text).catch(() => {});
+  }
+
   approvalLabel(code: string): string {
     const a = this.mstate[code]?.approval;
     return a === 'approved'
@@ -550,9 +739,12 @@ export class TranslationsComponent implements OnInit {
   save(): void {
     if (!this.briefing) return;
     this.service.save(this.toBackend(this.briefing), this.translationsPayload()).subscribe({
-      next: () => {
+      next: res => {
+        // Capture the new id so feedback can be requested without reopening.
+        if (this.briefing && res?.id) this.briefing.id = res.id;
         this.flash('Briefing opgeslagen');
         this.loadLibrary();
+        this.loadFeedback();
       },
       error: err => handleErr(this.snackBar, err, 'Opslaan mislukt'),
     });
