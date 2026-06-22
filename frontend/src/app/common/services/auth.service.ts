@@ -312,7 +312,15 @@ export class AuthService {
       this.firebaseTokenExpiry > now
     );
 
-    if (!isTokenValid && this.router.url !== LOGIN_ROUTE) {
+    // The public, token-gated translator feedback page (/feedback/:token) is
+    // intentionally reachable without a session. Never bounce it to /login.
+    // Use window.location (reliable during deep-link bootstrap, before the
+    // Angular router URL has settled) rather than this.router.url.
+    const onPublicRoute =
+      isPlatformBrowser(this.platformId) &&
+      window.location.pathname.startsWith('/feedback/');
+
+    if (!isTokenValid && this.router.url !== LOGIN_ROUTE && !onPublicRoute) {
       void this.router.navigate([LOGIN_ROUTE]);
     }
 
