@@ -5,25 +5,25 @@
 <div class="dq-wrap">
   <div class="dq-cols">
     <main class="dq-main">
-      <h1 class="dq-title">Vraag het de data</h1>
+      <h1 class="dq-title">Ask your data</h1>
       <p class="dq-sub">
-        Upload sheets en stel vragen in gewoon Nederlands — de agent verkent de
-        tabellen en schrijft echte SQL (Gemini). Exacte cijfers, geen index.
+        Upload sheets and ask questions in plain English — the agent explores the
+        tables and writes real SQL (Gemini). Exact numbers, no guesswork.
       </p>
 
       <div class="dq-card">
-        <div class="dq-label">Vraag</div>
+        <div class="dq-label">Question</div>
         <textarea
           [(ngModel)]="question"
           (keydown.meta.enter)="ask()"
           (keydown.control.enter)="ask()"
-          placeholder="bv. Wat is het gemiddelde per categorie?"
+          placeholder="e.g. What is the average per category?"
         ></textarea>
         <div class="dq-row">
           <button class="dq-btn primary" (click)="ask()" [disabled]="busy">
-            Vraag stellen
+            Ask
           </button>
-          <span class="dq-muted" *ngIf="busy">bezig…</span>
+          <span class="dq-muted" *ngIf="busy">working…</span>
         </div>
         <div class="dq-chips">
           <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
@@ -56,7 +56,7 @@
                   </tbody>
                 </table>
                 <div class="dq-muted" *ngIf="s.result?.truncated">
-                  (afgekapt op {{ s.result?.rows?.length }} rijen)
+                  (truncated to {{ s.result?.rows?.length }} rows)
                 </div>
               </div>
             </div>
@@ -66,9 +66,9 @@
     </main>
 
     <aside class="dq-card dq-side">
-      <div class="dq-label">Bronnen</div>
+      <div class="dq-label">Sources</div>
       <button class="dq-btn ghost" (click)="fileInput.click()" [disabled]="uploading">
-        <mat-icon>upload_file</mat-icon> Sheet inladen
+        <mat-icon>upload_file</mat-icon> Load sheet
       </button>
       <input
         #fileInput
@@ -79,17 +79,17 @@
       />
       <div class="dq-muted dq-up" *ngIf="uploadMsg">{{ uploadMsg }}</div>
 
-      <div class="dq-muted" *ngIf="!sources.length" style="margin-top: 8px">nog geen sheets</div>
+      <div class="dq-muted" *ngIf="!sources.length" style="margin-top: 8px">no sheets yet</div>
       <div
         class="dq-src"
         *ngFor="let s of sources"
         [class.off]="isOff(s.table)"
         (click)="toggle(s.table)"
-        title="klik om uit te zetten"
+        title="click to toggle off"
       >
         {{ s.table }} <span class="dq-muted">· {{ s.n_rows }}</span>
       </div>
-      <div class="dq-muted dq-hint">Klik een bron aan om 'm uit te sluiten van de query.</div>
+      <div class="dq-muted dq-hint">Click a source to exclude it from the query.</div>
     </aside>
   </div>
 </div>

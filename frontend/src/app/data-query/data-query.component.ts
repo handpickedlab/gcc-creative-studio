@@ -52,9 +52,9 @@ export class DataQueryComponent implements OnInit {
   private curTool: Step | null = null;
 
   readonly examples = [
-    'Hoeveel rijen heeft elke tabel?',
-    'Wat is het gemiddelde per categorie?',
-    'Top 5 rijen op de belangrijkste kolom',
+    'How many rows does each table have?',
+    'What is the average per category?',
+    'Top 5 rows by the most important column',
   ];
 
   constructor(
@@ -78,7 +78,7 @@ export class DataQueryComponent implements OnInit {
     const file = input.files?.[0];
     if (!file) return;
     this.uploading = true;
-    this.uploadMsg = 'Inladen…';
+    this.uploadMsg = 'Loading…';
     this.service.upload(file).subscribe({
       next: r => {
         this.uploading = false;
@@ -126,7 +126,7 @@ export class DataQueryComponent implements OnInit {
       next: ev => this.handle(ev),
       error: err => {
         this.busy = false;
-        handleErrorSnackbar(this.snackBar, err, 'Vraag');
+        handleErrorSnackbar(this.snackBar, err, 'Query');
       },
       complete: () => (this.busy = false),
     });
@@ -158,7 +158,7 @@ export class DataQueryComponent implements OnInit {
         this.curText.text = (this.curText.text || '') + (ev.v || '');
         break;
       case 'error':
-        this.steps.push({kind: 'text', text: '⚠️ ' + (ev.message || 'fout')});
+        this.steps.push({kind: 'text', text: '⚠️ ' + (ev.message || 'error')});
         break;
       case 'done':
         this.busy = false;
