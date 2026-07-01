@@ -45,6 +45,10 @@ from src.common.base_dto import (
 from src.common.schema.genai_model_setup import GenAIModelSetup
 from src.common.schema.media_item_model import JobStatusEnum, MediaItemModel
 from src.common.storage_service import GcsService
+from src.common.vertex_credentials import (
+    get_vertex_credentials,
+    get_vertex_project,
+)
 from src.config.config_service import config_service
 from src.galleries.dto.gallery_response_dto import MediaItemResponse
 from src.images.repository.media_item_repository import MediaRepository
@@ -95,7 +99,9 @@ def _process_audio_in_background(
 
                     try:
                         vertexai.init(
-                            project=cfg.PROJECT_ID, location=cfg.LOCATION
+                            project=get_vertex_project(),
+                            location=cfg.LOCATION,
+                            credentials=get_vertex_credentials(),
                         )
                         start_time = time.monotonic()
 
@@ -254,7 +260,8 @@ def _process_audio_in_background(
                             }
                             ai_client = (
                                 aiplatform.gapic.PredictionServiceClient(
-                                    client_options=client_options
+                                    client_options=client_options,
+                                    credentials=get_vertex_credentials(),
                                 )
                             )
 
@@ -281,7 +288,7 @@ def _process_audio_in_background(
                                         instance_dict, instance_value
                                     )
 
-                                    endpoint = f"projects/{cfg.PROJECT_ID}/locations/global/publishers/google/models/lyria-002"
+                                    endpoint = f"projects/{get_vertex_project()}/locations/global/publishers/google/models/lyria-002"
                                     response = await asyncio.to_thread(
                                         ai_client.predict,
                                         endpoint=endpoint,

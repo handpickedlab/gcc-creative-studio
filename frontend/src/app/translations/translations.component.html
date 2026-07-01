@@ -6,51 +6,51 @@
       <span class="logo">HKM</span>
       <span class="kicker">AI TOOLBOX</span>
       <ng-container *ngIf="view === 'work' && briefing">
-        <span class="sep">/</span><span class="crumb">Vertalingen</span>
+        <span class="sep">/</span><span class="crumb">Translations</span>
         <span class="sep">/</span><span class="crumb cur">{{ briefing.name }}</span>
       </ng-container>
     </div>
-    <span class="crumb cur">Vertalingen</span>
+    <span class="crumb cur">Translations</span>
   </div>
 
   <div class="body">
     <!-- Rail -->
     <div class="rail">
       <div class="rail-sec">
-        <div class="rail-label" style="margin-bottom:11px">Nieuwe briefing</div>
+        <div class="rail-label" style="margin-bottom:11px">New briefing</div>
         <div style="display:flex; gap:7px">
           <input #fileInput type="file" accept=".xlsx" hidden (change)="onFileSelected($event)" />
           <button class="btn primary sm full" style="flex:1" (click)="fileInput.click()">Upload .xlsx</button>
-          <button class="btn ghost sm" (click)="startBlank()">Blanco</button>
+          <button class="btn ghost sm" (click)="startBlank()">Blank</button>
         </div>
       </div>
       <div class="rail-divider"></div>
 
       <div class="rail-sec" style="padding-bottom:9px">
         <div style="display:flex; align-items:baseline; justify-content:space-between">
-          <span class="rail-label">Bibliotheek</span>
+          <span class="rail-label">Library</span>
           <span class="mono" style="font-size:10px; color:var(--text-s)">{{ library.length }}</span>
         </div>
         <div class="search-wrap">
           <svg class="ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-          <input [(ngModel)]="librarySearch" placeholder="Zoek briefing…" />
+          <input [(ngModel)]="librarySearch" placeholder="Search briefing…" />
         </div>
       </div>
 
       <div class="rail-list">
-        <div *ngIf="!filteredLibrary.length" style="padding:24px 12px; text-align:center; font-size:11px; color:var(--text-s)">Nog geen opgeslagen briefings.</div>
+        <div *ngIf="!filteredLibrary.length" style="padding:24px 12px; text-align:center; font-size:11px; color:var(--text-s)">No saved briefings yet.</div>
         <div *ngFor="let b of filteredLibrary" class="brow" [class.active]="view==='work' && briefing?.id===b.id" (click)="renamingId===b.id ? null : openBriefing(b.id)">
           <div class="top">
             <span class="dot" style="background:var(--text-s)"></span>
             <input *ngIf="renamingId===b.id" class="rename" [(ngModel)]="renameValue" (click)="$event.stopPropagation()" (blur)="commitRename(b)" (keydown.enter)="commitRename(b)" />
             <span *ngIf="renamingId!==b.id" class="nm">{{ b.name }}</span>
             <div class="row-acts" *ngIf="renamingId!==b.id">
-              <button class="iconbtn" title="Hernoemen" (click)="startRename(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L5 11l-2.5.5L3 9l6.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
-              <button class="iconbtn" title="Dupliceren" (click)="duplicateBriefing(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 5.5H2.5a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.2"/></svg></button>
-              <button class="iconbtn danger" title="Verwijderen" (click)="deleteBriefing(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button class="iconbtn" title="Rename" (click)="startRename(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L5 11l-2.5.5L3 9l6.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+              <button class="iconbtn" title="Duplicate" (click)="duplicateBriefing(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 5.5H2.5a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.2"/></svg></button>
+              <button class="iconbtn danger" title="Delete" (click)="deleteBriefing(b, $event)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
           </div>
-          <div class="meta">{{ b.fields }} velden · {{ b.date }}</div>
+          <div class="meta">{{ b.fields }} fields · {{ b.date }}</div>
         </div>
       </div>
 
@@ -58,7 +58,7 @@
       <div class="rail-sec" style="padding:10px 12px">
         <button class="dict-link" [class.active]="view==='dict'" (click)="openDict()">
           <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7a1.5 1.5 0 011.5 1.5v9.5L8 12l-3.5 1.5V4A1.5 1.5 0 016 2.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></span>
-          <div style="flex:1"><div class="t1">Woordenboek</div><div class="t2">{{ glossaryTotal }} termen · {{ glossaryPerMarket.length }} markten</div></div>
+          <div style="flex:1"><div class="t1">Dictionary</div><div class="t2">{{ glossaryTotal }} terms · {{ glossaryPerMarket.length }} markets</div></div>
         </button>
       </div>
     </div>
@@ -67,48 +67,48 @@
     <div class="canvas">
       <!-- EMPTY -->
       <div *ngIf="view==='empty'" class="empty">
-        <h1>Vertalingen</h1>
-        <p>Upload een briefing of begin blanco. Vertaal je campagne-copy per markt, beoordeel per tab en exporteer terug naar Excel.</p>
+        <h1>Translations</h1>
+        <p>Upload a briefing or start blank. Translate your campaign copy per market, review per tab, and export back to Excel.</p>
         <div class="acts">
           <button class="btn primary" (click)="fileInput.click()">Upload .xlsx</button>
-          <button class="btn ghost" (click)="startBlank()">Begin blanco</button>
+          <button class="btn ghost" (click)="startBlank()">Start blank</button>
         </div>
       </div>
 
       <!-- INTAKE -->
       <div *ngIf="view==='intake'" class="canvas-inner intake" style="max-width:680px">
-        <div style="font-size:9px; font-weight:600; color:var(--ok); letter-spacing:.12em; font-family:'DM Mono',monospace; margin-bottom:6px">✓ INGELEZEN</div>
+        <div style="font-size:9px; font-weight:600; color:var(--ok); letter-spacing:.12em; font-family:'DM Mono',monospace; margin-bottom:6px">✓ IMPORTED</div>
         <h2>{{ fileName }}</h2>
-        <p style="font-size:12px; color:var(--text-m); margin-bottom:24px">{{ sheets.length }} sheets gevonden · kies het blad en de request.</p>
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:24px">{{ sheets.length }} sheets found · choose the sheet and the request.</p>
         <div class="field-stack">
           <div>
-            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Blad</span></div><p class="hint">Selecteer het tabblad met de briefingvelden.</p></div>
+            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Sheet</span></div><p class="hint">Select the tab containing the briefing fields.</p></div>
             <select class="sel" [(ngModel)]="selectedSheet" (change)="onSheetChange()">
               <option *ngFor="let s of sheets" [value]="s">{{ s }}</option>
             </select>
           </div>
           <div>
-            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Request</span></div><p class="hint">Elke request toont hoeveel velden tekst bevatten.</p></div>
+            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Request</span></div><p class="hint">Each request shows how many fields contain text.</p></div>
             <div style="display:flex; flex-direction:column; gap:7px">
               <button *ngFor="let r of requests" class="req-btn" [class.on]="selectedRequestIndex===r.index" [class.empty]="r.filled===0" (click)="selectedRequestIndex=r.index">
                 <span class="lbl">{{ r.label }}</span>
                 <div style="display:flex; align-items:center; gap:7px">
                   <div class="fill-bars"><span *ngFor="let i of bars" [class.f]="i < r.filled"></span></div>
-                  <span class="req-count">{{ r.filled }} velden</span>
+                  <span class="req-count">{{ r.filled }} fields</span>
                 </div>
               </button>
             </div>
             <div *ngIf="selectedRequest?.filled===0" class="warn-box" style="margin-top:11px">
-              <div><div class="t1">Lege request</div><p>Deze request bevat geen ingevulde velden — kies een andere of begin blanco.</p></div>
+              <div><div class="t1">Empty request</div><p>This request has no filled fields — choose another or start blank.</p></div>
             </div>
           </div>
           <div class="dict-box" *ngIf="glossaryTotal">
-            <div><div style="font-size:12.5px; font-weight:500">Woordenboek geladen</div><p>Vertaalgeheugen samengevoegd — <b style="color:var(--text)">{{ glossaryTotal }} termen</b> over {{ glossaryPerMarket.length }} markten.</p></div>
+            <div><div style="font-size:12.5px; font-weight:500">Dictionary loaded</div><p>Translation memory merged — <b style="color:var(--text)">{{ glossaryTotal }} terms</b> across {{ glossaryPerMarket.length }} markets.</p></div>
           </div>
           <div style="display:flex; gap:9px">
-            <button class="btn ghost" (click)="view = briefing ? 'work' : 'empty'">Annuleren</button>
+            <button class="btn ghost" (click)="view = briefing ? 'work' : 'empty'">Cancel</button>
             <button class="btn primary full" style="flex:1" [disabled]="selectedRequestIndex==null || selectedRequest?.filled===0 || isUploading" (click)="confirmIntake()">
-              {{ isUploading ? 'Laden…' : (selectedRequest?.filled===0 ? 'Kies een gevulde request' : 'Open briefing') }}
+              {{ isUploading ? 'Loading…' : (selectedRequest?.filled===0 ? 'Choose a filled request' : 'Open briefing') }}
             </button>
           </div>
         </div>
@@ -116,23 +116,23 @@
 
       <!-- DICTIONARY -->
       <div *ngIf="view==='dict'" class="canvas-inner">
-        <button class="btn ghost sm" (click)="view = briefing ? 'work' : 'empty'" style="margin-bottom:18px">← Terug</button>
-        <h2 class="serif" style="font-size:26px; font-weight:600; letter-spacing:-.02em; margin-bottom:4px">Woordenboek</h2>
-        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">{{ glossaryTotal }} termen · vertaalgeheugen per markt. Bewerk vrij — termen sturen toekomstige vertalingen.</p>
+        <button class="btn ghost sm" (click)="view = briefing ? 'work' : 'empty'" style="margin-bottom:18px">← Back</button>
+        <h2 class="serif" style="font-size:26px; font-weight:600; letter-spacing:-.02em; margin-bottom:4px">Dictionary</h2>
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">{{ glossaryTotal }} terms · translation memory per market. Edit freely — terms guide future translations.</p>
         <div style="display:flex; gap:14px; margin-bottom:16px; flex-wrap:wrap">
           <select class="sel" style="max-width:240px" [(ngModel)]="dictMarket" (change)="loadDictTerms()">
             <option *ngFor="let m of targets" [value]="m.code">{{ m.code }} — {{ m.label }}</option>
           </select>
-          <input class="tinput" style="max-width:240px" [(ngModel)]="dictQuery" (keydown.enter)="loadDictTerms()" placeholder="Zoek term…" />
+          <input class="tinput" style="max-width:240px" [(ngModel)]="dictQuery" (keydown.enter)="loadDictTerms()" placeholder="Search term…" />
         </div>
         <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px">
-          <input class="tinput" [(ngModel)]="newSource" placeholder="Bron (EN)" (keydown.enter)="addDictTerm()" />
+          <input class="tinput" [(ngModel)]="newSource" placeholder="Source (EN)" (keydown.enter)="addDictTerm()" />
           <span style="color:var(--text-s)">→</span>
-          <input class="tinput" [(ngModel)]="newTarget" placeholder="{{ dictMarket }}-vertaling" (keydown.enter)="addDictTerm()" />
-          <button class="btn primary sm" [disabled]="!newSource.trim() || !newTarget.trim()" (click)="addDictTerm()">Toevoegen</button>
+          <input class="tinput" [(ngModel)]="newTarget" placeholder="{{ dictMarket }} translation" (keydown.enter)="addDictTerm()" />
+          <button class="btn primary sm" [disabled]="!newSource.trim() || !newTarget.trim()" (click)="addDictTerm()">Add</button>
         </div>
         <table class="gloss-tbl" *ngIf="dictTerms.length">
-          <thead><tr><th>Bron (EN)</th><th>{{ dictMarket }}</th><th></th></tr></thead>
+          <thead><tr><th>Source (EN)</th><th>{{ dictMarket }}</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let t of dictTerms">
               <td><input [(ngModel)]="t.source" (blur)="saveDictTerm(t)" /></td>
@@ -141,7 +141,7 @@
             </tr>
           </tbody>
         </table>
-        <p *ngIf="!dictTerms.length" style="color:var(--text-s); font-style:italic">Nog geen termen voor {{ dictMarket }}.</p>
+        <p *ngIf="!dictTerms.length" style="color:var(--text-s); font-style:italic">No terms for {{ dictMarket }} yet.</p>
       </div>
 
       <!-- WORK -->
@@ -152,17 +152,17 @@
             <div style="flex:1; min-width:0">
               <input class="name" [(ngModel)]="briefing.name" />
               <div class="mrow">
-                <span>{{ briefing.fields.length }} velden</span><span style="color:var(--border)">·</span>
-                <span>Aanvrager <b>{{ briefing.requestor || '—' }}</b></span><span style="color:var(--border)">·</span>
+                <span>{{ briefing.fields.length }} fields</span><span style="color:var(--border)">·</span>
+                <span>Requester <b>{{ briefing.requestor || '—' }}</b></span><span style="color:var(--border)">·</span>
                 <span>Deadline <b>{{ briefing.due || '—' }}</b></span>
               </div>
             </div>
-            <button class="btn soft sm" (click)="metaOpen=!metaOpen">{{ metaOpen ? 'Verbergen' : 'Details' }}</button>
+            <button class="btn soft sm" (click)="metaOpen=!metaOpen">{{ metaOpen ? 'Hide' : 'Details' }}</button>
           </div>
           <div class="meta-grid" *ngIf="metaOpen">
-            <div><div class="fld-label">Aanvrager</div><input class="tinput" [(ngModel)]="briefing.requestor" placeholder="bijv. Sanne de Vries" /></div>
-            <div><div class="fld-label">Deadline</div><input class="tinput" [(ngModel)]="briefing.due" placeholder="bijv. 24 mrt 2026" /></div>
-            <div class="full"><div class="fld-label">Notities</div><textarea class="tinput" rows="2" [(ngModel)]="briefing.notes" placeholder="Context, tone-of-voice, merkrichtlijnen…"></textarea></div>
+            <div><div class="fld-label">Requester</div><input class="tinput" [(ngModel)]="briefing.requestor" placeholder="e.g. Jane Smith" /></div>
+            <div><div class="fld-label">Deadline</div><input class="tinput" [(ngModel)]="briefing.due" placeholder="e.g. 24 Mar 2026" /></div>
+            <div class="full"><div class="fld-label">Notes</div><textarea class="tinput" rows="2" [(ngModel)]="briefing.notes" placeholder="Context, tone of voice, brand guidelines…"></textarea></div>
           </div>
         </div>
 
@@ -170,44 +170,44 @@
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px">
           <div class="seg-toggle">
             <button [class.on]="workTab==='briefing'" (click)="workTab='briefing'">Briefing</button>
-            <button [class.on]="workTab==='results'" (click)="goResults()" [disabled]="!hasResults">Resultaten</button>
+            <button [class.on]="workTab==='results'" (click)="goResults()" [disabled]="!hasResults">Results</button>
           </div>
-          <span *ngIf="hasResults" class="mono" style="font-size:11px; color:var(--text-m)">{{ doneCount }}/{{ selected.length }} klaar · {{ apprCount }} goedgekeurd</span>
+          <span *ngIf="hasResults" class="mono" style="font-size:11px; color:var(--text-m)">{{ doneCount }}/{{ selected.length }} done · {{ apprCount }} approved</span>
         </div>
 
         <!-- BRIEFING TAB -->
         <div *ngIf="workTab==='briefing'" class="work-grid">
           <!-- editor -->
           <div class="panel">
-            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Bronvelden</span><span class="r">bron · EN</span></div><p class="hint">Bewerk de Engelse brontekst. HTML-tags en placeholders blijven behouden.</p></div>
+            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Source fields</span><span class="r">source · EN</span></div><p class="hint">Edit the English source text. HTML tags and placeholders are preserved.</p></div>
             <div style="display:flex; flex-direction:column; gap:18px">
               <div *ngFor="let block of blocks">
-                <div class="block-head"><span class="bl">Blok {{ block }}</span><div class="ln"></div></div>
+                <div class="block-head"><span class="bl">Block {{ block }}</span><div class="ln"></div></div>
                 <div style="display:flex; flex-direction:column; gap:8px">
                   <div *ngFor="let f of fieldsInBlock(block)" class="fieldrow">
                     <div class="head">
                       <span class="btag">{{ f.block }}</span>
                       <input class="fname" [(ngModel)]="f.name" />
-                      <span style="font-size:10px; color:var(--text-s)">limiet</span>
+                      <span style="font-size:10px; color:var(--text-s)">limit</span>
                       <input class="limit-in" type="number" [(ngModel)]="f.limit" />
-                      <button class="iconbtn danger" title="Veld verwijderen" (click)="removeField(f)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                      <button class="iconbtn danger" title="Delete field" (click)="removeField(f)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                     </div>
                     <textarea class="fta" [rows]="f.name==='Body'?3:1" [(ngModel)]="f.text"></textarea>
                     <div class="fmeta"><span></span><span class="count" [class.over]="!!f.limit && f.text.length > f.limit">{{ f.text.length }}/{{ f.limit || '∞' }}</span></div>
                   </div>
-                  <button class="addline" (click)="addField(block)">+ Veld toevoegen aan {{ block }}</button>
+                  <button class="addline" (click)="addField(block)">+ Add field to {{ block }}</button>
                 </div>
               </div>
-              <button class="addblock" (click)="addBlock()">+ Blok toevoegen</button>
+              <button class="addblock" (click)="addBlock()">+ Add block</button>
             </div>
           </div>
 
           <!-- controls -->
           <div class="panel">
-            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Doelmarkten</span><span class="r">{{ selected.length }}/14</span></div><p class="hint">Kies één of meer markten. Elke markt wordt een eigen tab.</p></div>
+            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Target markets</span><span class="r">{{ selected.length }}/14</span></div><p class="hint">Choose one or more markets. Each market becomes its own tab.</p></div>
             <div style="display:flex; gap:8px; margin-bottom:11px; align-items:center">
-              <input class="tinput" [(ngModel)]="marketFilter" placeholder="Filter markten…" />
-              <button class="pill tiny" [class.active]="allSelected" (click)="selectAllMarkets()">Alles</button>
+              <input class="tinput" [(ngModel)]="marketFilter" placeholder="Filter markets…" />
+              <button class="pill tiny" [class.active]="allSelected" (click)="selectAllMarkets()">All</button>
             </div>
             <div *ngFor="let g of groups" style="margin-bottom:11px">
               <ng-container *ngIf="groupTargets(g).length">
@@ -221,14 +221,14 @@
             </div>
             <div class="divider"></div>
             <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:20px">
-              <div><div style="font-size:12px; font-weight:500">Tone of voice</div><div style="font-size:11px; color:var(--text-m); margin-top:2px">Aanspreekvorm</div></div>
+              <div><div style="font-size:12px; font-weight:500">Tone of voice</div><div style="font-size:11px; color:var(--text-m); margin-top:2px">Form of address</div></div>
               <div class="seg-toggle">
-                <button [class.on]="tone==='informeel'" (click)="tone='informeel'">Informeel</button>
-                <button [class.on]="tone==='formeel'" (click)="tone='formeel'">Formeel</button>
+                <button [class.on]="tone==='informeel'" (click)="tone='informeel'">Informal</button>
+                <button [class.on]="tone==='formeel'" (click)="tone='formeel'">Formal</button>
               </div>
             </div>
             <button class="btn primary lg full" [disabled]="!selected.length || isTranslating" (click)="translate()">
-              {{ isTranslating ? 'Bezig met vertalen…' : (selected.length ? 'Vertaal naar ' + selected.length + ' markt(en)' : 'Kies minimaal één markt') }}
+              {{ isTranslating ? 'Translating…' : (selected.length ? 'Translate to ' + selected.length + ' market(s)' : 'Choose at least one market') }}
             </button>
           </div>
         </div>
@@ -236,8 +236,11 @@
         <!-- RESULTS TAB -->
         <div *ngIf="workTab==='results'">
           <div class="res-head">
-            <div style="display:flex; align-items:baseline"><h3>Resultaten</h3><span class="sub">{{ doneCount }}/{{ selected.length }} klaar · {{ apprCount }} goedgekeurd</span></div>
-            <button class="btn ghost sm" [disabled]="isTranslating" (click)="exportXlsx()">Export .xlsx</button>
+            <div style="display:flex; align-items:baseline"><h3>Results</h3><span class="sub">{{ doneCount }}/{{ selected.length }} done · {{ apprCount }} approved</span></div>
+            <div style="display:flex; gap:8px">
+              <button class="btn ghost sm" [disabled]="mstate[active]?.status!=='done'" (click)="copyTsv()">Copy for Excel</button>
+              <button class="btn ghost sm" [disabled]="isTranslating" (click)="exportXlsx()">Export .xlsx</button>
+            </div>
           </div>
 
           <div class="tabs">
@@ -255,9 +258,9 @@
 
             <!-- error -->
             <div *ngIf="st.status==='error'" class="center-load">
-              <div style="font-size:14px; color:var(--text); font-weight:500">Vertaling mislukt voor {{ active }}</div>
-              <p style="max-width:300px; text-align:center">De AI gaf een fout terug. De andere markten zijn klaar — probeer {{ active }} opnieuw.</p>
-              <button class="btn primary sm" (click)="retryMarket(active)">{{ active }} opnieuw vertalen</button>
+              <div style="font-size:14px; color:var(--text); font-weight:500">Translation failed for {{ active }}</div>
+              <p style="max-width:300px; text-align:center">The AI returned an error. The other markets are done — try {{ active }} again.</p>
+              <button class="btn primary sm" (click)="retryMarket(active)">Re-translate {{ active }}</button>
             </div>
 
             <!-- done -->
@@ -265,20 +268,20 @@
               <div class="appr-bar">
                 <span class="stat" [style.color]="approvalDot(active)"><span class="d" [style.background]="approvalDot(active)"></span>{{ active }} · {{ approvalLabel(active) }}</span>
                 <div class="acts">
-                  <button class="btn sm" [class.primary]="st.approval==='approved'" [class.soft]="st.approval!=='approved'" (click)="approveMarket(active)">Goedkeuren</button>
-                  <button class="btn soft sm" (click)="startComment()">Wijziging vragen</button>
-                  <button class="btn ghost sm" (click)="rejectMarket(active)">Afkeuren</button>
+                  <button class="btn sm" [class.primary]="st.approval==='approved'" [class.soft]="st.approval!=='approved'" (click)="approveMarket(active)">Approve</button>
+                  <button class="btn soft sm" (click)="startComment()">Request change</button>
+                  <button class="btn ghost sm" (click)="rejectMarket(active)">Reject</button>
                 </div>
               </div>
               <div *ngIf="commentingMarket" class="commentbox">
-                <textarea rows="2" [(ngModel)]="commentDraft" placeholder="Beschrijf de gevraagde wijziging…"></textarea>
-                <div style="display:flex; gap:7px; margin-top:8px"><button class="btn primary sm" [disabled]="!commentDraft.trim()" (click)="saveComment()">Wijziging vragen</button><button class="btn ghost sm" (click)="commentingMarket=false">Annuleren</button></div>
+                <textarea rows="2" [(ngModel)]="commentDraft" placeholder="Describe the requested change…"></textarea>
+                <div style="display:flex; gap:7px; margin-top:8px"><button class="btn primary sm" [disabled]="!commentDraft.trim()" (click)="saveComment()">Request change</button><button class="btn ghost sm" (click)="commentingMarket=false">Cancel</button></div>
               </div>
               <div *ngIf="st.approval==='changes' && st.comment && !commentingMarket" class="changenote">
-                <div><span class="k">Wijziging gevraagd</span><p>{{ st.comment }}</p></div>
+                <div><span class="k">Change requested</span><p>{{ st.comment }}</p></div>
               </div>
 
-              <div class="tbl-head"><span>Veld</span><span>Bron · EN</span><span>Vertaling · {{ active }}</span><span></span></div>
+              <div class="tbl-head"><span>Field</span><span>Source · EN</span><span>Translation · {{ active }}</span><span></span></div>
               <div *ngFor="let f of briefing.fields" class="frow">
                 <div><div class="fl-block"><span class="btag">{{ f.block }}</span></div><div class="fl-name">{{ f.name }}</div></div>
                 <div class="src">{{ f.text }}</div>
@@ -286,10 +289,73 @@
                   <div *ngIf="isRetranslating(active, f)" class="skel"></div>
                   <ng-container *ngIf="!isRetranslating(active, f)">
                     <textarea [rows]="f.name==='Body'?3:1" [class.over]="over(active, f)" [ngModel]="textFor(active,f)" (ngModelChange)="setTextFor(active, f, $event)"></textarea>
-                    <div class="row2"><span class="count" [class.over]="over(active,f)" style="margin-left:auto">{{ textFor(active,f).length }}/{{ f.limit || '∞' }}{{ over(active,f) ? ' · te lang' : '' }}</span></div>
+                    <div class="row2"><span class="count" [class.over]="over(active,f)" style="margin-left:auto">{{ textFor(active,f).length }}/{{ f.limit || '∞' }}{{ over(active,f) ? ' · too long' : '' }}</span></div>
                   </ng-container>
                 </div>
-                <div class="acts"><button class="iconbtn" title="Veld opnieuw vertalen" (click)="retranslateField(active, f)"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M12 3v3H9M2 11V8h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.2 6A4.2 4.2 0 003.5 4.8M2.8 8a4.2 4.2 0 007.7 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button></div>
+                <div class="acts"><button class="iconbtn" title="Re-translate field" (click)="retranslateField(active, f)"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M12 3v3H9M2 11V8h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.2 6A4.2 4.2 0 003.5 4.8M2.8 8a4.2 4.2 0 007.7 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button></div>
+              </div>
+
+              <!-- ── Feedback & review (persisted) ───────────────────── -->
+              <div class="fb-panel" style="margin-top:22px; padding-top:18px; border-top:1px solid var(--border)">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px">
+                  <div style="display:flex; align-items:center; gap:10px">
+                    <span style="font-weight:600">Feedback · {{ active }}</span>
+                    <span class="pill tiny">{{ reviewStateLabel(active) }}</span>
+                    <span class="mono" style="font-size:11px; color:var(--text-m)">{{ linkStatusLabel(active) }}<ng-container *ngIf="marketOverview(active)?.linkStatus==='active' && marketOverview(active)?.expiresAt"> · until {{ fmtDate(marketOverview(active)?.expiresAt || undefined) }}</ng-container></span>
+                  </div>
+                  <div style="display:flex; gap:8px" *ngIf="feedbackReady">
+                    <button class="btn primary sm" (click)="requestLink(active)">Request feedback</button>
+                    <button class="btn soft sm" *ngIf="shareInfo[active]" (click)="copyLink(active)">Copy link</button>
+                    <button class="btn ghost sm" *ngIf="marketOverview(active)?.linkStatus==='active'" (click)="revokeLink(active)">Revoke</button>
+                    <button class="btn ghost sm" *ngIf="marketOverview(active) && marketOverview(active)?.reviewState!=='done'" (click)="markReviewDone(active)">Mark as done</button>
+                  </div>
+                </div>
+
+                <div *ngIf="!feedbackReady" class="warn-box" style="margin-bottom:12px">
+                  <div><div class="t1">Save the briefing first</div><p>Save the briefing — then you can create a translator link (valid for 3 days) and collect feedback per item.</p></div>
+                </div>
+
+                <ng-container *ngIf="feedbackReady">
+                  <div style="display:flex; align-items:center; gap:7px; margin-bottom:12px; flex-wrap:wrap">
+                    <span class="fld-label" style="margin:0">Show</span>
+                    <div class="seg-toggle">
+                      <button [class.on]="ticketFilter==='all'" (click)="ticketFilter='all'">All</button>
+                      <button [class.on]="ticketFilter==='open'" (click)="ticketFilter='open'">Open</button>
+                      <button [class.on]="ticketFilter==='in_progress'" (click)="ticketFilter='in_progress'">In progress</button>
+                      <button [class.on]="ticketFilter==='resolved'" (click)="ticketFilter='resolved'">Resolved</button>
+                    </div>
+                    <span class="mono" style="font-size:11px; color:var(--text-m); margin-left:auto" *ngIf="marketOverview(active) as ov">{{ ov.counts.open }} open · {{ ov.counts.inProgress }} in progress · {{ ov.counts.resolved }} resolved</span>
+                  </div>
+
+                  <div style="display:flex; flex-direction:column; gap:10px">
+                    <div *ngFor="let f of briefing.fields; let i = index" style="border:1px solid var(--border); border-radius:10px; padding:10px 12px">
+                      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+                        <span class="btag">{{ f.block }}</span>
+                        <span style="font-weight:500; font-size:12.5px">{{ f.name }}</span>
+                        <span class="mono" style="font-size:10px; color:var(--text-s); margin-left:auto">
+                          <ng-container *ngIf="openCountFor(active,i)">{{ openCountFor(active,i) }} open</ng-container><ng-container *ngIf="resolvedCountFor(active,i)"> · {{ resolvedCountFor(active,i) }} resolved</ng-container>
+                        </span>
+                      </div>
+                      <div *ngFor="let t of ticketsFor(active, i)" style="display:flex; gap:8px; padding:7px 0; border-top:1px solid var(--border)">
+                        <span style="width:7px; height:7px; border-radius:50%; margin-top:5px; flex:none" [style.background]="ticketStatusColor(t.status)"></span>
+                        <div style="flex:1; min-width:0">
+                          <div style="font-size:11.5px"><b>{{ t.authorName }}</b><span style="color:var(--text-s)"> · {{ t.authorRole==='translator' ? 'translator' : 'content manager' }}</span><span *ngIf="t.itemChanged" style="color:#C77"> · item changed</span></div>
+                          <div style="font-size:12.5px; color:var(--text-m); white-space:pre-wrap">{{ t.body }}</div>
+                        </div>
+                        <div style="display:flex; gap:5px; flex:none; align-items:center">
+                          <span class="pill tiny">{{ ticketStatusLabel(t.status) }}</span>
+                          <button *ngIf="t.status==='open'" class="btn soft sm" title="Pick up" (click)="setTicketStatus(t,'in_progress')">Pick up</button>
+                          <button *ngIf="t.status!=='resolved'" class="btn soft sm" title="Resolve" (click)="setTicketStatus(t,'resolved')">Resolve</button>
+                          <button *ngIf="t.status==='resolved'" class="btn ghost sm" title="Reopen" (click)="setTicketStatus(t,'open')">Reopen</button>
+                        </div>
+                      </div>
+                      <div style="display:flex; gap:7px; margin-top:8px">
+                        <input class="tinput" style="flex:1" [(ngModel)]="ticketDrafts[draftKey(active,i)]" placeholder="Comment on {{ f.name }}…" (keydown.enter)="addTicket(active,i)" />
+                        <button class="btn soft sm" [disabled]="!ticketDrafts[draftKey(active,i)] || !ticketDrafts[draftKey(active,i)].trim()" (click)="addTicket(active,i)">Post</button>
+                      </div>
+                    </div>
+                  </div>
+                </ng-container>
               </div>
             </ng-container>
           </ng-container>

@@ -66,7 +66,8 @@ export class AppComponent {
           (event.url.includes('login') && event.url.includes('email')) ||
           (event.url.includes('login') && event.url.includes('tos')) ||
           event.url.includes('reset-password') ||
-          event.url.includes('support-ticket')
+          event.url.includes('support-ticket') ||
+          event.url.startsWith('/feedback/')
         ) {
           this.showHeader = false;
         } else {

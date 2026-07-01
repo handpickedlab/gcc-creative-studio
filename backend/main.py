@@ -50,6 +50,10 @@ from src.source_assets.source_asset_controller import (
 )
 from src.tags.tags_controller import router as tags_router
 from src.translations.briefing_controller import router as briefings_router
+from src.translations.feedback_controller import router as feedback_router
+from src.translations.public_feedback_controller import (
+    router as public_feedback_router,
+)
 from src.translations.translation_controller import (
     router as translations_router,
 )
@@ -201,3 +205,5 @@ app.include_router(workbench_router)
 app.include_router(system_settings_router)
 app.include_router(translations_router)
 app.include_router(briefings_router)
+app.include_router(feedback_router)
+app.include_router(public_feedback_router)

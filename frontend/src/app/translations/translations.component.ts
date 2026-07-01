@@ -7,7 +7,11 @@ import {Component, OnInit} from '@angular/core';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {
   Briefing,
+  BriefingFeedback,
   BriefingSegment,
+  FeedbackStatus,
+  FeedbackTicket,
+  MarketOverview,
   MarketTranslation,
   TranslationService,
 } from '../services/translation.service';
@@ -54,23 +58,23 @@ interface LibItem {
 }
 
 const MARKETS: MarketMeta[] = [
-  {code: 'EN', label: 'English (bron)', group: 'Bron', source: true},
-  {code: 'UK', label: 'English (UK)', group: 'Engels'},
-  {code: 'NL', label: 'Nederlands (Nederland)', group: 'Nederlands'},
-  {code: 'BENL', label: 'Nederlands (België)', group: 'Nederlands', variant: true},
-  {code: 'BEFR', label: 'Français (België)', group: 'Frans', variant: true},
-  {code: 'FR', label: 'Français (Frankrijk)', group: 'Frans'},
-  {code: 'LU', label: 'Français (Luxemburg)', group: 'Frans'},
-  {code: 'CHFR', label: 'Français (Zwitserland)', group: 'Frans', variant: true},
-  {code: 'CHDE', label: 'Deutsch (Zwitserland)', group: 'Duits', variant: true},
-  {code: 'DE', label: 'Deutsch (Duitsland)', group: 'Duits'},
-  {code: 'AT', label: 'Deutsch (Oostenrijk)', group: 'Duits', variant: true},
-  {code: 'DK', label: 'Dansk (Denemarken)', group: 'Scandinavië'},
-  {code: 'ES', label: 'Español (Spanje)', group: 'Zuid-Europa'},
-  {code: 'SE', label: 'Svenska (Zweden)', group: 'Scandinavië'},
-  {code: 'NO', label: 'Norsk (Noorwegen)', group: 'Scandinavië'},
+  {code: 'EN', label: 'English (source)', group: 'Source', source: true},
+  {code: 'UK', label: 'English (UK)', group: 'English'},
+  {code: 'NL', label: 'Dutch (Netherlands)', group: 'Dutch'},
+  {code: 'BENL', label: 'Dutch (Belgium)', group: 'Dutch', variant: true},
+  {code: 'BEFR', label: 'French (Belgium)', group: 'French', variant: true},
+  {code: 'FR', label: 'French (France)', group: 'French'},
+  {code: 'LU', label: 'French (Luxembourg)', group: 'French'},
+  {code: 'CHFR', label: 'French (Switzerland)', group: 'French', variant: true},
+  {code: 'CHDE', label: 'German (Switzerland)', group: 'German', variant: true},
+  {code: 'DE', label: 'German (Germany)', group: 'German'},
+  {code: 'AT', label: 'German (Austria)', group: 'German', variant: true},
+  {code: 'DK', label: 'Danish (Denmark)', group: 'Scandinavian'},
+  {code: 'ES', label: 'Spanish (Spain)', group: 'Southern Europe'},
+  {code: 'SE', label: 'Swedish (Sweden)', group: 'Scandinavian'},
+  {code: 'NO', label: 'Norwegian (Norway)', group: 'Scandinavian'},
 ];
-const MARKET_GROUPS = ['Engels', 'Nederlands', 'Frans', 'Duits', 'Scandinavië', 'Zuid-Europa'];
+const MARKET_GROUPS = ['English', 'Dutch', 'French', 'German', 'Scandinavian', 'Southern Europe'];
 
 @Component({
   selector: 'app-translations',
@@ -115,6 +119,13 @@ export class TranslationsComponent implements OnInit {
   retranslating = new Set<string>();
   commentingMarket = false;
   commentDraft = '';
+
+  // feedback loop (persisted, per item + per market)
+  feedback: BriefingFeedback | null = null;
+  ticketFilter: 'all' | FeedbackStatus = 'all';
+  ticketDrafts: Record<string, string> = {}; // `${market}:${index}` -> draft
+  // Minted links, kept client-side: the raw token is only returned once.
+  shareInfo: Record<string, {url: string; expiresAt: string}> = {};
 
   // dictionary
   glossaryTotal = 0;
@@ -202,8 +213,11 @@ export class TranslationsComponent implements OnInit {
         this.active = codes[0] ?? '';
         this.workTab = codes.length ? 'results' : 'briefing';
         this.view = 'work';
+        this.feedback = null;
+        this.shareInfo = {};
+        this.loadFeedback();
       },
-      error: err => handleErr(this.snackBar, err, 'Kon briefing niet openen'),
+      error: err => handleErr(this.snackBar, err, 'Could not open briefing'),
     });
   }
 
@@ -211,16 +225,16 @@ export class TranslationsComponent implements OnInit {
     ev.stopPropagation();
     this.service.getBriefing(b.id).subscribe({
       next: res => {
-        const copy = {...res.briefing, name: res.briefing.name + ' (kopie)'};
+        const copy = {...res.briefing, name: res.briefing.name + ' (copy)'};
         this.service.save(copy, []).subscribe({
           next: () => {
-            this.flash('Briefing gedupliceerd');
+            this.flash('Briefing duplicated');
             this.loadLibrary();
           },
-          error: err => handleErr(this.snackBar, err, 'Dupliceren mislukt'),
+          error: err => handleErr(this.snackBar, err, 'Duplication failed'),
         });
       },
-      error: err => handleErr(this.snackBar, err, 'Dupliceren mislukt'),
+      error: err => handleErr(this.snackBar, err, 'Duplication failed'),
     });
   }
 
@@ -239,7 +253,7 @@ export class TranslationsComponent implements OnInit {
         b.name = name;
         if (this.briefing?.id === b.id) this.briefing.name = name;
       },
-      error: err => handleErr(this.snackBar, err, 'Hernoemen mislukt'),
+      error: err => handleErr(this.snackBar, err, 'Rename failed'),
     });
   }
 
@@ -252,9 +266,9 @@ export class TranslationsComponent implements OnInit {
           this.briefing = null;
           this.view = 'empty';
         }
-        this.flash('Briefing verwijderd');
+        this.flash('Briefing deleted');
       },
-      error: err => handleErr(this.snackBar, err, 'Verwijderen mislukt'),
+      error: err => handleErr(this.snackBar, err, 'Delete failed'),
     });
   }
 
@@ -262,7 +276,7 @@ export class TranslationsComponent implements OnInit {
   startBlank(): void {
     this.briefing = {
       id: null,
-      name: 'Nieuwe briefing',
+      name: 'New briefing',
       requestor: '',
       due: '',
       notes: '',
@@ -299,7 +313,7 @@ export class TranslationsComponent implements OnInit {
       },
       error: err => {
         this.isUploading = false;
-        handleErr(this.snackBar, err, 'Upload mislukt');
+        handleErr(this.snackBar, err, 'Upload failed');
       },
     });
   }
@@ -364,7 +378,7 @@ export class TranslationsComponent implements OnInit {
         },
         error: err => {
           this.isUploading = false;
-          handleErr(this.snackBar, err, 'Kon request niet laden');
+          handleErr(this.snackBar, err, 'Could not load request');
         },
       });
   }
@@ -484,7 +498,7 @@ export class TranslationsComponent implements OnInit {
       },
       error: () => {
         this.retranslating.delete(key);
-        handleErr(this.snackBar, null, 'Opnieuw vertalen mislukt');
+        handleErr(this.snackBar, null, 'Re-translation failed');
       },
     });
   }
@@ -526,15 +540,190 @@ export class TranslationsComponent implements OnInit {
     this.persist(true);
   }
 
+  // ── feedback loop (persisted tickets + share links) ─────────────
+  /** Feedback requires a saved briefing (needs an id for the API). */
+  get feedbackReady(): boolean {
+    return !!this.briefing?.id;
+  }
+
+  loadFeedback(): void {
+    if (!this.briefing?.id) {
+      this.feedback = null;
+      return;
+    }
+    this.service.getFeedback(this.briefing.id).subscribe({
+      next: fb => (this.feedback = fb),
+      error: () => (this.feedback = null),
+    });
+  }
+
+  marketOverview(code: string): MarketOverview | undefined {
+    return this.feedback?.markets.find(m => m.market === code);
+  }
+
+  reviewStateLabel(code: string): string {
+    const s = this.marketOverview(code)?.reviewState;
+    return s === 'in_review' ? 'In review' : s === 'done' ? 'Done' : 'Draft';
+  }
+
+  linkStatusLabel(code: string): string {
+    const s = this.marketOverview(code)?.linkStatus;
+    return s === 'active'
+      ? 'Link active'
+      : s === 'expired'
+        ? 'Link expired'
+        : s === 'revoked'
+          ? 'Link revoked'
+          : 'No active link';
+  }
+
+  draftKey(code: string, index: number): string {
+    return `${code}:${index}`;
+  }
+
+  allTicketsFor(code: string, index: number): FeedbackTicket[] {
+    return (this.feedback?.tickets ?? []).filter(
+      t => t.market === code && t.segmentIndex === index,
+    );
+  }
+
+  ticketsFor(code: string, index: number): FeedbackTicket[] {
+    const all = this.allTicketsFor(code, index);
+    return this.ticketFilter === 'all'
+      ? all
+      : all.filter(t => t.status === this.ticketFilter);
+  }
+
+  openCountFor(code: string, index: number): number {
+    return this.allTicketsFor(code, index).filter(
+      t => t.status !== 'resolved',
+    ).length;
+  }
+
+  resolvedCountFor(code: string, index: number): number {
+    return this.allTicketsFor(code, index).filter(t => t.status === 'resolved')
+      .length;
+  }
+
+  addTicket(code: string, index: number): void {
+    if (!this.briefing?.id) {
+      this.flash('Save the briefing first');
+      return;
+    }
+    const key = this.draftKey(code, index);
+    const body = (this.ticketDrafts[key] ?? '').trim();
+    if (!body) return;
+    this.service
+      .createTicket(this.briefing.id, code, {segmentIndex: index, body})
+      .subscribe({
+        next: () => {
+          this.ticketDrafts[key] = '';
+          this.loadFeedback();
+        },
+        error: err => handleErr(this.snackBar, err, 'Failed to add comment'),
+      });
+  }
+
+  setTicketStatus(t: FeedbackTicket, status: FeedbackStatus): void {
+    this.service.updateTicket(t.id, {status}).subscribe({
+      next: () => this.loadFeedback(),
+      error: err => handleErr(this.snackBar, err, 'Failed to update status'),
+    });
+  }
+
+  ticketStatusLabel(s: FeedbackStatus): string {
+    return s === 'open' ? 'Open' : s === 'in_progress' ? 'In progress' : 'Resolved';
+  }
+
+  ticketStatusColor(s: FeedbackStatus): string {
+    return s === 'resolved' ? '#7AAE88' : s === 'in_progress' ? '#D99A40' : '#C77';
+  }
+
+  requestLink(code: string): void {
+    if (!this.briefing?.id) {
+      this.flash('Save the briefing first');
+      return;
+    }
+    this.service.createShareLink(this.briefing.id, code).subscribe({
+      next: link => {
+        const url = `${window.location.origin}/feedback/${link.token}`;
+        this.shareInfo[code] = {url, expiresAt: link.expiresAt};
+        this.copyText(url);
+        this.flash('Translator link copied · valid for 3 days');
+        this.loadFeedback();
+      },
+      error: err => handleErr(this.snackBar, err, 'Failed to create link'),
+    });
+  }
+
+  copyLink(code: string): void {
+    const url = this.shareInfo[code]?.url;
+    if (url) {
+      this.copyText(url);
+      this.flash('Link copied');
+    }
+  }
+
+  revokeLink(code: string): void {
+    if (!this.briefing?.id) return;
+    this.service.revokeShareLink(this.briefing.id, code).subscribe({
+      next: () => {
+        delete this.shareInfo[code];
+        this.flash('Link revoked');
+        this.loadFeedback();
+      },
+      error: err => handleErr(this.snackBar, err, 'Failed to revoke'),
+    });
+  }
+
+  markReviewDone(code: string): void {
+    if (!this.briefing?.id) return;
+    this.service.setReviewState(this.briefing.id, code, 'done').subscribe({
+      next: () => this.loadFeedback(),
+      error: err => handleErr(this.snackBar, err, 'Update failed'),
+    });
+  }
+
+  /** Tab-separated copy of the active market, ready to paste into Excel. */
+  copyTsv(): void {
+    if (!this.briefing) return;
+    const esc = (s: string | number | null) =>
+      String(s ?? '')
+        .replace(/\t/g, ' ')
+        .replace(/\r?\n/g, ' ');
+    const rows = [
+      ['Block', 'Field', 'Label', 'Limit', 'Source (EN)', `Translation ${this.active}`]
+        .join('\t'),
+    ];
+    for (const f of this.briefing.fields) {
+      rows.push(
+        [
+          f.block,
+          f.name,
+          f.name,
+          f.limit ?? '',
+          esc(f.text),
+          esc(this.textFor(this.active, f)),
+        ].join('\t'),
+      );
+    }
+    this.copyText(rows.join('\n'));
+    this.flash('Copied — paste into Excel');
+  }
+
+  private copyText(text: string): void {
+    void navigator.clipboard?.writeText(text).catch(() => {});
+  }
+
   approvalLabel(code: string): string {
     const a = this.mstate[code]?.approval;
     return a === 'approved'
-      ? 'Goedgekeurd'
+      ? 'Approved'
       : a === 'changes'
-        ? 'Wijzigingen'
+        ? 'Changes'
         : a === 'rejected'
-          ? 'Afgekeurd'
-          : 'Wacht op review';
+          ? 'Rejected'
+          : 'Awaiting review';
   }
   approvalDot(code: string): string {
     const a = this.mstate[code]?.approval;
@@ -564,12 +753,14 @@ export class TranslationsComponent implements OnInit {
     if (!this.briefing) return;
     this.service.save(this.toBackend(this.briefing), this.translationsPayload()).subscribe({
       next: res => {
+        // Capture the new id so feedback can be requested without reopening.
         if (res?.id != null && this.briefing) this.briefing.id = res.id;
-        if (!silent) this.flash('Briefing opgeslagen');
+        if (!silent) this.flash('Briefing saved');
         this.loadLibrary();
+        this.loadFeedback();
       },
       error: err => {
-        if (!silent) handleErr(this.snackBar, err, 'Opslaan mislukt');
+        if (!silent) handleErr(this.snackBar, err, 'Save failed');
       },
     });
   }
@@ -590,9 +781,9 @@ export class TranslationsComponent implements OnInit {
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-        this.flash('Geëxporteerd naar .xlsx');
+        this.flash('Exported to .xlsx');
       },
-      error: err => handleErr(this.snackBar, err, 'Export mislukt'),
+      error: err => handleErr(this.snackBar, err, 'Export failed'),
     });
   }
 
@@ -617,7 +808,7 @@ export class TranslationsComponent implements OnInit {
         this.newSource = '';
         this.newTarget = '';
       },
-      error: err => handleErr(this.snackBar, err, 'Term toevoegen mislukt'),
+      error: err => handleErr(this.snackBar, err, 'Failed to add term'),
     });
   }
   saveDictTerm(t: {id: number; source: string; target: string}): void {

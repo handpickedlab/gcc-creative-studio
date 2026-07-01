@@ -14,7 +14,14 @@
  * limitations under the License.
  */
 
-import {Component, NgZone, Inject, PLATFORM_ID} from '@angular/core';
+import {
+  Component,
+  NgZone,
+  Inject,
+  PLATFORM_ID,
+  OnInit,
+  OnDestroy,
+} from '@angular/core';
 import {GoogleAuthProvider} from '@angular/fire/auth';
 import {Router} from '@angular/router';
 import {AuthService} from './../common/services/auth.service';
@@ -23,6 +30,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {handleErrorSnackbar} from '../utils/handleMessageSnackbar';
 import {environment} from '../../environments/environment';
 import {isPlatformBrowser} from '@angular/common';
+import {Subscription} from 'rxjs';
 
 const HOME_ROUTE = '/';
 
@@ -35,13 +43,17 @@ interface LooseObject {
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss'],
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit, OnDestroy {
   private readonly provider: GoogleAuthProvider = new GoogleAuthProvider();
 
   loader = false;
   invalidLogin = false;
   errorMessage = '';
   isBrowser: boolean;
+  // Revealed when One Tap / FedCM is unavailable; shows the rendered Google
+  // sign-in button (popup flow, no third-party cookies needed) as a fallback.
+  showGoogleButtonFallback = false;
+  private promptSuppressedSub?: Subscription;
 
   constructor(
     private authService: AuthService,
@@ -56,7 +68,40 @@ export class LoginComponent {
     });
   }
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    // When the auth service reports that the One Tap / FedCM prompt was
+    // suppressed, stop the spinner and reveal the rendered Google button so the
+    // user is never stranded on the old "login timed out" dead-end.
+    this.promptSuppressedSub = this.authService.loginPromptSuppressed$.subscribe(
+      () => {
+        this.ngZone.run(() => {
+          this.loader = false;
+          this.showGoogleButtonFallback = true;
+        });
+        // Defer so Angular reveals the containers before Google renders into them.
+        setTimeout(() => this.renderFallbackButtons(), 0);
+      },
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.promptSuppressedSub?.unsubscribe();
+  }
+
+  private renderFallbackButtons(): void {
+    if (!this.isBrowser) return;
+    // Render into both responsive containers; only the one for the active
+    // breakpoint is visible, the other sits in a display:none section.
+    for (const id of [
+      'gsi-fallback-button-desktop',
+      'gsi-fallback-button-mobile',
+    ]) {
+      const el = document.getElementById(id);
+      if (el && !el.hasChildNodes()) {
+        this.authService.renderGoogleSignInButton(el);
+      }
+    }
+  }
 
   loginWithGoogle() {
     this.loader = true;

@@ -1,0 +1,98 @@
+<!-- Copyright 2026 Google LLC — Apache-2.0. Public translator feedback page. -->
+<div class="tf-wrap">
+  <div *ngIf="loading" class="tf-state">
+    <div class="tf-state-card"><p>Loading…</p></div>
+  </div>
+
+  <div *ngIf="!loading && errorState" class="tf-state">
+    <div class="tf-state-card">
+      <h2>
+        {{ errorState === 'expired' ? 'This link has expired' : 'Link not found' }}
+      </h2>
+      <p *ngIf="errorState === 'expired'">
+        The feedback link is no longer valid (links expire after 3 days). Ask
+        the content manager for a new link.
+      </p>
+      <p *ngIf="errorState !== 'expired'">
+        Check that you opened the full link, or ask the content
+        manager for a new one.
+      </p>
+    </div>
+  </div>
+
+  <div *ngIf="!loading && view" class="tf-main">
+    <header class="tf-head">
+      <div class="tf-kicker">HKM · Translator feedback</div>
+      <h1>{{ view.briefingName }}</h1>
+      <div class="tf-sub">
+        Markt: <b>{{ view.marketLabel }}</b> ({{ view.market }}) · read-only —
+        leave feedback per item.
+      </div>
+      <div class="tf-name">
+        <label for="tf-name-input">Your name</label>
+        <input
+          id="tf-name-input"
+          [(ngModel)]="translatorName"
+          placeholder="e.g. Jane Smith"
+        />
+      </div>
+    </header>
+
+    <div class="tf-items">
+      <div *ngFor="let item of view.items" class="tf-item">
+        <div class="tf-item-head">
+          <span class="tf-tag">{{ item.block || '—' }}</span>
+          <span class="tf-field">{{ item.label || item.field }}</span>
+          <span class="tf-limit" *ngIf="item.charLimit">max {{ item.charLimit }}</span>
+        </div>
+
+        <div class="tf-cols">
+          <div class="tf-col">
+            <div class="tf-col-label">Source · EN</div>
+            <div class="tf-text">{{ item.source }}</div>
+          </div>
+          <div class="tf-col">
+            <div class="tf-col-label">Translation · {{ view.market }}</div>
+            <div class="tf-text">{{ item.translation }}</div>
+          </div>
+        </div>
+
+        <div class="tf-tickets" *ngIf="ticketsFor(item.index).length">
+          <div *ngFor="let t of ticketsFor(item.index)" class="tf-ticket">
+            <span class="tf-dot" [style.background]="statusColor(t.status)"></span>
+            <div class="tf-ticket-body">
+              <div class="tf-ticket-meta">
+                <b>{{ t.authorName }}</b> · {{ roleLabel(t.authorRole) }} ·
+                {{ statusLabel(t.status) }}
+                <span *ngIf="t.itemChanged" class="tf-changed"> · item changed</span>
+              </div>
+              <div class="tf-ticket-text">{{ t.body }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tf-add">
+          <textarea
+            rows="2"
+            [(ngModel)]="drafts[item.index]"
+            placeholder="Feedback on this item…"
+          ></textarea>
+          <button [disabled]="!canSubmit(item.index)" (click)="submit(item.index)">
+            {{ submitting[item.index] ? 'Sending…' : 'Post feedback' }}
+          </button>
+        </div>
+        <div
+          class="tf-need-name"
+          *ngIf="!translatorName.trim() && (drafts[item.index] || '').trim()"
+        >
+          Enter your name at the top first.
+        </div>
+      </div>
+    </div>
+
+    <footer class="tf-foot">
+      Your feedback is shared directly with the content manager. You can only
+      leave feedback — the copy itself is not editable.
+    </footer>
+  </div>
+</div>

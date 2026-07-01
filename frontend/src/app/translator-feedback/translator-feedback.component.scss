@@ -1,0 +1,241 @@
+/* Copyright 2026 Google LLC — Apache-2.0.
+   Self-contained styling for the public translator feedback page. It renders
+   without the app shell, so it defines its own dark theme rather than relying
+   on shared CSS variables. */
+
+:host {
+  --bg: #2e3031;
+  --card: rgba(40, 40, 56, 0.55);
+  --border: rgba(232, 232, 237, 0.14);
+  --text: #e8e8ed;
+  --text-m: rgba(232, 232, 237, 0.72);
+  --text-s: rgba(232, 232, 237, 0.5);
+  --accent: linear-gradient(to right, #3b82f6, #8b5cf6, #f87171);
+
+  display: block;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Google Sans', Helvetica, Arial, sans-serif;
+}
+
+.tf-wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 22px 80px;
+}
+
+.tf-state {
+  display: flex;
+  justify-content: center;
+  padding-top: 90px;
+}
+.tf-state-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 34px 30px;
+  max-width: 440px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+}
+.tf-state-card h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.tf-state-card p {
+  font-size: 13px;
+  color: var(--text-m);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.tf-head {
+  margin-bottom: 26px;
+}
+.tf-kicker {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-s);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.tf-head h1 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+.tf-sub {
+  font-size: 12.5px;
+  color: var(--text-m);
+}
+.tf-sub b {
+  color: var(--text);
+}
+
+.tf-name {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 320px;
+}
+.tf-name label {
+  font-size: 11px;
+  color: var(--text-s);
+}
+.tf-name input,
+.tf-add textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 11px;
+  resize: vertical;
+}
+.tf-name input:focus,
+.tf-add textarea:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.7);
+}
+
+.tf-items {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tf-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  backdrop-filter: blur(20px);
+}
+.tf-item-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.tf-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-s);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.tf-field {
+  font-weight: 500;
+  font-size: 13px;
+}
+.tf-limit {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-s);
+}
+
+.tf-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 620px) {
+  .tf-cols {
+    grid-template-columns: 1fr;
+  }
+}
+.tf-col-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-s);
+  margin-bottom: 4px;
+}
+.tf-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tf-tickets {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tf-ticket {
+  display: flex;
+  gap: 9px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.tf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+}
+.tf-ticket-meta {
+  font-size: 11px;
+  color: var(--text-s);
+}
+.tf-ticket-meta b {
+  color: var(--text);
+}
+.tf-changed {
+  color: #c77;
+}
+.tf-ticket-text {
+  font-size: 12.5px;
+  color: var(--text-m);
+  white-space: pre-wrap;
+  margin-top: 2px;
+}
+
+.tf-add {
+  display: flex;
+  gap: 9px;
+  margin-top: 14px;
+  align-items: flex-end;
+}
+.tf-add textarea {
+  flex: 1;
+}
+.tf-add button {
+  flex: none;
+  border: none;
+  border-radius: 9px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background-image: var(--accent);
+  cursor: pointer;
+}
+.tf-add button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.tf-need-name {
+  font-size: 11px;
+  color: #d99a40;
+  margin-top: 6px;
+}
+
+.tf-foot {
+  margin-top: 26px;
+  font-size: 11px;
+  color: var(--text-s);
+  text-align: center;
+  line-height: 1.6;
+}
