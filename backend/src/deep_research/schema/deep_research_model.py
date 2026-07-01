@@ -50,6 +50,9 @@ class DeepResearchReport(Base):
 
     # The raw intake selections (field key -> str | list[str]).
     intake: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Live progress events (author/kind/text) while the pipeline runs, so the
+    # client can poll and show what the agent is doing.
+    progress: Mapped[list] = mapped_column(JSONB, default=list)
     # The assembled research brief fed to the pipeline as the user message.
     brief: Mapped[str | None] = mapped_column(Text, nullable=True)
     # The final, cited Markdown report produced by the pipeline.
@@ -82,6 +85,10 @@ class DeepResearchReportModel(BaseDocument):
     intake: dict = Field(
         default_factory=dict,
         description="The raw intake selections used to build the brief.",
+    )
+    progress: list = Field(
+        default_factory=list,
+        description="Live progress events emitted while the pipeline runs.",
     )
     brief: str | None = Field(
         default=None,

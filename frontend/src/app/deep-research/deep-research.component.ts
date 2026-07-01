@@ -16,7 +16,7 @@
 
 import {Component, OnDestroy, OnInit} from '@angular/core';
 import {FormBuilder, FormControl, FormGroup, Validators} from '@angular/forms';
-import {Subscription, interval} from 'rxjs';
+import {Subscription, timer} from 'rxjs';
 import {switchMap} from 'rxjs/operators';
 import {
   DeepResearchReport,
@@ -24,18 +24,16 @@ import {
   IntakeFieldType,
   IntakeSchema,
   JobStatus,
+  ProgressEvent,
   StartDeepResearchRequest,
 } from '../common/models/deep-research.model';
-import {
-  DeepResearchEvent,
-  DeepResearchService,
-} from '../services/deep-research/deep-research.service';
+import {DeepResearchService} from '../services/deep-research/deep-research.service';
 
 /** Sentinel option that reveals a free-text input on a single-select field. */
 const CUSTOM_OPTION = 'Anders… (vul zelf in)';
 /** Competitor option that reveals the "which competitors?" input. */
 const SPECIFIC_COMPETITORS = 'Specific competitors';
-const POLL_INTERVAL_MS = 4000;
+const POLL_INTERVAL_MS = 2000;
 const DEFAULT_ITERATIONS = 3;
 
 type ViewState = 'wizard' | 'running' | 'report';
@@ -84,7 +82,6 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
   };
 
   private pollSub?: Subscription;
-  private streamSub?: Subscription;
 
   constructor(
     private fb: FormBuilder,
@@ -98,7 +95,6 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.pollSub?.unsubscribe();
-    this.streamSub?.unsubscribe();
   }
 
   // --- Loading ---------------------------------------------------------------
@@ -355,114 +351,34 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     this.starting = true;
     this.runError = null;
     this.liveGroups = [];
-    this.streamSub?.unsubscribe();
-    this.streamSub = this.service
-      .startResearchStream(this.buildRequest())
-      .subscribe({
-        next: ev => this.handleStreamEvent(ev),
-        error: () => {
-          // Stream dropped (e.g. a proxy/idle timeout). If the run already
-          // started, keep it visible and poll for the final report.
-          this.starting = false;
-          if (this.activeReport?.id) {
-            this.view = 'running';
-            this.startPolling(this.activeReport.id);
-          } else {
-            this.runError =
-              'De verbinding werd verbroken. Probeer het opnieuw.';
-          }
-        },
-        complete: () => {
-          // Stream ended without a terminal event → poll for completion.
-          if (this.view !== 'report' && this.activeReport?.id) {
-            this.startPolling(this.activeReport.id);
-          }
-        },
-      });
-  }
-
-  private handleStreamEvent(ev: DeepResearchEvent): void {
-    switch (ev.t) {
-      case 'start':
+    this.service.startResearch(this.buildRequest()).subscribe({
+      next: report => {
         this.starting = false;
-        this.view = 'running';
-        this.activeReport = {
-          id: ev.id,
-          topic: ev.topic ?? this.topic,
-          status: JobStatus.PROCESSING,
-        } as unknown as DeepResearchReport;
-        break;
-      case 'step':
-        this.pushLive(ev);
-        break;
-      case 'done':
-        if (ev.id) {
-          this.finishFromStream(ev.id);
-        }
-        break;
-      case 'error':
-        this.runError = ev.message ?? 'Onderzoek mislukt.';
-        if (ev.id) {
-          this.finishFromStream(ev.id);
+        this.activeReport = report;
+        if (report.status === JobStatus.PROCESSING) {
+          this.view = 'running';
+          this.liveGroups = this.buildGroups(report.progress);
+          this.startPolling(report.id);
         } else {
-          this.starting = false;
+          this.view = 'report';
         }
-        break;
-    }
-  }
-
-  private pushLive(ev: DeepResearchEvent): void {
-    const base = (ev.author ?? '').startsWith('web_researcher')
-      ? 'web_researcher'
-      : ev.author ?? '';
-    const info = this.agentLabels[base] ?? {label: base || 'Agent', icon: 'bolt'};
-
-    let group = this.liveGroups[this.liveGroups.length - 1];
-    if (!group || group.key !== base) {
-      group = {key: base, label: info.label, icon: info.icon, lines: []};
-      this.liveGroups.push(group);
-    }
-
-    let line: string;
-    if (ev.kind === 'tool') {
-      line =
-        ev.text === 'google_search'
-          ? 'Web doorzoeken…'
-          : ev.text === 'url_context'
-            ? 'Bronpagina lezen…'
-            : ev.text === 'exit_research_loop'
-              ? 'Dekking voldoende — afronden'
-              : ev.text || 'tool';
-    } else {
-      const t = (ev.text ?? '').trim();
-      if (!t) {
-        return;
-      }
-      line = t.length > 180 ? t.slice(0, 177) + '…' : t;
-    }
-    group.lines.push(line);
-  }
-
-  private finishFromStream(id: number): void {
-    this.streamSub?.unsubscribe();
-    this.starting = false;
-    this.service.getReport(id).subscribe({
-      next: full => {
-        this.activeReport = full;
-        this.view = 'report';
         this.loadHistory();
       },
-      error: () => this.startPolling(id),
+      error: () => {
+        this.starting = false;
+        this.runError = 'Kon het onderzoek niet starten. Probeer het opnieuw.';
+      },
     });
   }
 
   private startPolling(id: number): void {
     this.pollSub?.unsubscribe();
-    this.pollSub = interval(POLL_INTERVAL_MS)
+    this.pollSub = timer(0, POLL_INTERVAL_MS)
       .pipe(switchMap(() => this.service.getReport(id)))
       .subscribe({
         next: report => {
           this.activeReport = report;
+          this.liveGroups = this.buildGroups(report.progress);
           if (report.status !== JobStatus.PROCESSING) {
             this.pollSub?.unsubscribe();
             this.view = 'report';
@@ -471,6 +387,57 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
         },
         error: () => {},
       });
+  }
+
+  /** Rebuild the phase-grouped activity log from the polled progress list. */
+  private buildGroups(
+    progress?: ProgressEvent[],
+  ): {key: string; label: string; icon: string; lines: string[]}[] {
+    const groups: {
+      key: string;
+      label: string;
+      icon: string;
+      lines: string[];
+    }[] = [];
+    for (const ev of progress ?? []) {
+      const base = (ev.author ?? '').startsWith('web_researcher')
+        ? 'web_researcher'
+        : ev.author ?? '';
+      const info = this.agentLabels[base] ?? {
+        label: base || 'Agent',
+        icon: 'bolt',
+      };
+      let group = groups[groups.length - 1];
+      if (!group || group.key !== base) {
+        group = {key: base, label: info.label, icon: info.icon, lines: []};
+        groups.push(group);
+      }
+      const line = this.lineFor(ev);
+      if (line) {
+        group.lines.push(line);
+      }
+    }
+    return groups;
+  }
+
+  private lineFor(ev: ProgressEvent): string {
+    if (ev.kind === 'tool') {
+      switch (ev.text) {
+        case 'google_search':
+          return 'Web doorzoeken…';
+        case 'url_context':
+          return 'Bronpagina lezen…';
+        case 'exit_research_loop':
+          return 'Dekking voldoende — afronden';
+        default:
+          return ev.text || 'tool';
+      }
+    }
+    const t = (ev.text ?? '').trim();
+    if (!t) {
+      return '';
+    }
+    return t.length > 180 ? t.slice(0, 177) + '…' : t;
   }
 
   openReport(report: DeepResearchReport): void {
