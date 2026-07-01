@@ -83,15 +83,15 @@ export class TranslatorFeedbackComponent implements OnInit {
   }
 
   roleLabel(role: string): string {
-    return role === 'translator' ? 'Vertaler' : 'Content manager';
+    return role === 'translator' ? 'Translator' : 'Content manager';
   }
 
   statusLabel(status: string): string {
     return status === 'open'
       ? 'Open'
       : status === 'in_progress'
-        ? 'Opgepakt'
-        : 'Opgelost';
+        ? 'In progress'
+        : 'Resolved';
   }
 
   statusColor(status: string): string {
