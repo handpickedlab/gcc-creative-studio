@@ -36,6 +36,8 @@ COMPOSE_MODEL = os.getenv("DR_COMPOSE_MODEL", DEFAULT_MODEL)
 # The fact-checker that re-reads cited sources to verify claims. Reasoning-heavy,
 # so it defaults to the base model.
 VERIFY_MODEL = os.getenv("DR_VERIFY_MODEL", DEFAULT_MODEL)
+# The editor that rewrites the draft to fix/drop the verifier's flagged claims.
+REVISE_MODEL = os.getenv("DR_REVISE_MODEL", DEFAULT_MODEL)
 
 # Vertex AI location for the deep-research models. Defaults to the app-wide
 # LOCATION; grounding (google_search / url_context) is verified to work there.
@@ -46,6 +48,11 @@ VERTEX_LOCATION = os.getenv("DR_LOCATION", config_service.LOCATION)
 # searching followed by one reflection. The loop also exits early as soon as
 # the reflector decides coverage is sufficient.
 MAX_RESEARCH_ITERATIONS = int(os.getenv("DR_MAX_ITERATIONS", "3"))
+
+# How many times the verify/revise loop may rewrite the report to fix claims the
+# fact-checker flagged. Each revision is followed by a fresh verification pass;
+# 0 restores the old behaviour (verify once, list issues, no fix).
+MAX_REVISION_PASSES = int(os.getenv("DR_MAX_REVISIONS", "1"))
 
 # Number of web researchers that run concurrently each round. The plan's
 # sub-questions (or the reflector's gap queries on later rounds) are distributed

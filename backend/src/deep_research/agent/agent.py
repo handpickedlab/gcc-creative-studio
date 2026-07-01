@@ -30,11 +30,20 @@ the local runner in ``run.py``.
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncGenerator
 from datetime import date
 
-from google.adk.agents import LlmAgent, LoopAgent, ParallelAgent, SequentialAgent
+from google.adk.agents import (
+    BaseAgent,
+    LlmAgent,
+    LoopAgent,
+    ParallelAgent,
+    SequentialAgent,
+)
 from google.adk.agents.callback_context import CallbackContext
+from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.readonly_context import ReadonlyContext
+from google.adk.events import Event, EventActions
 from google.adk.tools import google_search, url_context
 
 from . import config, prompts
@@ -176,10 +185,48 @@ def _make_merge_callback(num_slots: int):
 # --- Pipeline wiring ---------------------------------------------------------
 
 
+def unresolved_claims(verification: str) -> list[str]:
+    """The claims the verifier listed under its "caution" heading (empty = clean).
+
+    The verifier writes flagged claims as a bullet list under "### Claims to
+    treat with caution"; a clean report carries the literal "None -- ..." line
+    there, which is not a list item.
+    """
+    return _extract_list_items_under(verification or "", "caution")
+
+
+class _VerificationGate(BaseAgent):
+    """Stops the verify/revise loop when the draft is clean or the budget is spent.
+
+    Sits between claim_verifier and report_reviser. Escalating stops the
+    LoopAgent immediately (before the reviser runs), so the loop always ends on
+    a draft whose verification section was produced from that exact draft, and
+    the reviser only runs when there is something to fix.
+    """
+
+    max_revisions: int
+
+    async def _run_async_impl(
+        self, ctx: InvocationContext
+    ) -> AsyncGenerator[Event, None]:
+        state = ctx.session.state
+        round_no = int(state.get("verification_round") or 0) + 1
+        clean = not unresolved_claims(state.get("verification_section") or "")
+        yield Event(
+            invocation_id=ctx.invocation_id,
+            author=self.name,
+            actions=EventActions(
+                state_delta={"verification_round": round_no},
+                escalate=clean or round_no > self.max_revisions,
+            ),
+        )
+
+
 def build_root_agent(
     composer_instruction: str = prompts.COMPOSER_INSTRUCTION,
     max_iterations: int | None = None,
     num_slots: int | None = None,
+    max_revisions: int | None = None,
     today: date | None = None,
 ) -> SequentialAgent:
     """Construct the deep-research pipeline.
@@ -258,9 +305,12 @@ def build_root_agent(
         output_key="draft_report",
     )
 
-    # 4. Verify the draft against its sources, then finalize. The verifier
-    # re-reads cited pages (url_context) and appends a verification section; the
-    # callback assembles final_report so the report body is never model-rewritten.
+    # 4. Verify the draft against its sources, fix what fails, then finalize.
+    # The verifier re-reads cited pages (url_context) and lists unsupported
+    # claims; while any remain (and revision budget is left) the reviser rewrites
+    # the draft to correct or drop them, and the loop re-verifies the result. The
+    # gate exits after a verify pass, so the final verification section always
+    # describes the draft it is appended to (assembled in code by _finalize_report).
     claim_verifier = LlmAgent(
         name="claim_verifier",
         model=make_model(config.VERIFY_MODEL),
@@ -268,13 +318,36 @@ def build_root_agent(
         instruction=prompts.VERIFIER_INSTRUCTION,
         tools=[url_context],
         output_key="verification_section",
+    )
+    revisions = (
+        max_revisions
+        if max_revisions is not None
+        else config.MAX_REVISION_PASSES
+    )
+    verification_gate = _VerificationGate(
+        name="verification_gate", max_revisions=revisions
+    )
+    report_reviser = LlmAgent(
+        name="report_reviser",
+        model=make_model(config.REVISE_MODEL),
+        description="Rewrites the draft report to fix or drop the claims the verifier flagged.",
+        instruction=prompts.REVISER_INSTRUCTION,
+        output_key="draft_report",
+    )
+    verify_and_fix = LoopAgent(
+        name="verify_and_fix",
+        description="Verifies the draft's claims and revises the report until clean, ending on a verified draft.",
+        sub_agents=[claim_verifier, verification_gate, report_reviser],
+        # +1: the last allowed iteration is a verify-only pass (the gate exits
+        # before the reviser), so a revised draft is always re-verified.
+        max_iterations=revisions + 1,
         after_agent_callback=_finalize_report,
     )
 
     return SequentialAgent(
         name="deep_research_agent",
-        description="Deep research agent: plan, parallel web research + reflection, a cited draft, then source verification.",
-        sub_agents=[plan_generator, research_loop, report_composer, claim_verifier],
+        description="Deep research agent: plan, parallel web research + reflection, a cited draft, then verify-and-fix.",
+        sub_agents=[plan_generator, research_loop, report_composer, verify_and_fix],
     )
 
 

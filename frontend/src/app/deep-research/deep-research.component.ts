@@ -79,6 +79,7 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     reflector: {label: 'Dekking beoordelen', icon: 'psychology'},
     report_composer: {label: 'Concept schrijven', icon: 'edit_note'},
     claim_verifier: {label: 'Bronnen verifiëren', icon: 'fact_check'},
+    report_reviser: {label: 'Onjuiste claims corrigeren', icon: 'auto_fix_high'},
   };
 
   private pollSub?: Subscription;
