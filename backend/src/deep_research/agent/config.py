@@ -37,6 +37,11 @@ COMPOSE_MODEL = os.getenv("DR_COMPOSE_MODEL", DEFAULT_MODEL)
 # so it defaults to the base model.
 VERIFY_MODEL = os.getenv("DR_VERIFY_MODEL", DEFAULT_MODEL)
 
+# Vertex AI location for the deep-research models. Defaults to the app-wide
+# LOCATION; grounding (google_search / url_context) is verified to work there.
+# Override with DR_LOCATION if a specific regional endpoint is ever required.
+VERTEX_LOCATION = os.getenv("DR_LOCATION", config_service.LOCATION)
+
 # Safety bound on the search/reflect loop. Each iteration is one round of
 # searching followed by one reflection. The loop also exits early as soon as
 # the reflector decides coverage is sufficient.
