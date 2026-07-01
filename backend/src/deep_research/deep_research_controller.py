@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 
 from src.auth.auth_guard import RoleChecker, get_current_user
 from src.common.dto.pagination_response_dto import PaginationResponseDto
@@ -58,6 +59,28 @@ async def start_research(
         dto=request_dto,
         current_user=current_user,
         executor=executor,
+    )
+
+
+@router.post(
+    "/stream",
+    summary="Start a Consumer Sentiment Scan and stream progress (SSE)",
+)
+async def stream_research(
+    request_dto: StartDeepResearchDto,
+    current_user: UserModel = Depends(get_current_user),
+    service: DeepResearchService = Depends(),
+):
+    """Start a scan and stream the agent's progress as Server-Sent Events.
+
+    Emits a ``start`` event with the report id, a ``step`` per pipeline event,
+    then ``done``/``error``. The report is persisted regardless of whether the
+    client stays connected; the client can also poll ``GET /{report_id}``.
+    """
+    return StreamingResponse(
+        service.stream_research(request_dto, current_user),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

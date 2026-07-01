@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import asyncio
+import json
 import logging
 import os
 import sys
+from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import Depends, HTTPException, status
@@ -24,6 +26,7 @@ from google.cloud.logging.handlers import CloudLoggingHandler
 
 from src.common.dto.pagination_response_dto import PaginationResponseDto
 from src.common.schema.media_item_model import JobStatusEnum
+from src.database import async_session_local
 from src.deep_research.agent import build_root_agent, run_pipeline
 from src.deep_research.agent.brief import (
     HUNKEMOLLER_COMPOSER_INSTRUCTION,
@@ -45,6 +48,18 @@ from src.deep_research.schema.deep_research_model import DeepResearchReportModel
 from src.users.user_model import UserModel, UserRoleEnum
 
 logger = logging.getLogger(__name__)
+
+# Interval (seconds) between SSE heartbeat comments while the pipeline is quiet,
+# so proxies don't close an idle connection.
+_SSE_HEARTBEAT_S = 15
+# Keep references to in-flight streaming tasks so they aren't garbage collected
+# if the client disconnects mid-run (CPU stays allocated: cpu-throttling=false).
+_STREAM_TASKS: set[asyncio.Task] = set()
+
+
+def _sse(payload: dict) -> str:
+    """Format a payload as a Server-Sent-Events ``data:`` frame."""
+    return "data: " + json.dumps(payload, default=str) + "\n\n"
 
 
 def _run_deep_research_in_background(
@@ -222,6 +237,117 @@ class DeepResearchService:
         logger.info("Deep research job queued: %s", placeholder.id)
 
         return placeholder
+
+    async def stream_research(
+        self,
+        dto: StartDeepResearchDto,
+        current_user: UserModel,
+    ) -> AsyncGenerator[str, None]:
+        """Start a scan and stream the agent's progress as SSE frames.
+
+        Emits ``start`` (with the report id), then a ``step`` per pipeline event
+        (plan / search / reflect / compose / verify), then ``done`` or ``error``.
+        The pipeline runs as a task with its own DB session so the report is
+        persisted even if the client disconnects (Cloud Run keeps CPU allocated).
+        """
+        intake = dto.intake_values()
+        brief = build_brief(intake)
+        initial_state = build_initial_state(intake)
+
+        placeholder = await self.repo.create(
+            DeepResearchReportModel(
+                user_id=current_user.id,
+                topic=dto.research_topic,
+                status=JobStatusEnum.PROCESSING,
+                max_iterations=dto.max_iterations,
+                intake=intake,
+                brief=brief,
+            )
+        )
+        report_id = placeholder.id
+        yield _sse({"t": "start", "id": report_id, "topic": placeholder.topic})
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def on_event(author: str, kind: str, text: str) -> None:
+            # Called synchronously from inside the pipeline's async loop.
+            try:
+                queue.put_nowait(
+                    {"t": "step", "author": author, "kind": kind, "text": text}
+                )
+            except Exception:  # never let progress reporting break the run
+                pass
+
+        async def _run() -> None:
+            try:
+                agent = build_root_agent(
+                    composer_instruction=HUNKEMOLLER_COMPOSER_INSTRUCTION,
+                    max_iterations=dto.max_iterations,
+                )
+                report = await run_pipeline(
+                    agent, brief, initial_state, on_event
+                )
+                async with async_session_local() as db:
+                    repo = DeepResearchRepository(db)
+                    if report:
+                        await repo.update(
+                            report_id,
+                            {"status": JobStatusEnum.COMPLETED, "report": report},
+                        )
+                    else:
+                        await repo.update(
+                            report_id,
+                            {
+                                "status": JobStatusEnum.FAILED,
+                                "error_message": "The research pipeline produced an empty report.",
+                            },
+                        )
+                queue.put_nowait(
+                    {
+                        "t": "done",
+                        "id": report_id,
+                        "status": "completed" if report else "failed",
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    "Deep research stream failed for %s: %s",
+                    report_id,
+                    e,
+                    exc_info=True,
+                )
+                try:
+                    async with async_session_local() as db:
+                        await DeepResearchRepository(db).update(
+                            report_id,
+                            {
+                                "status": JobStatusEnum.FAILED,
+                                "error_message": str(e),
+                            },
+                        )
+                except Exception:
+                    pass
+                queue.put_nowait(
+                    {"t": "error", "id": report_id, "message": str(e)}
+                )
+            finally:
+                queue.put_nowait(None)
+
+        task = asyncio.create_task(_run())
+        _STREAM_TASKS.add(task)
+        task.add_done_callback(_STREAM_TASKS.discard)
+
+        while True:
+            try:
+                item = await asyncio.wait_for(
+                    queue.get(), timeout=_SSE_HEARTBEAT_S
+                )
+            except asyncio.TimeoutError:
+                yield ": ping\n\n"  # SSE comment keeps the connection alive
+                continue
+            if item is None:
+                break
+            yield _sse(item)
 
     async def list_reports(
         self,

@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-import {HttpClient, HttpParams} from '@angular/common/http';
+import {
+  HttpClient,
+  HttpEvent,
+  HttpEventType,
+  HttpParams,
+} from '@angular/common/http';
 import {Injectable} from '@angular/core';
 import {Observable} from 'rxjs';
 import {environment} from '../../../environments/environment';
@@ -24,6 +29,18 @@ import {
   PaginatedReports,
   StartDeepResearchRequest,
 } from '../../common/models/deep-research.model';
+
+/** One Server-Sent event from the streaming research run. */
+export interface DeepResearchEvent {
+  t: 'start' | 'step' | 'done' | 'error';
+  id?: number;
+  topic?: string;
+  author?: string;
+  kind?: string; // 'tool' | 'text'
+  text?: string;
+  status?: string;
+  message?: string;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -39,6 +56,51 @@ export class DeepResearchService {
   /** Fetch the intake fields + stepper grouping used to render the wizard. */
   getIntakeSchema(): Observable<IntakeSchema> {
     return this.http.get<IntakeSchema>(`${this.apiUrl}/intake-schema`);
+  }
+
+  /**
+   * Start a scan and stream the agent's progress live (SSE). Uses HttpClient
+   * download-progress so the auth interceptor still applies — no manual token
+   * handling — and parses the server-sent-events frames as they accumulate.
+   */
+  startResearchStream(
+    request: StartDeepResearchRequest,
+  ): Observable<DeepResearchEvent> {
+    const req = this.http.post(`${this.apiUrl}/stream`, request, {
+      observe: 'events',
+      responseType: 'text',
+      reportProgress: true,
+    });
+    return new Observable<DeepResearchEvent>(sub => {
+      let seen = 0;
+      const emitFrames = (text: string) => {
+        let idx: number;
+        while ((idx = text.indexOf('\n\n', seen)) >= 0) {
+          const frame = text.slice(seen, idx);
+          seen = idx + 2;
+          const line = frame.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+          try {
+            sub.next(JSON.parse(line.slice(5).trim()) as DeepResearchEvent);
+          } catch {
+            // ignore partial / malformed frame
+          }
+        }
+      };
+      const inner = req.subscribe({
+        next: (ev: HttpEvent<string>) => {
+          if (ev.type === HttpEventType.DownloadProgress) {
+            emitFrames((ev as {partialText?: string}).partialText ?? '');
+          } else if (ev.type === HttpEventType.Response) {
+            if (typeof ev.body === 'string') emitFrames(ev.body);
+            sub.complete();
+          }
+        },
+        error: err => sub.error(err),
+        complete: () => sub.complete(),
+      });
+      return () => inner.unsubscribe();
+    });
   }
 
   /** Kick off a scan; returns the placeholder report (status "processing"). */
