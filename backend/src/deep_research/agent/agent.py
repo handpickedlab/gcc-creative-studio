@@ -39,6 +39,7 @@ from google.adk.tools import google_search, url_context
 
 from . import config, prompts
 from .tools import exit_research_loop
+from .vertex_model import make_model
 
 
 def _finalize_report(callback_context: CallbackContext) -> None:
@@ -202,7 +203,7 @@ def build_root_agent(
     # 1. Plan the research.
     plan_generator = LlmAgent(
         name="plan_generator",
-        model=config.PLANNER_MODEL,
+        model=make_model(config.PLANNER_MODEL),
         description="Breaks a research question into a structured plan with sub-questions.",
         instruction=with_date(prompts.PLANNER_INSTRUCTION),
         output_key="research_plan",
@@ -213,7 +214,7 @@ def build_root_agent(
     research_slots = [
         LlmAgent(
             name=f"web_researcher_{i + 1}",
-            model=config.SEARCH_MODEL,
+            model=make_model(config.SEARCH_MODEL),
             description="Researches its assigned sub-questions and reports new cited findings.",
             instruction=_make_slot_instruction(i, num_slots, today_iso),
             # google_search discovers pages; url_context reads the most relevant
@@ -233,7 +234,7 @@ def build_root_agent(
     # 2b. Reflect on coverage; stop the loop or request more searches.
     reflector = LlmAgent(
         name="reflector",
-        model=config.REFLECT_MODEL,
+        model=make_model(config.REFLECT_MODEL),
         description="Judges whether coverage is sufficient; stops the loop or proposes new queries.",
         instruction=prompts.REFLECTOR_INSTRUCTION,
         tools=[exit_research_loop],
@@ -251,7 +252,7 @@ def build_root_agent(
     # 3. Compose the draft report.
     report_composer = LlmAgent(
         name="report_composer",
-        model=config.COMPOSE_MODEL,
+        model=make_model(config.COMPOSE_MODEL),
         description="Synthesizes the draft report from the findings.",
         instruction=composer_instruction,
         output_key="draft_report",
@@ -262,7 +263,7 @@ def build_root_agent(
     # callback assembles final_report so the report body is never model-rewritten.
     claim_verifier = LlmAgent(
         name="claim_verifier",
-        model=config.VERIFY_MODEL,
+        model=make_model(config.VERIFY_MODEL),
         description="Re-reads cited sources to verify the draft's claims and flags unsupported ones.",
         instruction=prompts.VERIFIER_INSTRUCTION,
         tools=[url_context],
