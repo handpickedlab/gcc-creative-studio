@@ -211,6 +211,71 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     return this.activeReport?.report || '';
   }
 
+  // --- Report splitting (collapse the long Sources list) ---------------------
+
+  private _parsedFor: string | null = null;
+  private _parsed = {main: '', sources: '', rest: '', count: 0};
+
+  /**
+   * Split the report into the body, the (long) Sources list and anything after
+   * it (e.g. the verification section), so the UI can tuck the sources away.
+   * Memoized on the raw report string so change detection stays cheap.
+   */
+  private parseReport(): {main: string; sources: string; rest: string; count: number} {
+    const md = this.reportBody;
+    if (md === this._parsedFor) {
+      return this._parsed;
+    }
+    this._parsedFor = md;
+
+    const lines = md.split('\n');
+    const start = lines.findIndex(l => /^#{1,6}\s+sources\b/i.test(l.trim()));
+    if (start < 0) {
+      this._parsed = {main: md, sources: '', rest: '', count: 0};
+      return this._parsed;
+    }
+
+    // The sources list runs until the next heading or a horizontal rule.
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) {
+      const t = lines[i].trim();
+      if (t === '---' || t === '***' || /^#{1,6}\s+/.test(t)) {
+        end = i;
+        break;
+      }
+    }
+
+    const sources = lines.slice(start + 1, end).join('\n').trim();
+    let count = (sources.match(/^\s*\[\d+\]/gm) || []).length;
+    if (!count) {
+      count = (sources.match(/^\s*(\d+[.)]|[-*])\s/gm) || []).length;
+    }
+
+    this._parsed = {
+      main: lines.slice(0, start).join('\n').trim(),
+      sources,
+      rest: lines.slice(end).join('\n').trim(),
+      count,
+    };
+    return this._parsed;
+  }
+
+  get reportMain(): string {
+    return this.parseReport().main;
+  }
+
+  get reportSources(): string {
+    return this.parseReport().sources;
+  }
+
+  get reportRest(): string {
+    return this.parseReport().rest;
+  }
+
+  get sourceCount(): number {
+    return this.parseReport().count;
+  }
+
   private buildRequest(): StartDeepResearchRequest {
     const request: Record<string, unknown> = {};
     this.schema?.fields.forEach(field => {

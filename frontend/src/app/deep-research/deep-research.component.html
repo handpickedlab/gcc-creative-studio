@@ -292,7 +292,17 @@
             </div>
           </div>
 
-          <markdown *ngIf="reportBody" [data]="reportBody" class="report-md"></markdown>
+          <markdown *ngIf="reportMain" [data]="reportMain" class="report-md"></markdown>
+
+          <details class="sources" *ngIf="reportSources">
+            <summary>
+              Bronnen
+              <span class="cnt" *ngIf="sourceCount">{{ sourceCount }}</span>
+            </summary>
+            <markdown [data]="reportSources" class="report-md sources-md"></markdown>
+          </details>
+
+          <markdown *ngIf="reportRest" [data]="reportRest" class="report-md"></markdown>
         </ng-container>
       </div>
     </main>
