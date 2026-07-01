@@ -26,7 +26,10 @@ import {
   JobStatus,
   StartDeepResearchRequest,
 } from '../common/models/deep-research.model';
-import {DeepResearchService} from '../services/deep-research/deep-research.service';
+import {
+  DeepResearchEvent,
+  DeepResearchService,
+} from '../services/deep-research/deep-research.service';
 
 /** Sentinel option that reveals a free-text input on a single-select field. */
 const CUSTOM_OPTION = 'Anders… (vul zelf in)';
@@ -69,7 +72,19 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
 
   history: DeepResearchReport[] = [];
 
+  /** Live activity log while a scan runs, grouped by pipeline phase. */
+  liveGroups: {key: string; label: string; icon: string; lines: string[]}[] = [];
+
+  private readonly agentLabels: Record<string, {label: string; icon: string}> = {
+    plan_generator: {label: 'Onderzoeksplan opstellen', icon: 'checklist'},
+    web_researcher: {label: 'Web doorzoeken', icon: 'travel_explore'},
+    reflector: {label: 'Dekking beoordelen', icon: 'psychology'},
+    report_composer: {label: 'Concept schrijven', icon: 'edit_note'},
+    claim_verifier: {label: 'Bronnen verifiëren', icon: 'fact_check'},
+  };
+
   private pollSub?: Subscription;
+  private streamSub?: Subscription;
 
   constructor(
     private fb: FormBuilder,
@@ -83,6 +98,7 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.pollSub?.unsubscribe();
+    this.streamSub?.unsubscribe();
   }
 
   // --- Loading ---------------------------------------------------------------
@@ -273,22 +289,105 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     }
     this.starting = true;
     this.runError = null;
-    this.service.startResearch(this.buildRequest()).subscribe({
-      next: report => {
+    this.liveGroups = [];
+    this.streamSub?.unsubscribe();
+    this.streamSub = this.service
+      .startResearchStream(this.buildRequest())
+      .subscribe({
+        next: ev => this.handleStreamEvent(ev),
+        error: () => {
+          // Stream dropped (e.g. a proxy/idle timeout). If the run already
+          // started, keep it visible and poll for the final report.
+          this.starting = false;
+          if (this.activeReport?.id) {
+            this.view = 'running';
+            this.startPolling(this.activeReport.id);
+          } else {
+            this.runError =
+              'De verbinding werd verbroken. Probeer het opnieuw.';
+          }
+        },
+        complete: () => {
+          // Stream ended without a terminal event → poll for completion.
+          if (this.view !== 'report' && this.activeReport?.id) {
+            this.startPolling(this.activeReport.id);
+          }
+        },
+      });
+  }
+
+  private handleStreamEvent(ev: DeepResearchEvent): void {
+    switch (ev.t) {
+      case 'start':
         this.starting = false;
-        this.activeReport = report;
-        if (report.status === JobStatus.PROCESSING) {
-          this.view = 'running';
-          this.startPolling(report.id);
-        } else {
-          this.view = 'report';
+        this.view = 'running';
+        this.activeReport = {
+          id: ev.id,
+          topic: ev.topic ?? this.topic,
+          status: JobStatus.PROCESSING,
+        } as unknown as DeepResearchReport;
+        break;
+      case 'step':
+        this.pushLive(ev);
+        break;
+      case 'done':
+        if (ev.id) {
+          this.finishFromStream(ev.id);
         }
+        break;
+      case 'error':
+        this.runError = ev.message ?? 'Onderzoek mislukt.';
+        if (ev.id) {
+          this.finishFromStream(ev.id);
+        } else {
+          this.starting = false;
+        }
+        break;
+    }
+  }
+
+  private pushLive(ev: DeepResearchEvent): void {
+    const base = (ev.author ?? '').startsWith('web_researcher')
+      ? 'web_researcher'
+      : ev.author ?? '';
+    const info = this.agentLabels[base] ?? {label: base || 'Agent', icon: 'bolt'};
+
+    let group = this.liveGroups[this.liveGroups.length - 1];
+    if (!group || group.key !== base) {
+      group = {key: base, label: info.label, icon: info.icon, lines: []};
+      this.liveGroups.push(group);
+    }
+
+    let line: string;
+    if (ev.kind === 'tool') {
+      line =
+        ev.text === 'google_search'
+          ? 'Web doorzoeken…'
+          : ev.text === 'url_context'
+            ? 'Bronpagina lezen…'
+            : ev.text === 'exit_research_loop'
+              ? 'Dekking voldoende — afronden'
+              : ev.text || 'tool';
+    } else {
+      const t = (ev.text ?? '').trim();
+      if (!t) {
+        return;
+      }
+      line = t.length > 180 ? t.slice(0, 177) + '…' : t;
+    }
+    group.lines.push(line);
+  }
+
+  private finishFromStream(id: number): void {
+    this.streamSub?.unsubscribe();
+    this.starting = false;
+    this.service.getReport(id).subscribe({
+      next: full => {
+        this.activeReport = full;
+        this.view = 'report';
         this.loadHistory();
       },
-      error: () => {
-        this.starting = false;
-        this.runError = 'Kon het onderzoek niet starten. Probeer het opnieuw.';
-      },
+      error: () => this.startPolling(id),
     });
   }
 

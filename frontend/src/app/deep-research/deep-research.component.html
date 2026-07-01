@@ -237,14 +237,33 @@
         </section>
 
         <!-- ============ RUNNING ============ -->
-        <div class="empty" *ngIf="view === 'running'">
-          <div class="spinner big"></div>
-          <h1>Onderzoek loopt…</h1>
-          <p class="topic">{{ activeReport?.topic }}</p>
-          <p>
-            Dit kan enkele minuten duren — het rapport verschijnt hier zodra het
-            klaar is. Je kunt de pagina open laten.
+        <div class="running" *ngIf="view === 'running'">
+          <div class="run-head">
+            <div class="spinner"></div>
+            <div class="run-title">
+              <h2>Onderzoek loopt…</h2>
+              <p class="run-topic">{{ activeReport?.topic }}</p>
+            </div>
+          </div>
+          <p class="hint">
+            Live voortgang — de agent plant, doorzoekt het web, reflecteert en
+            schrijft een geciteerde brief. Dit duurt enkele minuten; je kunt de
+            pagina open laten.
           </p>
+
+          <div class="livelog">
+            <div class="lg" *ngFor="let g of liveGroups">
+              <div class="lg-head">
+                <mat-icon>{{ g.icon }}</mat-icon>
+                <span>{{ g.label }}</span>
+              </div>
+              <div class="lg-line" *ngFor="let l of g.lines">{{ l }}</div>
+            </div>
+            <div class="lg-waiting" *ngIf="!liveGroups.length">
+              <div class="dots"><span></span><span></span><span></span></div>
+              Verbinden met de agent…
+            </div>
+          </div>
         </div>
 
         <!-- ============ REPORT ============ -->

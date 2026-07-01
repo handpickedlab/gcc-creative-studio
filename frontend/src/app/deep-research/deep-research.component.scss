@@ -205,6 +205,26 @@
 .empty .topic { font-weight: 500; color: var(--text); }
 .empty p { font-size: 13px; color: var(--text-m); max-width: 440px; line-height: 1.6; margin: 0; }
 
+/* ---- running / live log ---- */
+.running { max-width: 740px; }
+.run-head { display: flex; align-items: center; gap: 14px; }
+.run-title h2 { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+.run-topic { font-size: 13px; color: var(--text-m); margin: 3px 0 0; }
+.running .hint { margin-top: 12px; }
+
+.livelog { margin-top: 22px; display: flex; flex-direction: column; gap: 16px; }
+.lg { border-left: 2px solid var(--border-lt); padding: 1px 0 1px 15px; }
+.lg:last-child { border-left-color: var(--accent); }
+.lg-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
+.lg-head mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--accent); }
+.lg-line { font-size: 12px; color: var(--text-m); line-height: 1.55; padding: 4px 0 0 24px; word-break: break-word; }
+.lg-waiting { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-m); padding: 6px 0; }
+.dots { display: inline-flex; gap: 4px; }
+.dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: drdot 1.2s ease-in-out infinite; }
+.dots span:nth-child(2) { animation-delay: .2s; }
+.dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes drdot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
 /* ---- report ---- */
 .res-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .res-title h3 { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin: 8px 0 0; }
