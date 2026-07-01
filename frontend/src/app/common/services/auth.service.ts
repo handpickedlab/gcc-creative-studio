@@ -26,7 +26,7 @@ import {
   signInWithPopup,
   UserCredential,
 } from '@angular/fire/auth';
-import {Observable, from, throwError, of} from 'rxjs';
+import {Observable, Subject, from, throwError, of} from 'rxjs';
 import {catchError, tap, map, switchMap} from 'rxjs/operators';
 import {isPlatformBrowser} from '@angular/common';
 import {SettingsService} from '../../services/settings.service';
@@ -55,6 +55,12 @@ export class AuthService {
   private currentOAuthAccessToken: string | null = null;
   private firebaseIdToken: string | null = null; // To store the Firebase token for the test
   private firebaseTokenExpiry: number | null = null; // To store token expiration time (in ms)
+
+  // Emits when the One Tap / FedCM prompt could not be shown (third-party
+  // sign-in disabled, One Tap cooldown, no active Google session, ...). The
+  // login component listens and reveals the rendered Google sign-in button as
+  // a popup-based fallback that does not depend on third-party cookies.
+  readonly loginPromptSuppressed$ = new Subject<void>();
 
   constructor(
     private router: Router,
@@ -193,24 +199,37 @@ export class AuthService {
         );
       }
 
-      const loginTimeout = setTimeout(() => {
-        observer.error(
-          new Error(
-            'Login timed out or third party sign-in may be disabled. Please try again and enable third party sign-in by clicking on the information button at the top left side of the browser.',
-          ),
-        );
-      }, 15000);
+      let settled = false;
+      let fallbackShown = false;
+
+      const revealFallback = () => {
+        clearTimeout(fallbackTimeout);
+        if (settled || fallbackShown) return;
+        fallbackShown = true;
+        this.loginPromptSuppressed$.next();
+      };
+
+      // Safety net: if neither a credential nor a prompt-moment notification
+      // arrives (some browsers stay silent when the prompt is blocked), reveal
+      // the button fallback so the user is never stuck on a spinner.
+      const fallbackTimeout = setTimeout(revealFallback, 10000);
 
       try {
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
+          // FedCM is the browser-native sign-in mechanism that works even when
+          // third-party cookies are blocked (Chrome's phase-out). Without it,
+          // One Tap silently fails on those browsers.
+          use_fedcm_for_prompt: true,
           callback: (response: any) => {
-            clearTimeout(loginTimeout);
-            const idToken = response.credential;
+            clearTimeout(fallbackTimeout);
+            const idToken = response?.credential;
             if (idToken) {
+              settled = true;
               observer.next(idToken);
               observer.complete();
-            } else {
+            } else if (!settled) {
+              settled = true;
               observer.error(
                 new Error(
                   'Google Sign-In response did not contain a credential.',
@@ -220,17 +239,54 @@ export class AuthService {
           },
         });
 
-        // Trigger the One Tap prompt.
-        // Per new docs, we don't use the notification object for flow control.
-        google.accounts.id.prompt();
+        // Show the One Tap / FedCM prompt for a fast, one-click sign-in. When
+        // the browser suppresses it (third-party sign-in disabled, One Tap
+        // cooldown, no active Google session, dismissed) we do NOT error out —
+        // instead we surface the rendered Google button fallback.
+        google.accounts.id.prompt((notification: any) => {
+          try {
+            const suppressed =
+              (typeof notification.isNotDisplayed === 'function' &&
+                notification.isNotDisplayed()) ||
+              (typeof notification.isSkippedMoment === 'function' &&
+                notification.isSkippedMoment()) ||
+              (typeof notification.isDismissedMoment === 'function' &&
+                notification.isDismissedMoment());
+            if (suppressed) {
+              revealFallback();
+            }
+          } catch {
+            // In FedCM mode some moment methods are unsupported; fall back.
+            revealFallback();
+          }
+        });
       } catch (error) {
-        clearTimeout(loginTimeout);
         console.error(
           'Error during Google Identity Platform sign-in initialization:',
           error,
         );
-        observer.error(error);
+        revealFallback();
       }
+    });
+  }
+
+  /**
+   * Renders the official Google sign-in button into the given container using
+   * the callback registered by {@link promptForIdentityPlatformToken$}'s
+   * `google.accounts.id.initialize`. This popup-based flow yields the same
+   * Google ID token and works without third-party cookies, so it is the
+   * fallback when One Tap / FedCM is unavailable.
+   */
+  renderGoogleSignInButton(container: HTMLElement): void {
+    if (typeof google === 'undefined' || !container) return;
+    container.replaceChildren();
+    google.accounts.id.renderButton(container, {
+      type: 'standard',
+      theme: 'filled_blue',
+      size: 'large',
+      text: 'signin_with',
+      shape: 'pill',
+      logo_alignment: 'center',
     });
   }
 
