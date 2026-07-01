@@ -63,10 +63,18 @@ export interface DeepResearchReport {
   errorMessage?: string | null;
   maxIterations?: number | null;
   intake: Record<string, string | string[]>;
+  progress?: ProgressEvent[];
   brief?: string | null;
   report?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One live progress step recorded while the pipeline runs. */
+export interface ProgressEvent {
+  author: string;
+  kind: string; // 'tool' | 'text'
+  text: string;
 }
 
 /**

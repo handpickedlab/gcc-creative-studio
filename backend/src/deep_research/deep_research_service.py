@@ -52,6 +52,10 @@ logger = logging.getLogger(__name__)
 # Interval (seconds) between SSE heartbeat comments while the pipeline is quiet,
 # so proxies don't close an idle connection.
 _SSE_HEARTBEAT_S = 15
+# How often the background worker flushes accumulated progress to the DB, so the
+# client can poll GET /{id} and render live progress (SSE is buffered by the
+# hosting CDN for long responses, so polling is the reliable path in production).
+_PROGRESS_FLUSH_S = 1.5
 # Keep references to in-flight streaming tasks so they aren't garbage collected
 # if the client disconnects mid-run (CPU stays allocated: cpu-throttling=false).
 _STREAM_TASKS: set[asyncio.Task] = set()
@@ -107,6 +111,33 @@ def _run_deep_research_in_background(
             async with WorkerDatabase() as db_factory:
                 async with db_factory() as db:
                     repo = DeepResearchRepository(db)
+
+                    # Accumulate the pipeline's per-step events; a flusher task
+                    # persists them so the client can poll and show progress.
+                    steps: list[dict] = []
+
+                    def on_event(author: str, kind: str, text: str) -> None:
+                        steps.append(
+                            {
+                                "author": author,
+                                "kind": kind,
+                                "text": text if kind == "tool" else text[:200],
+                            }
+                        )
+
+                    async def _flush_progress() -> None:
+                        async with db_factory() as progress_db:
+                            progress_repo = DeepResearchRepository(progress_db)
+                            while True:
+                                await asyncio.sleep(_PROGRESS_FLUSH_S)
+                                try:
+                                    await progress_repo.update(
+                                        report_id, {"progress": list(steps)}
+                                    )
+                                except Exception:
+                                    pass  # progress is best-effort
+
+                    flusher = asyncio.create_task(_flush_progress())
                     try:
                         worker_logger.info(
                             "Starting deep research pipeline for report %s.",
@@ -117,24 +148,27 @@ def _run_deep_research_in_background(
                             max_iterations=max_iterations,
                         )
                         report = await run_pipeline(
-                            agent, brief, initial_state
+                            agent, brief, initial_state, on_event
                         )
                         if not report:
                             raise RuntimeError(
                                 "The research pipeline produced an empty report."
                             )
 
+                        flusher.cancel()
                         await repo.update(
                             report_id,
                             {
                                 "status": JobStatusEnum.COMPLETED,
                                 "report": report,
+                                "progress": list(steps),
                             },
                         )
                         worker_logger.info(
                             "Deep research report %s completed.", report_id
                         )
                     except Exception as e:
+                        flusher.cancel()
                         worker_logger.error(
                             "Deep research pipeline failed.",
                             extra={
@@ -150,6 +184,7 @@ def _run_deep_research_in_background(
                             {
                                 "status": JobStatusEnum.FAILED,
                                 "error_message": str(e),
+                                "progress": list(steps),
                             },
                         )
 
