@@ -1,0 +1,95 @@
+<!--
+ Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ Data-query tool: upload sheets, ask in natural language, stream the agent's work.
+-->
+<div class="dq-wrap">
+  <div class="dq-cols">
+    <main class="dq-main">
+      <h1 class="dq-title">Ask your data</h1>
+      <p class="dq-sub">
+        Upload sheets and ask questions in plain English — the agent explores the
+        tables and writes real SQL (Gemini). Exact numbers, no guesswork.
+      </p>
+
+      <div class="dq-card">
+        <div class="dq-label">Question</div>
+        <textarea
+          [(ngModel)]="question"
+          (keydown.meta.enter)="ask()"
+          (keydown.control.enter)="ask()"
+          placeholder="e.g. What is the average per category?"
+        ></textarea>
+        <div class="dq-row">
+          <button class="dq-btn primary" (click)="ask()" [disabled]="busy">
+            Ask
+          </button>
+          <span class="dq-muted" *ngIf="busy">working…</span>
+        </div>
+        <div class="dq-chips">
+          <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
+        </div>
+      </div>
+
+      <div class="dq-stream">
+        <ng-container *ngFor="let s of steps">
+          <div *ngIf="s.kind === 'text'" class="s-text">{{ s.text }}</div>
+
+          <div *ngIf="s.kind === 'tool'" class="s-tool">
+            <span class="s-head">
+              🔧 <b>{{ s.name }}</b>
+              <code *ngIf="s.name !== 'run_sql'"> {{ toolArgs(s) }}</code>
+              <span class="dq-muted"> → {{ s.summary }}</span>
+            </span>
+
+            <div *ngIf="s.name === 'run_sql'" class="s-sql">
+              <code>{{ sql(s) }}</code>
+              <div *ngIf="s.result?.error" class="s-err">{{ s.result?.error }}</div>
+              <div *ngIf="s.result?.columns" class="s-tbl">
+                <table>
+                  <thead>
+                    <tr><th *ngFor="let c of cols(s)">{{ c }}</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let row of s.result?.rows">
+                      <td *ngFor="let c of cols(s)">{{ row[c] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="dq-muted" *ngIf="s.result?.truncated">
+                  (truncated to {{ s.result?.rows?.length }} rows)
+                </div>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+    </main>
+
+    <aside class="dq-card dq-side">
+      <div class="dq-label">Sources</div>
+      <button class="dq-btn ghost" (click)="fileInput.click()" [disabled]="uploading">
+        <mat-icon>upload_file</mat-icon> Load sheet
+      </button>
+      <input
+        #fileInput
+        type="file"
+        accept=".csv,.xlsx,.xlsm,.xls"
+        (change)="onFileSelected($event)"
+        hidden
+      />
+      <div class="dq-muted dq-up" *ngIf="uploadMsg">{{ uploadMsg }}</div>
+
+      <div class="dq-muted" *ngIf="!sources.length" style="margin-top: 8px">no sheets yet</div>
+      <div
+        class="dq-src"
+        *ngFor="let s of sources"
+        [class.off]="isOff(s.table)"
+        (click)="toggle(s.table)"
+        title="click to toggle off"
+      >
+        {{ s.table }} <span class="dq-muted">· {{ s.n_rows }}</span>
+      </div>
+      <div class="dq-muted dq-hint">Click a source to exclude it from the query.</div>
+    </aside>
+  </div>
+</div>
