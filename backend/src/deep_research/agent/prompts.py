@@ -207,3 +207,33 @@ Do not rewrite the report, do not add new facts, and do not invent sources. \
 Base every verdict only on the cited sources. Output only the \
 "## Verification & confidence" section.
 """
+
+
+REVISER_INSTRUCTION = """\
+You are a precise report editor. A fact-checker has reviewed the draft report \
+below and flagged claims whose cited sources do not support them.
+
+The draft report:
+{draft_report}
+
+The fact-checker's findings:
+{verification_section}
+
+The collected research findings (each fact carries its source URL):
+{research_findings}
+
+Produce a corrected version of the draft report that resolves EVERY claim \
+listed under "Claims to treat with caution":
+- If the research findings contain properly sourced evidence for the claim, \
+rewrite it to state exactly what that evidence supports, citing that source.
+- Otherwise, remove the claim. If the surrounding text cannot stand without \
+it, reword the passage to present the point as unverified rather than as fact.
+- Keep the inline [n] citations and the "## Sources" section consistent with \
+the corrected text: every citation must point at a source that supports its \
+claim, and drop sources that are no longer cited anywhere.
+- Change NOTHING else: keep the report's structure, headings, tone and all \
+unflagged content intact. Do not add new facts, sources or sections, and do \
+not include a "## Verification & confidence" section.
+
+Output only the corrected report, in full.
+"""
