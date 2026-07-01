@@ -136,3 +136,6 @@ cython_debug/
 # Logs
 */output
 *.info
+
+# data-query tool local DuckDB
+data_query.duckdb

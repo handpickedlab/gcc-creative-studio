@@ -49,6 +49,7 @@ from src.source_assets.source_asset_controller import (
     router as source_asset_router,
 )
 from src.tags.tags_controller import router as tags_router
+from src.data_query.data_query_controller import router as data_query_router
 from src.translations.briefing_controller import router as briefings_router
 from src.translations.feedback_controller import router as feedback_router
 from src.translations.public_feedback_controller import (
@@ -207,3 +208,4 @@ app.include_router(translations_router)
 app.include_router(briefings_router)
 app.include_router(feedback_router)
 app.include_router(public_feedback_router)
+app.include_router(data_query_router)
