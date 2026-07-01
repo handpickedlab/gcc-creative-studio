@@ -1,0 +1,258 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="deep-research">
+  <header class="dr-title">
+    <mat-icon>travel_explore</mat-icon>
+    <div>
+      <h1>Deep Research</h1>
+      <p>Consumer Sentiment Scan — intake → deep research → insight brief</p>
+    </div>
+  </header>
+
+  <!-- Loading / error states -->
+  <div *ngIf="loadingSchema" class="dr-center">
+    <mat-spinner diameter="40"></mat-spinner>
+  </div>
+  <div *ngIf="schemaError" class="dr-error">{{ schemaError }}</div>
+
+  <div *ngIf="!loadingSchema && !schemaError && schema" class="dr-layout">
+    <!-- Main column -->
+    <section class="dr-main">
+      <!-- ========================= WIZARD ========================= -->
+      <mat-stepper *ngIf="view === 'wizard'" linear #stepper>
+        <mat-step
+          *ngFor="let step of schema.steps; let i = index"
+          [stepControl]="stepForms[i]"
+          [label]="step.title"
+        >
+          <form [formGroup]="stepForms[i]" class="dr-step">
+            <ng-container *ngFor="let key of step.fieldKeys">
+              <div class="dr-field" *ngIf="fieldsByKey[key] as field">
+                <!-- FREE TEXT -->
+                <ng-container *ngIf="field.type === FieldType.FREE_TEXT">
+                  <div class="dr-chips" *ngIf="field.options?.length">
+                    <span class="dr-chip-hint">Voorbeelden:</span>
+                    <button
+                      type="button"
+                      mat-stroked-button
+                      class="dr-chip"
+                      *ngFor="let example of field.options"
+                      (click)="setValue(i, field.key, example)"
+                    >
+                      {{ example }}
+                    </button>
+                  </div>
+                  <mat-form-field appearance="outline" class="dr-w-full">
+                    <mat-label>{{ field.label }}</mat-label>
+                    <textarea
+                      matInput
+                      rows="3"
+                      [formControlName]="field.key"
+                      [placeholder]="field.example"
+                    ></textarea>
+                  </mat-form-field>
+                </ng-container>
+
+                <!-- SINGLE SELECT -->
+                <mat-form-field
+                  *ngIf="field.type === FieldType.SINGLE_SELECT"
+                  appearance="outline"
+                  class="dr-w-full"
+                >
+                  <mat-label>{{ field.label }}</mat-label>
+                  <mat-select [formControlName]="field.key">
+                    <mat-option *ngFor="let o of field.options" [value]="o">{{ o }}</mat-option>
+                  </mat-select>
+                </mat-form-field>
+
+                <!-- SINGLE SELECT + CUSTOM -->
+                <ng-container *ngIf="field.type === FieldType.SINGLE_SELECT_CUSTOM">
+                  <mat-form-field appearance="outline" class="dr-w-full">
+                    <mat-label>{{ field.label }}</mat-label>
+                    <mat-select [formControlName]="field.key">
+                      <mat-option *ngFor="let o of field.options" [value]="o">{{ o }}</mat-option>
+                      <mat-option [value]="CUSTOM_OPTION">{{ CUSTOM_OPTION }}</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field
+                    *ngIf="stepForms[i].get(field.key)?.value === CUSTOM_OPTION"
+                    appearance="outline"
+                    class="dr-w-full"
+                  >
+                    <mat-label>{{ field.label }} — eigen invulling</mat-label>
+                    <input
+                      matInput
+                      [formControlName]="field.key + '__custom'"
+                      [placeholder]="field.example"
+                    />
+                  </mat-form-field>
+                </ng-container>
+
+                <!-- MULTI SELECT -->
+                <mat-form-field
+                  *ngIf="field.type === FieldType.MULTI_SELECT"
+                  appearance="outline"
+                  class="dr-w-full"
+                >
+                  <mat-label>{{ field.label }}</mat-label>
+                  <mat-select [formControlName]="field.key" multiple>
+                    <mat-option *ngFor="let o of field.options" [value]="o">{{ o }}</mat-option>
+                  </mat-select>
+                </mat-form-field>
+
+                <!-- COMPETITOR -->
+                <ng-container *ngIf="field.type === FieldType.COMPETITOR">
+                  <label class="dr-label">{{ field.label }}</label>
+                  <mat-radio-group [formControlName]="field.key" class="dr-radio-group">
+                    <mat-radio-button *ngFor="let o of field.options" [value]="o">{{ o }}</mat-radio-button>
+                  </mat-radio-group>
+                  <mat-form-field
+                    *ngIf="stepForms[i].get(field.key)?.value === SPECIFIC_COMPETITORS"
+                    appearance="outline"
+                    class="dr-w-full dr-mt"
+                  >
+                    <mat-label>Welke concurrenten?</mat-label>
+                    <input
+                      matInput
+                      [formControlName]="field.key + '__names'"
+                      [placeholder]="field.example"
+                    />
+                  </mat-form-field>
+                </ng-container>
+
+                <p class="dr-help" *ngIf="field.help">{{ field.help }}</p>
+              </div>
+            </ng-container>
+
+            <div class="dr-actions">
+              <button *ngIf="i > 0" mat-button matStepperPrevious>Vorige</button>
+              <button mat-flat-button color="primary" matStepperNext>Volgende</button>
+            </div>
+          </form>
+        </mat-step>
+
+        <!-- Review & start -->
+        <mat-step label="Review & start">
+          <div class="dr-step">
+            <div class="dr-summary">
+              <div class="dr-summary-row" *ngFor="let f of schema.fields">
+                <span class="dr-summary-key">{{ f.label }}</span>
+                <span class="dr-summary-val">{{ displayValue(f) || '—' }}</span>
+              </div>
+            </div>
+
+            <mat-expansion-panel class="dr-advanced">
+              <mat-expansion-panel-header>
+                <mat-panel-title>Geavanceerd</mat-panel-title>
+              </mat-expansion-panel-header>
+              <label class="dr-label">
+                Aantal research-rondes: {{ maxIterations.value }}
+              </label>
+              <mat-slider min="1" max="6" step="1" discrete showTickMarks>
+                <input matSliderThumb [formControl]="maxIterations" />
+              </mat-slider>
+              <p class="dr-help">
+                Meer rondes = grondiger, maar trager en duurder. De agent stopt
+                eerder zodra de dekking voldoende is.
+              </p>
+            </mat-expansion-panel>
+
+            <p class="dr-error" *ngIf="!topic">
+              Vul minimaal een onderwerp in (stap 1).
+            </p>
+            <p class="dr-error" *ngIf="runError">{{ runError }}</p>
+
+            <div class="dr-actions">
+              <button mat-button matStepperPrevious>Vorige</button>
+              <button
+                mat-flat-button
+                color="primary"
+                [disabled]="!topic || starting"
+                (click)="start()"
+              >
+                <mat-spinner *ngIf="starting" diameter="18" class="dr-btn-spinner"></mat-spinner>
+                <mat-icon *ngIf="!starting">rocket_launch</mat-icon>
+                Start onderzoek
+              </button>
+            </div>
+          </div>
+        </mat-step>
+      </mat-stepper>
+
+      <!-- ========================= RUNNING ========================= -->
+      <div *ngIf="view === 'running'" class="dr-running">
+        <mat-spinner diameter="48"></mat-spinner>
+        <h2>Onderzoek loopt…</h2>
+        <p class="dr-running-topic">{{ activeReport?.topic }}</p>
+        <p class="dr-help">
+          Dit kan enkele minuten duren. Je kunt deze pagina open laten — het
+          rapport verschijnt zodra het klaar is.
+        </p>
+      </div>
+
+      <!-- ========================= REPORT ========================= -->
+      <div *ngIf="view === 'report'" class="dr-report">
+        <div class="dr-report-header">
+          <div>
+            <span class="dr-status" [ngClass]="activeReport?.status">
+              {{ statusLabel(activeReport?.status) }}
+            </span>
+            <h2>{{ activeReport?.topic }}</h2>
+          </div>
+          <div class="dr-report-actions">
+            <button
+              mat-stroked-button
+              (click)="download()"
+              [disabled]="!reportBody"
+            >
+              <mat-icon>download</mat-icon> Download
+            </button>
+            <button mat-flat-button color="primary" (click)="newResearch()">
+              <mat-icon>add</mat-icon> Nieuw onderzoek
+            </button>
+          </div>
+        </div>
+
+        <div *ngIf="activeReport?.status === JobStatus.FAILED" class="dr-error">
+          Onderzoek mislukt: {{ activeReport?.errorMessage }}
+        </div>
+
+        <markdown *ngIf="reportBody" [data]="reportBody" class="dr-markdown"></markdown>
+      </div>
+    </section>
+
+    <!-- History column -->
+    <aside class="dr-history">
+      <h3>Historie</h3>
+      <p *ngIf="!history.length" class="dr-help">Nog geen onderzoeken.</p>
+      <button
+        *ngFor="let r of history"
+        type="button"
+        class="dr-history-item"
+        [class.active]="activeReport?.id === r.id"
+        (click)="openReport(r)"
+      >
+        <span class="dr-dot" [ngClass]="r.status"></span>
+        <span class="dr-history-body">
+          <span class="dr-history-topic">{{ r.topic }}</span>
+          <span class="dr-history-meta">{{ r.createdAt | date: 'short' }}</span>
+        </span>
+        <mat-icon class="dr-history-delete" (click)="deleteReport(r, $event)">delete</mat-icon>
+      </button>
+    </aside>
+  </div>
+</div>

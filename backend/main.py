@@ -36,6 +36,9 @@ from src.audios.audio_controller import router as audio_router
 from src.brand_guidelines.brand_guideline_controller import (
     router as brand_guideline_router,
 )
+from src.deep_research.deep_research_controller import (
+    router as deep_research_router,
+)
 from src.galleries.gallery_controller import router as gallery_router
 from src.generation_options.generation_options_controller import (
     router as generation_options_router,
@@ -200,6 +203,7 @@ app.include_router(source_asset_router)
 app.include_router(tags_router)
 app.include_router(workspace_router)
 app.include_router(brand_guideline_router)
+app.include_router(deep_research_router)
 app.include_router(workflow_router)
 app.include_router(workflows_executor_router)
 app.include_router(workbench_router)

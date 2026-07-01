@@ -1,0 +1,256 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import asyncio
+import logging
+import os
+import sys
+from concurrent.futures import ThreadPoolExecutor
+
+from fastapi import Depends, HTTPException, status
+from google.cloud.logging import Client as LoggerClient
+from google.cloud.logging.handlers import CloudLoggingHandler
+
+from src.common.dto.pagination_response_dto import PaginationResponseDto
+from src.common.schema.media_item_model import JobStatusEnum
+from src.deep_research.agent import build_root_agent, run_pipeline
+from src.deep_research.agent.brief import (
+    HUNKEMOLLER_COMPOSER_INSTRUCTION,
+    build_brief,
+    build_initial_state,
+)
+from src.deep_research.agent.intake import INTAKE_FIELDS, STEPPER_GROUPS
+from src.deep_research.dto.deep_research_search_dto import DeepResearchSearchDto
+from src.deep_research.dto.intake_schema_dto import (
+    IntakeFieldDto,
+    IntakeSchemaDto,
+    IntakeStepDto,
+)
+from src.deep_research.dto.start_deep_research_dto import StartDeepResearchDto
+from src.deep_research.repository.deep_research_repository import (
+    DeepResearchRepository,
+)
+from src.deep_research.schema.deep_research_model import DeepResearchReportModel
+from src.users.user_model import UserModel, UserRoleEnum
+
+logger = logging.getLogger(__name__)
+
+
+def _run_deep_research_in_background(
+    report_id: int,
+    brief: str,
+    initial_state: dict,
+    max_iterations: int | None,
+) -> None:
+    """Long-running worker: run the ADK pipeline and persist the result.
+
+    Runs in a separate thread with its own event loop and database engine (see
+    :class:`src.database.WorkerDatabase`). On success the report row is marked
+    COMPLETED with the cited Markdown; on failure it is marked FAILED with the
+    error message.
+    """
+    worker_logger = logging.getLogger(f"deep_research_worker.{report_id}")
+    worker_logger.setLevel(logging.INFO)
+
+    try:
+        from src.database import WorkerDatabase
+
+        # --- Hybrid logging setup for the worker thread ---
+        if worker_logger.hasHandlers():
+            worker_logger.handlers.clear()
+
+        if os.getenv("ENVIRONMENT") == "production":
+            log_client = LoggerClient()
+            handler = CloudLoggingHandler(
+                log_client, name=f"deep_research_worker.{report_id}"
+            )
+            worker_logger.addHandler(handler)
+        else:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s - [DEEP_RESEARCH_WORKER] - %(levelname)s - %(message)s",
+                )
+            )
+            worker_logger.addHandler(handler)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def _async_worker():
+            async with WorkerDatabase() as db_factory:
+                async with db_factory() as db:
+                    repo = DeepResearchRepository(db)
+                    try:
+                        worker_logger.info(
+                            "Starting deep research pipeline for report %s.",
+                            report_id,
+                        )
+                        agent = build_root_agent(
+                            composer_instruction=HUNKEMOLLER_COMPOSER_INSTRUCTION,
+                            max_iterations=max_iterations,
+                        )
+                        report = await run_pipeline(
+                            agent, brief, initial_state
+                        )
+                        if not report:
+                            raise RuntimeError(
+                                "The research pipeline produced an empty report."
+                            )
+
+                        await repo.update(
+                            report_id,
+                            {
+                                "status": JobStatusEnum.COMPLETED,
+                                "report": report,
+                            },
+                        )
+                        worker_logger.info(
+                            "Deep research report %s completed.", report_id
+                        )
+                    except Exception as e:
+                        worker_logger.error(
+                            "Deep research pipeline failed.",
+                            extra={
+                                "json_fields": {
+                                    "report_id": report_id,
+                                    "error": str(e),
+                                },
+                            },
+                            exc_info=True,
+                        )
+                        await repo.update(
+                            report_id,
+                            {
+                                "status": JobStatusEnum.FAILED,
+                                "error_message": str(e),
+                            },
+                        )
+
+        loop.run_until_complete(_async_worker())
+        loop.close()
+
+    except Exception as e:
+        worker_logger.error(
+            "Deep research worker failed to initialize.",
+            extra={"json_fields": {"report_id": report_id, "error": str(e)}},
+            exc_info=True,
+        )
+
+
+class DeepResearchService:
+    """Business logic for the Hunkemöller Consumer Sentiment Scan.
+
+    Assembles the brief from the intake, persists a placeholder report and runs
+    the multi-agent pipeline in a background job that updates the report when it
+    finishes.
+    """
+
+    def __init__(self, repo: DeepResearchRepository = Depends()):
+        self.repo = repo
+
+    def _authorize(
+        self, report: DeepResearchReportModel, current_user: UserModel
+    ) -> None:
+        """Reports are private to their owner; admins may access any report."""
+        is_admin = UserRoleEnum.ADMIN in current_user.roles
+        if report.user_id != current_user.id and not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to access this report.",
+            )
+
+    def get_intake_schema(self) -> IntakeSchemaDto:
+        """Return the intake field schema + stepper grouping for the UI."""
+        fields = [
+            IntakeFieldDto(
+                key=f.key,
+                label=f.label,
+                type=f.type.value,
+                brief_label=f.brief_label,
+                options=list(f.options),
+                example=f.example,
+                help=f.help,
+            )
+            for f in INTAKE_FIELDS
+        ]
+        steps = [
+            IntakeStepDto(title=title, field_keys=list(keys))
+            for title, keys in STEPPER_GROUPS
+        ]
+        return IntakeSchemaDto(fields=fields, steps=steps)
+
+    async def start_research(
+        self,
+        dto: StartDeepResearchDto,
+        current_user: UserModel,
+        executor: ThreadPoolExecutor,
+    ) -> DeepResearchReportModel:
+        """Create a placeholder report and queue the research pipeline."""
+        intake = dto.intake_values()
+        brief = build_brief(intake)
+        initial_state = build_initial_state(intake)
+
+        placeholder = DeepResearchReportModel(
+            user_id=current_user.id,
+            topic=dto.research_topic,
+            status=JobStatusEnum.PROCESSING,
+            max_iterations=dto.max_iterations,
+            intake=intake,
+            brief=brief,
+        )
+        placeholder = await self.repo.create(placeholder)
+
+        executor.submit(
+            _run_deep_research_in_background,
+            report_id=placeholder.id,
+            brief=brief,
+            initial_state=initial_state,
+            max_iterations=dto.max_iterations,
+        )
+        logger.info("Deep research job queued: %s", placeholder.id)
+
+        return placeholder
+
+    async def list_reports(
+        self,
+        search_dto: DeepResearchSearchDto,
+        current_user: UserModel,
+    ) -> PaginationResponseDto[DeepResearchReportModel]:
+        """List the current user's reports, newest first."""
+        return await self.repo.query(search_dto, user_id=current_user.id)
+
+    async def get_report(
+        self,
+        report_id: int,
+        current_user: UserModel,
+    ) -> DeepResearchReportModel | None:
+        """Fetch a single report after an ownership check."""
+        report = await self.repo.get_by_id(report_id)
+        if not report:
+            return None
+        self._authorize(report, current_user)
+        return report
+
+    async def delete_report(
+        self,
+        report_id: int,
+        current_user: UserModel,
+    ) -> None:
+        """Delete a report after an ownership check."""
+        report = await self.repo.get_by_id(report_id)
+        if not report:
+            return
+        self._authorize(report, current_user)
+        await self.repo.delete(report_id)
