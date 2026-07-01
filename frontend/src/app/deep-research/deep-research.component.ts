@@ -58,6 +58,10 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
   stepForms: FormGroup[] = [];
   maxIterations = new FormControl(DEFAULT_ITERATIONS);
 
+  /** Current wizard step (0..reviewStep). The review step is the last one. */
+  step = 0;
+  readonly iterationOptions = [1, 2, 3, 4, 5, 6];
+
   view: ViewState = 'wizard';
   activeReport?: DeepResearchReport;
   starting = false;
@@ -200,10 +204,67 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     return request as unknown as StartDeepResearchRequest;
   }
 
+  // --- Wizard navigation -----------------------------------------------------
+
+  /** Index of the final "review & start" step (after the content steps). */
+  get reviewStep(): number {
+    return this.schema?.steps.length ?? 0;
+  }
+
+  get onReview(): boolean {
+    return this.step >= this.reviewStep;
+  }
+
+  goStep(index: number): void {
+    // Stepper chips navigate backwards freely; forward goes via "Volgende".
+    if (index <= this.step) {
+      this.step = index;
+    }
+  }
+
+  nextStep(): void {
+    const form = this.stepForms[this.step];
+    if (form && form.invalid) {
+      form.markAllAsTouched();
+      return;
+    }
+    this.step = Math.min(this.step + 1, this.reviewStep);
+  }
+
+  prevStep(): void {
+    this.step = Math.max(this.step - 1, 0);
+  }
+
   // --- Wizard interactions ---------------------------------------------------
 
   setValue(stepIndex: number, key: string, value: string): void {
     this.stepForms[stepIndex]?.get(key)?.setValue(value);
+  }
+
+  isMultiSelected(key: string, option: string): boolean {
+    const value = this.controlValue(key);
+    return Array.isArray(value) && value.includes(option);
+  }
+
+  toggleMulti(stepIndex: number, key: string, option: string): void {
+    const control = this.stepForms[stepIndex]?.get(key);
+    if (!control) {
+      return;
+    }
+    const current: string[] = Array.isArray(control.value)
+      ? [...control.value]
+      : [];
+    const at = current.indexOf(option);
+    if (at >= 0) {
+      current.splice(at, 1);
+    } else {
+      current.push(option);
+    }
+    control.setValue(current);
+  }
+
+  stepValue(key: string): string {
+    return (this.controlValue(key) as string) || '';
   }
 
   start(): void {
@@ -269,6 +330,7 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     this.activeReport = undefined;
     this.runError = null;
     this.view = 'wizard';
+    this.step = 0;
     if (this.schema) {
       this.buildForms(this.schema);
     }
