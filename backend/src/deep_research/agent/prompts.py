@@ -197,8 +197,9 @@ Output ONLY a Markdown section titled exactly "## Verification & confidence":
 rationale (High = nearly all key claims SUPPORTED; Low = several UNSUPPORTED or \
 UNVERIFIABLE).
 - "### Claims to treat with caution": a bullet list of every UNSUPPORTED or \
-UNVERIFIABLE claim, each with the claim (short), its cited source, and why it \
-failed (source does not support it / no URL / page unreadable). If there are \
+UNVERIFIABLE claim. Each bullet MUST start with the verdict in capitals \
+followed by a colon, then the claim (short), its cited source, and why it \
+failed, e.g.: "- UNSUPPORTED: <claim> -- <source> -- <why>". If there are \
 none, write exactly: "None -- all key claims are supported by their sources."
 - "### Source quality": one or two lines on the overall reliability of the \
 sources, noting any that lacked a usable URL.
@@ -223,11 +224,15 @@ The collected research findings (each fact carries its source URL):
 {research_findings}
 
 Produce a corrected version of the draft report that resolves EVERY claim \
-listed under "Claims to treat with caution":
+marked UNSUPPORTED under "Claims to treat with caution":
 - If the research findings contain properly sourced evidence for the claim, \
 rewrite it to state exactly what that evidence supports, citing that source.
 - Otherwise, remove the claim. If the surrounding text cannot stand without \
 it, reword the passage to present the point as unverified rather than as fact.
+- Leave claims marked UNVERIFIABLE in place, citations included: their \
+sources merely could not be read (paywall, unreachable page), which the \
+verification section already discloses to the reader. Do not delete research \
+over that.
 - Keep the inline [n] citations and the "## Sources" section consistent with \
 the corrected text: every citation must point at a source that supports its \
 claim, and drop sources that are no longer cited anywhere.

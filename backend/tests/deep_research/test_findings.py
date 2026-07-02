@@ -14,6 +14,8 @@
 
 """Tests for sub-question extraction, slot assignment, and findings merging."""
 
+import pytest
+
 from src.deep_research.agent import prompts
 from src.deep_research.agent.agent import (
     _extract_list_items_under,
@@ -67,9 +69,7 @@ def test_extract_stops_at_next_heading():
 
 
 def test_extract_targets_prefers_gaps_when_present():
-    targets, focus = _extract_targets(
-        {"research_plan": PLAN, "gap_analysis": GAP}
-    )
+    targets, focus = _extract_targets({"research_plan": PLAN, "gap_analysis": GAP})
     assert targets == ["gap query one", "gap query two"]
     assert focus == "open gaps"
 
@@ -119,9 +119,7 @@ def test_slots_partition_targets_round_robin_without_loss():
 
 def test_unassigned_slot_returns_skip():
     # 3 targets, slot index 5 -> nothing assigned.
-    instr = _make_slot_instruction(5, 6, "2026-06-30")(
-        _Ctx({"research_plan": PLAN})
-    )
+    instr = _make_slot_instruction(5, 6, "2026-06-30")(_Ctx({"research_plan": PLAN}))
     assert instr == prompts.SLOT_SKIP_INSTRUCTION
 
 
@@ -149,13 +147,14 @@ def test_merge_appends_with_round_header():
     assert out.index("Fact A") < out.index("Fact B")
 
 
-def test_merge_callback_combines_slots_and_clears_them():
+@pytest.mark.anyio
+async def test_merge_callback_combines_slots_and_clears_them():
     state = {
         "slot_findings_0": "Evidence from slot 0",
         "slot_findings_1": prompts.SLOT_SKIP_TOKEN,  # filtered out
         "slot_findings_2": "Evidence from slot 2",
     }
-    _make_merge_callback(3)(_Ctx(state))
+    await _make_merge_callback(3)(_Ctx(state))
 
     assert state["research_round"] == 1
     findings = state["research_findings"]
@@ -166,9 +165,10 @@ def test_merge_callback_combines_slots_and_clears_them():
     assert all(state[f"slot_findings_{i}"] == "" for i in range(3))
 
 
-def test_merge_callback_no_op_when_all_slots_empty():
+@pytest.mark.anyio
+async def test_merge_callback_no_op_when_all_slots_empty():
     state = {"slot_findings_0": "", "slot_findings_1": prompts.SLOT_SKIP_TOKEN}
-    _make_merge_callback(2)(_Ctx(state))
+    await _make_merge_callback(2)(_Ctx(state))
     assert "research_round" not in state
     assert "research_findings" not in state
 
