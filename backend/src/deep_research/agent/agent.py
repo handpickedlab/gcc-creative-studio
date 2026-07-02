@@ -47,6 +47,7 @@ from google.adk.events import Event, EventActions
 from google.adk.tools import google_search, url_context
 
 from . import config, prompts
+from .sources import resolve_grounding_redirects
 from .tools import exit_research_loop
 from .vertex_model import make_model
 
@@ -161,7 +162,7 @@ def _make_merge_callback(num_slots: int):
     are cleared so the next round starts clean.
     """
 
-    def callback(callback_context: CallbackContext) -> None:
+    async def callback(callback_context: CallbackContext) -> None:
         state = callback_context.state
         fragments: list[str] = []
         for i in range(num_slots):
@@ -172,10 +173,14 @@ def _make_merge_callback(num_slots: int):
             state[key] = ""  # clear for the next round
         if not fragments:
             return None
+        # Grounded search cites pages via short-lived vertexaisearch redirect
+        # URLs; swap in the real destinations now so the reflector, composer,
+        # verifier and the report's readers get links that actually open.
+        new_findings = await resolve_grounding_redirects("\n\n".join(fragments))
         round_no = int(state.get("research_round") or 0) + 1
         state["research_round"] = round_no
         state["research_findings"] = merge_findings(
-            state.get("research_findings") or "", "\n\n".join(fragments), round_no
+            state.get("research_findings") or "", new_findings, round_no
         )
         return None
 
@@ -195,13 +200,30 @@ def unresolved_claims(verification: str) -> list[str]:
     return _extract_list_items_under(verification or "", "caution")
 
 
+def unsupported_claims(verification: str) -> list[str]:
+    """Only the flagged claims the verifier judged UNSUPPORTED.
+
+    These are the ones a revision can fix: the cited source contradicts or
+    fails to back the text. UNVERIFIABLE claims (paywalled or unreadable
+    sources) stay flagged for the reader but must not trigger a rewrite --
+    deleting them would discard research over reachability noise, not over
+    evidence of error.
+    """
+    return [
+        claim
+        for claim in unresolved_claims(verification)
+        if claim.lstrip("*_ ").upper().startswith("UNSUPPORTED")
+    ]
+
+
 class _VerificationGate(BaseAgent):
     """Stops the verify/revise loop when the draft is clean or the budget is spent.
 
     Sits between claim_verifier and report_reviser. Escalating stops the
     LoopAgent immediately (before the reviser runs), so the loop always ends on
     a draft whose verification section was produced from that exact draft, and
-    the reviser only runs when there is something to fix.
+    the reviser only runs when there is something it can actually fix -- i.e.
+    at least one UNSUPPORTED claim.
     """
 
     max_revisions: int
@@ -211,7 +233,7 @@ class _VerificationGate(BaseAgent):
     ) -> AsyncGenerator[Event, None]:
         state = ctx.session.state
         round_no = int(state.get("verification_round") or 0) + 1
-        clean = not unresolved_claims(state.get("verification_section") or "")
+        clean = not unsupported_claims(state.get("verification_section") or "")
         yield Event(
             invocation_id=ctx.invocation_id,
             author=self.name,

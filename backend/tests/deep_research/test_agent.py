@@ -29,6 +29,7 @@ from src.deep_research.agent.agent import (
     _VerificationGate,
     build_root_agent,
     unresolved_claims,
+    unsupported_claims,
 )
 
 
@@ -130,10 +131,19 @@ DIRTY_VERIFICATION = """\
 ## Verification & confidence
 Overall confidence: Low -- several key claims lack support.
 ### Claims to treat with caution
-- "60% of shoppers prefer wireless bras" -- source does not support it
-- Q3 revenue figure -- no URL
+- UNSUPPORTED: "60% of shoppers prefer wireless bras" -- source does not support it
+- UNVERIFIABLE: Q3 revenue figure -- page could not be read
 ### Source quality
 Mixed; two sources lacked usable URLs."""
+
+UNVERIFIABLE_ONLY_VERIFICATION = """\
+## Verification & confidence
+Overall confidence: Medium -- key claims could not be re-read.
+### Claims to treat with caution
+- UNVERIFIABLE: Reddit quote about "cost-per-wear" -- verification page
+- **UNVERIFIABLE**: willingness-to-pay stat -- paywall
+### Source quality
+Reputable but partly unreachable."""
 
 CLEAN_VERIFICATION = """\
 ## Verification & confidence
@@ -146,11 +156,20 @@ Reputable industry sources, all with URLs."""
 
 def test_unresolved_claims_parses_the_caution_list():
     assert unresolved_claims(DIRTY_VERIFICATION) == [
-        '"60% of shoppers prefer wireless bras" -- source does not support it',
-        "Q3 revenue figure -- no URL",
+        'UNSUPPORTED: "60% of shoppers prefer wireless bras" -- source does not support it',
+        "UNVERIFIABLE: Q3 revenue figure -- page could not be read",
     ]
     assert unresolved_claims(CLEAN_VERIFICATION) == []
     assert unresolved_claims("") == []
+
+
+def test_unsupported_claims_ignores_unreachable_sources():
+    assert unsupported_claims(DIRTY_VERIFICATION) == [
+        'UNSUPPORTED: "60% of shoppers prefer wireless bras" -- source does not support it',
+    ]
+    # Bold or plain, UNVERIFIABLE never counts as fixable.
+    assert unsupported_claims(UNVERIFIABLE_ONLY_VERIFICATION) == []
+    assert unsupported_claims(CLEAN_VERIFICATION) == []
 
 
 class _ScriptedVerifier(BaseAgent):
@@ -253,6 +272,19 @@ async def test_exhausted_budget_still_ends_on_a_verified_draft():
     assert state["verifier_passes"] == 2
     assert state["revise_passes"] == 1
     assert state["final_report"] == f"REVISED DRAFT v1\n\n---\n\n{DIRTY_VERIFICATION}"
+
+
+@pytest.mark.anyio
+async def test_unreachable_sources_do_not_trigger_revision():
+    # Everything is UNVERIFIABLE (paywalls, bot checks): rewriting cannot fix
+    # that, so the draft must ship untouched with the honest verdict appended.
+    loop = _make_fix_loop([UNVERIFIABLE_ONLY_VERIFICATION], max_revisions=1)
+    state = await _run_to_state(loop, {"draft_report": "ORIGINAL DRAFT"})
+    assert state["verifier_passes"] == 1
+    assert not state.get("revise_passes")
+    assert state["final_report"] == (
+        f"ORIGINAL DRAFT\n\n---\n\n{UNVERIFIABLE_ONLY_VERIFICATION}"
+    )
 
 
 @pytest.mark.anyio
