@@ -33,25 +33,25 @@
 .serif { font-family: 'Cormorant Garamond', serif; }
 .mono { font-family: 'DM Mono', ui-monospace, monospace; }
 
-/* Match the studio's standard content grid (same as .home-margin elsewhere):
-   clears the floating nav rail (left) and the workspace pill (top). */
+/* Full-screen app frame. The noir surface fills the whole viewport; padding
+   clears the floating workspace pill (top) and the studio nav rail (left),
+   which hover over the surface. */
 .page {
-  --maxw: 1400px;
-  max-width: var(--maxw);
-  margin-top: 10vh;
-  margin-bottom: 5vh;
-  margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--maxw) / 2));
-  margin-right: 5vw;
-  min-height: 78vh;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border: 1px solid var(--border-lt);
-  border-radius: var(--rl);
   overflow: hidden;
+  padding-top: calc(3vh + 62px);
+  padding-left: calc(5vw + 4.5rem);
 }
 @media (min-width: 1400px) {
-  .page { margin-left: max(calc(3vw + 4.5rem), calc(50% - var(--maxw) / 2)); }
+  .page { padding-left: calc(3vw + 4.5rem); }
+}
+@media (max-width: 767px) {
+  /* Mobile: nav bar and workspace pill sit at the bottom of the screen. */
+  .page { padding: 12px 0 calc(10vh + 64px); }
 }
 
 /* ---- header ---- */
