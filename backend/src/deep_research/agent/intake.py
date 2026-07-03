@@ -36,7 +36,7 @@ class FieldType(str, Enum):
 
     FREE_TEXT = "free_text"
     SINGLE_SELECT = "single_select"
-    SINGLE_SELECT_CUSTOM = "single_select_custom"  # dropdown + free "Anders…" input
+    SINGLE_SELECT_CUSTOM = "single_select_custom"  # dropdown + free "Other…" input
     MULTI_SELECT = "multi_select"
     COMPETITOR = "competitor"  # 3-way: none / include / specific competitors + text
 
@@ -55,7 +55,7 @@ SEGMENTS: list[str] = [
 # Gender is a second demographic axis, combinable with the age segments.
 GENDERS: list[str] = [
     "Women",
-    "Man",
+    "Men",
     "Other",
 ]
 
@@ -189,7 +189,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Research topic",
         options=TOPIC_EXAMPLES,
         example="Consumer sentiment around wireless bras for everyday use",
-        help="Het centrale onderwerp van de scan. Kies een voorbeeld of typ je eigen onderwerp.",
+        help="The central topic of the scan. Pick an example or type your own topic.",
     ),
     IntakeField(
         key="market",
@@ -198,7 +198,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Market / geography",
         options=MARKETS,
         example="Germany and Netherlands comparison",
-        help="Selecteer één markt of typ een eigen combinatie via 'Anders…'.",
+        help="Select one market or type your own combination via 'Other…'.",
     ),
     IntakeField(
         key="customer_lens",
@@ -207,7 +207,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Customer lens",
         options=CUSTOMER_LENSES,
         example="Young segment vs older quality-focused segment",
-        help="Alle consumenten, één Hunkemöller-segment, of een vergelijking van segmenten.",
+        help="All consumers, one Hunkemöller segment, or a comparison of segments.",
     ),
     IntakeField(
         key="gender",
@@ -216,7 +216,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Gender",
         options=GENDERS,
         example="Women and Other",
-        help="Tweede demografische as, te combineren met de leeftijds-segmenten. Leeg = alle genders.",
+        help="Second demographic axis, combinable with the age segments. Empty = all genders.",
     ),
     IntakeField(
         key="research_goal",
@@ -225,7 +225,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Research goal",
         options=RESEARCH_GOALS,
         example="Input for a new Q4 campaign territory",
-        help="Bepaalt de structuur van sectie 7 (Implications).",
+        help="Determines the structure of section 7 (Implications).",
     ),
     IntakeField(
         key="category_focus",
@@ -234,7 +234,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Category focus",
         options=CATEGORIES,
         example="Casual cotton collection for younger women",
-        help="Eén of meerdere productcategorieën.",
+        help="One or more product categories.",
     ),
     IntakeField(
         key="consumer_angle",
@@ -243,7 +243,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Consumer angle",
         options=CONSUMER_ANGLES,
         example="Softness, fit and price/value",
-        help="De invalshoeken die je vooral wilt belichten.",
+        help="The angles you mainly want to highlight.",
     ),
     IntakeField(
         key="time_horizon",
@@ -252,7 +252,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Time horizon",
         options=TIME_HORIZONS,
         example="Current sentiment for campaign planning",
-        help="Welke periode van signalen prioriteit krijgt.",
+        help="Which period of signals gets priority.",
     ),
     IntakeField(
         key="source_preference",
@@ -261,7 +261,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Source preference",
         options=SOURCE_PREFERENCES,
         example="Forums and reviews first",
-        help="Welke brontypes als eerste worden geraadpleegd.",
+        help="Which source types are consulted first.",
     ),
     IntakeField(
         key="competitor_context",
@@ -274,7 +274,7 @@ INTAKE_FIELDS: list[IntakeField] = [
             "Specific competitors",
         ],
         example="Compare with H&M, Intimissimi, Triumph and Skims",
-        help="Optioneel: betrek concurrenten in de analyse.",
+        help="Optional: include competitors in the analysis.",
     ),
     IntakeField(
         key="output_usage",
@@ -283,7 +283,7 @@ INTAKE_FIELDS: list[IntakeField] = [
         brief_label="Output usage",
         options=OUTPUT_USAGES,
         example="Product implications and messaging angles",
-        help="Waar de output primair voor gebruikt wordt.",
+        help="What the output is primarily used for.",
     ),
 ]
 
@@ -292,8 +292,8 @@ FIELDS_BY_KEY: dict[str, IntakeField] = {f.key: f for f in INTAKE_FIELDS}
 
 # Grouping for the stepper: (step title, [field keys]).
 STEPPER_GROUPS: list[tuple[str, list[str]]] = [
-    ("Onderwerp & markt", ["research_topic", "market", "time_horizon"]),
-    ("Doelgroep & doel", ["customer_lens", "gender", "research_goal", "output_usage"]),
-    ("Focus & invalshoek", ["category_focus", "consumer_angle"]),
-    ("Bronnen & concurrentie", ["source_preference", "competitor_context"]),
+    ("Topic & market", ["research_topic", "market", "time_horizon"]),
+    ("Audience & goal", ["customer_lens", "gender", "research_goal", "output_usage"]),
+    ("Focus & angle", ["category_focus", "consumer_angle"]),
+    ("Sources & competition", ["source_preference", "competitor_context"]),
 ]

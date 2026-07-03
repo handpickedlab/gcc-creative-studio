@@ -107,7 +107,7 @@ async def set_review_state(
 async def create_share_link(
     briefing_id: int, market: str, service: FeedbackService = Depends()
 ):
-    """'Vraag feedback aan': mint a fresh 3-day translator link for this
+    """'Request feedback': mint a fresh 3-day translator link for this
     market (rotates any previous link) and mark the market in review."""
     return await service.request_feedback(briefing_id, market)
 

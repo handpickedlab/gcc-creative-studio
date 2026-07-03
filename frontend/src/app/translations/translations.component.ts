@@ -1,6 +1,6 @@
 /**
  * Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
- * Hunkemöller "Vertalingen" page.
+ * Hunkemöller "Translations" page.
  */
 
 import {Component, OnInit} from '@angular/core';
@@ -391,7 +391,7 @@ export class TranslationsComponent implements OnInit {
     return (this.briefing?.fields ?? []).filter(f => f.block === block);
   }
   addField(block: string): void {
-    this.briefing?.fields.push({id: fid(), block, name: 'Nieuw veld', limit: 80, text: ''});
+    this.briefing?.fields.push({id: fid(), block, name: 'New field', limit: 80, text: ''});
   }
   addBlock(): void {
     const n = 'B' + (this.blocks.length + 1);
