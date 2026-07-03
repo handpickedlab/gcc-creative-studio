@@ -55,7 +55,7 @@ async def upload_sheet(
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Bestand te groot (max 25 MB).",
+                detail="File too large (max 25 MB).",
             )
     return {"loaded": service.ingest(file.filename or "upload", data)}
 

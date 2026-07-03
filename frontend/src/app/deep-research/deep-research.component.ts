@@ -30,7 +30,7 @@ import {
 import {DeepResearchService} from '../services/deep-research/deep-research.service';
 
 /** Sentinel option that reveals a free-text input on a single-select field. */
-const CUSTOM_OPTION = 'Anders… (vul zelf in)';
+const CUSTOM_OPTION = 'Other… (type your own)';
 /** Competitor option that reveals the "which competitors?" input. */
 const SPECIFIC_COMPETITORS = 'Specific competitors';
 const POLL_INTERVAL_MS = 2000;
@@ -74,12 +74,12 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
   liveGroups: {key: string; label: string; icon: string; lines: string[]}[] = [];
 
   private readonly agentLabels: Record<string, {label: string; icon: string}> = {
-    plan_generator: {label: 'Onderzoeksplan opstellen', icon: 'checklist'},
-    web_researcher: {label: 'Web doorzoeken', icon: 'travel_explore'},
-    reflector: {label: 'Dekking beoordelen', icon: 'psychology'},
-    report_composer: {label: 'Concept schrijven', icon: 'edit_note'},
-    claim_verifier: {label: 'Bronnen verifiëren', icon: 'fact_check'},
-    report_reviser: {label: 'Onjuiste claims corrigeren', icon: 'auto_fix_high'},
+    plan_generator: {label: 'Drafting research plan', icon: 'checklist'},
+    web_researcher: {label: 'Searching the web', icon: 'travel_explore'},
+    reflector: {label: 'Assessing coverage', icon: 'psychology'},
+    report_composer: {label: 'Writing draft', icon: 'edit_note'},
+    claim_verifier: {label: 'Verifying sources', icon: 'fact_check'},
+    report_reviser: {label: 'Correcting unsupported claims', icon: 'auto_fix_high'},
   };
 
   private pollSub?: Subscription;
@@ -112,7 +112,7 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
         this.loadingSchema = false;
       },
       error: () => {
-        this.schemaError = 'Kon het intake-formulier niet laden.';
+        this.schemaError = 'Could not load the intake form.';
         this.loadingSchema = false;
       },
     });
@@ -294,7 +294,7 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
   }
 
   goStep(index: number): void {
-    // Stepper chips navigate backwards freely; forward goes via "Volgende".
+    // Stepper chips navigate backwards freely; forward goes via "Next".
     if (index <= this.step) {
       this.step = index;
     }
@@ -367,7 +367,7 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.starting = false;
-        this.runError = 'Kon het onderzoek niet starten. Probeer het opnieuw.';
+        this.runError = 'Could not start the research. Please try again.';
       },
     });
   }
@@ -425,11 +425,11 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
     if (ev.kind === 'tool') {
       switch (ev.text) {
         case 'google_search':
-          return 'Web doorzoeken…';
+          return 'Searching the web…';
         case 'url_context':
-          return 'Bronpagina lezen…';
+          return 'Reading source page…';
         case 'exit_research_loop':
-          return 'Dekking voldoende — afronden';
+          return 'Coverage sufficient — wrapping up';
         default:
           return ev.text || 'tool';
       }
@@ -509,13 +509,13 @@ export class DeepResearchComponent implements OnInit, OnDestroy {
   statusLabel(status?: JobStatus): string {
     switch (status) {
       case JobStatus.PROCESSING:
-        return 'Bezig';
+        return 'Running';
       case JobStatus.COMPLETED:
-        return 'Voltooid';
+        return 'Completed';
       case JobStatus.FAILED:
-        return 'Mislukt';
+        return 'Failed';
       case JobStatus.STOPPED:
-        return 'Gestopt';
+        return 'Stopped';
       default:
         return '';
     }

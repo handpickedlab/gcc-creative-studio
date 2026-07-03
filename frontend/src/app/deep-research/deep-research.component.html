@@ -12,7 +12,7 @@
     <div class="crumbs">
       <span class="sep">/</span>
       <span class="crumb cur">
-        {{ view === 'wizard' ? 'Nieuw onderzoek' : (activeReport?.topic || 'Onderzoek') }}
+        {{ view === 'wizard' ? 'New research' : (activeReport?.topic || 'Research') }}
       </span>
     </div>
   </header>
@@ -20,7 +20,7 @@
   <!-- loading / error -->
   <div *ngIf="loadingSchema" class="center-load">
     <div class="spinner"></div>
-    <span>Intake laden…</span>
+    <span>Loading intake…</span>
   </div>
   <div *ngIf="schemaError && !loadingSchema" class="center-load">{{ schemaError }}</div>
 
@@ -28,11 +28,11 @@
     <!-- ---- history rail ---- -->
     <aside class="rail">
       <div class="rail-sec">
-        <div class="rail-label">Historie</div>
+        <div class="rail-label">History</div>
       </div>
       <div class="rail-divider"></div>
       <div class="rail-list">
-        <p *ngIf="!history.length" class="rail-empty">Nog geen onderzoeken.</p>
+        <p *ngIf="!history.length" class="rail-empty">No research runs yet.</p>
         <div
           class="brow"
           *ngFor="let r of history"
@@ -44,7 +44,7 @@
             <span class="nm">{{ r.topic }}</span>
             <button
               class="iconbtn danger"
-              title="Verwijderen"
+              title="Delete"
               (click)="deleteReport(r, $event)"
             >
               <mat-icon>delete</mat-icon>
@@ -56,7 +56,7 @@
       <div class="rail-divider"></div>
       <div class="rail-sec">
         <button class="btn soft full" (click)="newResearch()">
-          <mat-icon>add</mat-icon> Nieuw onderzoek
+          <mat-icon>add</mat-icon> New research
         </button>
       </div>
     </aside>
@@ -66,10 +66,10 @@
       <div class="canvas-inner">
         <!-- ============ WIZARD ============ -->
         <section class="intake" *ngIf="view === 'wizard'">
-          <h2>Nieuw onderzoek</h2>
+          <h2>New research</h2>
           <p class="lede">
-            Vul de intake in; de agent plant het onderzoek, doorzoekt het web,
-            reflecteert en schrijft een geciteerde insight-brief.
+            Fill in the intake; the agent plans the research, searches the web,
+            reflects and writes a cited insight brief.
           </p>
 
           <!-- stepper -->
@@ -186,8 +186,8 @@
             </form>
 
             <div class="wiz-acts">
-              <button class="btn ghost" *ngIf="step > 0" (click)="prevStep()">Vorige</button>
-              <button class="btn primary" (click)="nextStep()">Volgende</button>
+              <button class="btn ghost" *ngIf="step > 0" (click)="prevStep()">Back</button>
+              <button class="btn primary" (click)="nextStep()">Next</button>
             </div>
           </ng-container>
 
@@ -201,7 +201,7 @@
             </div>
 
             <div class="block-head">
-              <span class="bl">Research-rondes</span><span class="ln"></span>
+              <span class="bl">Research rounds</span><span class="ln"></span>
             </div>
             <div class="chip-row">
               <button
@@ -215,22 +215,22 @@
               </button>
             </div>
             <p class="hint">
-              Meer rondes = grondiger, maar trager en duurder. De agent stopt
-              eerder zodra de dekking voldoende is.
+              More rounds = more thorough, but slower and more expensive. The
+              agent stops early once coverage is sufficient.
             </p>
 
-            <p class="warn-line" *ngIf="!topic">Vul minimaal een onderwerp in (stap 1).</p>
+            <p class="warn-line" *ngIf="!topic">Enter at least a topic (step 1).</p>
             <p class="warn-line" *ngIf="runError">{{ runError }}</p>
 
             <div class="wiz-acts">
-              <button class="btn ghost" (click)="prevStep()">Vorige</button>
+              <button class="btn ghost" (click)="prevStep()">Back</button>
               <button
                 class="btn primary lg"
                 [disabled]="!topic || starting"
                 (click)="start()"
               >
                 <span class="spinner sm" *ngIf="starting"></span>
-                {{ starting ? 'Bezig…' : 'Start onderzoek' }}
+                {{ starting ? 'Working…' : 'Start research' }}
               </button>
             </div>
           </ng-container>
@@ -241,14 +241,14 @@
           <div class="run-head">
             <div class="spinner"></div>
             <div class="run-title">
-              <h2>Onderzoek loopt…</h2>
+              <h2>Research in progress…</h2>
               <p class="run-topic">{{ activeReport?.topic }}</p>
             </div>
           </div>
           <p class="hint">
-            Live voortgang — de agent plant, doorzoekt het web, reflecteert en
-            schrijft een geciteerde brief. Dit duurt enkele minuten; je kunt de
-            pagina open laten.
+            Live progress — the agent plans, searches the web, reflects and
+            writes a cited brief. This takes a few minutes; you can leave the
+            page open.
           </p>
 
           <div class="livelog">
@@ -261,7 +261,7 @@
             </div>
             <div class="lg-waiting" *ngIf="!liveGroups.length">
               <div class="dots"><span></span><span></span><span></span></div>
-              Verbinden met de agent…
+              Connecting to the agent…
             </div>
           </div>
         </div>
@@ -280,14 +280,14 @@
                 <mat-icon>download</mat-icon> Download
               </button>
               <button class="btn primary sm" (click)="newResearch()">
-                <mat-icon>add</mat-icon> Nieuw
+                <mat-icon>add</mat-icon> New
               </button>
             </div>
           </div>
 
           <div class="warn-box" *ngIf="activeReport?.status === JobStatus.FAILED">
             <div>
-              <div class="t1">Onderzoek mislukt</div>
+              <div class="t1">Research failed</div>
               <p>{{ activeReport?.errorMessage }}</p>
             </div>
           </div>
@@ -296,7 +296,7 @@
 
           <details class="sources" *ngIf="reportSources">
             <summary>
-              Bronnen
+              Sources
               <span class="cnt" *ngIf="sourceCount">{{ sourceCount }}</span>
             </summary>
             <markdown [data]="reportSources" class="report-md sources-md"></markdown>
