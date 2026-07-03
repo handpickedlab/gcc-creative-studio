@@ -26,7 +26,7 @@
                         <div class="relative w-full h-full cursor-pointer" (dblclick)="navigateToGallery(img)">
                             <!-- Loading Spinner -->
                             <div *ngIf="!isLoaded(img)" class="absolute inset-0 flex items-center justify-center bg-neutral-800 z-10">
-                                <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div class="w-6 h-6 border-2 border-[#d4b896] border-t-transparent rounded-full animate-spin"></div>
                             </div>
                             <img [src]="getMediaUrl(img)" 
                                  class="w-full h-full object-cover transition-opacity duration-300" 
@@ -48,7 +48,7 @@
             <div *ngIf="input.value" class="relative group rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900">
                 <!-- Loading Spinner -->
                 <div *ngIf="!isLoaded(input.value)" class="absolute inset-0 flex items-center justify-center bg-neutral-800 z-10">
-                    <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div class="w-6 h-6 border-2 border-[#d4b896] border-t-transparent rounded-full animate-spin"></div>
                 </div>
 
                 <video [src]="getMediaUrl(input.value)" 
@@ -69,7 +69,7 @@
             <div *ngIf="input.value" class="relative group rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 p-2 flex items-center justify-center min-h-[50px]">
                 <!-- Loading Spinner -->
                 <div *ngIf="!isLoaded(input.value)" class="absolute inset-0 flex items-center justify-center bg-neutral-900 z-10">
-                    <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div class="w-6 h-6 border-2 border-[#d4b896] border-t-transparent rounded-full animate-spin"></div>
                 </div>
 
                 <audio [src]="getMediaUrl(input.value)" 
@@ -106,7 +106,7 @@
                    <div class="relative group rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 aspect-square">
                        <!-- Loading Spinner -->
                        <div *ngIf="!isLoaded(img)" class="absolute inset-0 flex items-center justify-center bg-neutral-800 z-10">
-                           <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                           <div class="w-6 h-6 border-2 border-[#d4b896] border-t-transparent rounded-full animate-spin"></div>
                        </div>
 
                        <img [src]="getMediaUrl(img)" 
@@ -133,7 +133,7 @@
                    <div class="relative group rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900">
                       <!-- Loading Spinner -->
                       <div *ngIf="!isLoaded(vid)" class="absolute inset-0 flex items-center justify-center bg-neutral-800 z-10">
-                          <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          <div class="w-6 h-6 border-2 border-[#d4b896] border-t-transparent rounded-full animate-spin"></div>
                       </div>
 
                       <video [src]="getMediaUrl(vid)" 
@@ -156,7 +156,7 @@
            <div *ngIf="output.value" class="relative group rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 p-2 flex items-center justify-center min-h-[50px]">
               <!-- Loading Spinner -->
               <div *ngIf="!loadedMedia.has($any(output.value))" class="absolute inset-0 flex items-center justify-center bg-neutral-900 z-10">
-                  <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div class="w-6 h-6 border-2 border-[#d4b896] border-t-transparent rounded-full animate-spin"></div>
               </div>
 
               <audio [src]="getMediaUrl(output.value)" 

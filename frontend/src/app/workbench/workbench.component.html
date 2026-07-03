@@ -47,10 +47,10 @@
           <!-- "Add New" Card (Cloud Media Selector) -->
           <div
             (click)="openMediaSelector()"
-            class="aspect-square border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center text-gray-500 gap-2 cursor-pointer hover:border-blue-500 hover:text-blue-400 transition-colors relative group bg-[#151517]"
+            class="aspect-square border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center text-gray-500 gap-2 cursor-pointer hover:border-[#d4b896] hover:text-[#d4b896] transition-colors relative group bg-[#151517]"
           >
             <div
-              class="w-12 h-12 rounded-full bg-gray-800 group-hover:bg-blue-500/20 flex items-center justify-center transition-colors"
+              class="w-12 h-12 rounded-full bg-gray-800 group-hover:bg-[#d4b896]/20 flex items-center justify-center transition-colors"
             >
               <mat-icon class="!w-6 !h-6">filter_drama</mat-icon>
             </div>
@@ -61,7 +61,7 @@
           <div
             *ngFor="let asset of filteredAssets()"
             (click)="addToTimeline(asset)"
-            class="group relative aspect-square bg-black rounded-xl overflow-hidden border border-white/5 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all"
+            class="group relative aspect-square bg-black rounded-xl overflow-hidden border border-white/5 cursor-pointer hover:ring-2 hover:ring-[#d4b896]/50 transition-all"
           >
             <img
               *ngIf="asset.thumbnail"
@@ -74,7 +74,7 @@
               class="w-full h-full flex items-center justify-center bg-gray-900"
             >
               <svg
-                class="text-blue-400 w-8 h-8"
+                class="text-[#d4b896] w-8 h-8"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -88,7 +88,7 @@
               class="w-full h-full flex items-center justify-center bg-gray-900"
             >
               <svg
-                class="text-purple-400 w-8 h-8"
+                class="text-[#d4b896] w-8 h-8"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -544,7 +544,7 @@
 
         <!-- Time Display Pill -->
         <!-- <div
-                                                                                    class="absolute bottom-6 px-4 py-1.5 text-white/90 z-20 bg-gradient-to-b from-zinc-500/50 to-neutral-700/20 rounded-3xl shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-[10px]">
+                                                                                    class="absolute bottom-6 px-4 py-1.5 text-white/90 z-20 bg-gradient-to-b from-zinc-500/50 to-neutral-700/20 rounded-3xl shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-[10px]">
                                                                                     {{ formatTime(currentTime()) }} <span class="text-gray-600 mx-1">/</span> {{
                                                                                     formatTime(totalDuration()) }}
                                                                                 </div> -->
@@ -817,7 +817,7 @@
                     (click)="selectClip(clip.id, $event)"
                     class="absolute top-1 bottom-1 rounded-xl cursor-pointer overflow-hidden border flex items-center group"
                     [ngClass]="{
-                      'border-blue-500 ring-2 ring-blue-500/50 shadow-xl shadow-blue-500/40 z-30':
+                      'border-[#d4b896] ring-2 ring-[#d4b896]/50 shadow-xl shadow-[#d4b896]/40 z-30':
                         selectedClipId() === clip.id,
                       'border-white/10 bg-[#2a2a2c] hover:border-white/30':
                         selectedClipId() !== clip.id,
@@ -841,10 +841,10 @@
                     <!-- Fallback gradient when no thumbnail -->
                     <div
                       *ngIf="!getAssetThumbnail(clip.assetId)"
-                      class="absolute inset-0 bg-gradient-to-r from-blue-900/50 to-blue-700/30 flex items-center justify-center"
+                      class="absolute inset-0 bg-gradient-to-r from-[#3a2f1f]/50 to-[#8a6f4e]/30 flex items-center justify-center"
                     >
                       <svg
-                        class="text-blue-400 w-6 h-6 opacity-50"
+                        class="text-[#d4b896] w-6 h-6 opacity-50"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -856,10 +856,10 @@
 
                     <!-- Trim Handles -->
                     <div
-                      class="absolute left-0 top-0 bottom-0 w-1.5 bg-white/40 cursor-ew-resize"
+                      class="absolute left-0 top-0 bottom-0 w-1.5 bg-[#342e26]/70 cursor-ew-resize"
                     ></div>
                     <div
-                      class="absolute right-0 top-0 bottom-0 w-1.5 bg-white/40 cursor-ew-resize"
+                      class="absolute right-0 top-0 bottom-0 w-1.5 bg-[#342e26]/70 cursor-ew-resize"
                     ></div>
                   </div>
                 </div>
@@ -913,7 +913,7 @@
           <!-- Timer -->
           <!-- Timer -->
           <div class="absolute bottom-2 right-2 w-max z-20">
-            <span class="text-sky-300 text-sm"
+            <span class="text-[#e2c8a8] text-sm"
               >{{ formatTime(currentTime()) }}
             </span>
             <span class="text-white/90 mx-1">|</span>

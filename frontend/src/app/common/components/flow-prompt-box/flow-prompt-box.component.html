@@ -194,7 +194,7 @@
                 <span class="absolute bottom-1 text-[8px] text-neutral-500">Audio Ref</span>
               </ng-container>
               <ng-container *ngIf="referenceAudio">
-                <mat-icon class="text-blue-400 !text-3xl !h-8 !w-8 flex items-center justify-center">music_note</mat-icon>
+                <mat-icon class="text-[#d4b896] !text-3xl !h-8 !w-8 flex items-center justify-center">music_note</mat-icon>
                 <span class="absolute bottom-1 text-[8px] text-neutral-300 max-w-[64px] truncate">{{ referenceAudio.name || 'Audio' }}</span>
                 <button
                   (click)="$event.stopPropagation(); clearReferenceAudio.emit($event)"
@@ -227,7 +227,7 @@
         >
           <mat-icon svgIcon="gemini-spark-icon"></mat-icon>
           <span
-            class="font-bold bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 bg-clip-text text-transparent"
+            class="font-bold bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] bg-clip-text text-transparent"
           >
             Generate
           </span>

@@ -144,3 +144,8 @@
     }
   }
 }
+
+// Warm hover state for the tools pill (replaces the old bg-white toggle).
+.tools-hover {
+  background-color: #4a4238 !important;
+}

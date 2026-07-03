@@ -28,10 +28,9 @@
 .genAI {
   background: linear-gradient(
     86.95deg,
-    #34a853 -65.34%,
-    #fbbc05 -12.75%,
-    #ea4335 25.15%,
-    #1a73e8 103.88%
+    #e2c8a8 -65.34%,
+    #d4b896 25.15%,
+    #a8875f 103.88%
   );
   -webkit-background-clip: text;
   -moz-background-clip: text;
@@ -41,7 +40,7 @@
 
 :host ::ng-deep .mat-toolbar.mat-primary {
   background-color: transparent;
-  color: #504747;
+  color: #9a8a7a;
   box-shadow: none;
   justify-content: start;
 }
@@ -59,7 +58,7 @@
   line-height: 19px;
   /* identical to box height */
   letter-spacing: -0.005em;
-  color: #161a1d;
+  color: #9a8a7a;
   cursor: pointer;
 }
 
@@ -68,7 +67,7 @@
   color: #5f6368;
   font-family: 'Google Sans', sans-serif !important;
   .blue {
-    color: #4285f4;
+    color: #d4b896;
   }
   .red {
     color: #ea4335;

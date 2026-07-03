@@ -28,7 +28,7 @@
 
     <div class="flex items-center gap-4">
       <button *ngIf="isAdmin" (click)="createTemplateFromMediaItem()" matTooltip="Create Template from Media"
-        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
+        class="bg-[#a8875f] hover:bg-[#8a6f4e] text-white font-bold py-2 px-4 rounded inline-flex items-center">
         <mat-icon>auto_stories</mat-icon>
         <span class="ml-2">Create Template</span>
         </button>
@@ -168,7 +168,7 @@
                 <ul class="space-y-2">
                   <li *ngFor="let chunk of mediaItem.groundingMetadata.groundingChunks">
                     <a *ngIf="chunk.web" [href]="chunk.web.uri" target="_blank"
-                      class="text-blue-400 hover:underline text-sm flex items-center gap-2">
+                      class="text-[#d4b896] hover:underline text-sm flex items-center gap-2">
                       <mat-icon class="!text-sm !w-4 !h-4">open_in_new</mat-icon>
                       {{ chunk.web.title || chunk.web.uri }}
                     </a>
@@ -202,7 +202,7 @@
                                                                                 ">...</span>
                 </p>
                 <button *ngIf="mediaItem.prompt.split(' ').length > 20" (click)="togglePromptExpansion()"
-                  class="text-blue-400 hover:text-blue-300 text-sm mt-1">
+                  class="text-[#d4b896] hover:text-[#e2c8a8] text-sm mt-1">
                   {{ isPromptExpanded ? 'Show less' : 'Show more' }}
                 </button>
               </div>

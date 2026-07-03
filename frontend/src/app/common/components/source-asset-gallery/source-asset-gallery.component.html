@@ -52,10 +52,10 @@
       <!-- Audio placeholder -->
       <div
         *ngIf="asset.mimeType?.startsWith('audio/')"
-        class="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/80 to-purple-600/60"
+        class="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#3a2f1f]/80 to-[#a8875f]/60"
       >
-        <mat-icon class="!w-12 !h-12 text-purple-300">audiotrack</mat-icon>
-        <p class="text-xs text-purple-200 mt-2 px-2 text-center truncate max-w-full">{{ asset.originalFilename }}</p>
+        <mat-icon class="!w-12 !h-12 text-[#e2c8a8]">audiotrack</mat-icon>
+        <p class="text-xs text-[#ecd9c0] mt-2 px-2 text-center truncate max-w-full">{{ asset.originalFilename }}</p>
       </div>
 
       <div *ngIf="deletingAssetId === asset.id" class="delete-loading-overlay">

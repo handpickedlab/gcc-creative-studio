@@ -41,7 +41,7 @@
                 [type]="showModelName ? 'text' : 'password'"
                 [(ngModel)]="geminiOmniModelName"
                 placeholder="e.g. custom-model-id"
-                class="bg-zinc-800 text-white border border-zinc-700 rounded pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-blue-500 w-full"
+                class="bg-zinc-800 text-white border border-zinc-700 rounded pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-[#d4b896] w-full"
               />
               <button
                 type="button"
@@ -55,7 +55,7 @@
             </div>
             <button
               (click)="saveGeminiOmniModelName()"
-              class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-semibold transition-colors"
+              class="bg-[#a8875f] hover:bg-[#8a6f4e] text-white rounded px-4 py-2 text-sm font-semibold transition-colors"
             >
               Save
             </button>
@@ -82,12 +82,12 @@
       <div *ngIf="overviewStats$ | async as stats; else loadingStats">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
           <div class="dark:bg-[#2A2B2F] p-4 rounded-lg shadow flex flex-col items-center justify-center border border-zinc-800 cursor-pointer" matTooltip="Count of all registered users on the platform.">
-            <mat-icon class="text-blue-400 mb-2 flex justify-center items-center" style="font-size: 48px; width: 48px; height: 48px;">group</mat-icon>
+            <mat-icon class="text-[#d4b896] mb-2 flex justify-center items-center" style="font-size: 48px; width: 48px; height: 48px;">group</mat-icon>
             <span class="!text-3xl font-bold text-white">{{ stats.totalUsers }}</span>
             <span class="text-zinc-400 mt-1 text-sm">Total Users</span>
           </div>
           <div class="dark:bg-[#2A2B2F] p-4 rounded-lg shadow flex flex-col items-center justify-center border border-zinc-800 cursor-pointer" matTooltip="Count of all workspaces created.">
-            <mat-icon class="text-purple-400 mb-2 flex justify-center items-center" style="font-size: 48px; width: 48px; height: 48px;">business</mat-icon>
+            <mat-icon class="text-[#d4b896] mb-2 flex justify-center items-center" style="font-size: 48px; width: 48px; height: 48px;">business</mat-icon>
             <span class="!text-3xl font-bold text-white">{{ stats.totalWorkspaces }}</span>
             <span class="text-zinc-400 mt-1 text-sm">Workspaces</span>
           </div>
@@ -112,7 +112,7 @@
             <span class="text-zinc-400 mt-1 text-sm">AI Media Total</span>
           </div>
           <div class="dark:bg-[#2A2B2F] p-4 rounded-lg shadow flex flex-col items-center justify-center border border-zinc-800 cursor-pointer" matTooltip="Count of all user uploaded source assets.">
-            <mat-icon class="text-indigo-400 mb-2 flex justify-center items-center" style="font-size: 48px; width: 48px; height: 48px;">cloud_upload</mat-icon>
+            <mat-icon class="text-[#d4b896] mb-2 flex justify-center items-center" style="font-size: 48px; width: 48px; height: 48px;">cloud_upload</mat-icon>
             <span class="!text-3xl font-bold text-white">{{ stats.userUploadedMedia }}</span>
             <span class="text-zinc-400 mt-1 text-sm">Uploaded</span>
           </div>

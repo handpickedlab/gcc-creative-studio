@@ -17,9 +17,9 @@
 .linear-text {
   background: linear-gradient(
     89.9deg,
-    rgba(66, 133, 244, 0.95) 21.17%,
-    #a488f5 44.34%,
-    rgba(234, 67, 53, 0.88) 81.26%
+    rgba(226, 200, 168, 0.98) 21.17%,
+    #d4b896 44.34%,
+    rgba(168, 135, 95, 0.92) 81.26%
   );
   -webkit-background-clip: text;
   -moz-background-clip: text;
@@ -29,6 +29,7 @@
 
 .login-app-text {
   font-size: 1.5rem;
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.55);
 }
 
 .login-buttons-container {
@@ -38,7 +39,7 @@
 }
 
 .login-button {
-  background: #4285f4;
+  background: #d4b896;
   box-sizing: border-box;
   border: 1px solid #e0e0e0;
   color: #fff;
@@ -60,19 +61,24 @@
   width: 100%;
   align-items: center;
 
-  background: rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px); /* For Safari */
+  background: rgba(25, 22, 15, 0.6) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px); /* For Safari */
+  border: 1px solid rgba(64, 56, 48, 0.8);
+
+  h1 {
+    color: #f0e8df;
+  }
 
   .register-text {
     margin: 1rem 0;
-    color: white;
+    color: #f0e8df;
   }
 }
 
 .login-btn {
-  background-color: white !important;
-  color: blue !important;
+  background-color: #d4b896 !important;
+  color: #241c10 !important;
 }
 
 // Small devices (landscape phones, 576px and up)
