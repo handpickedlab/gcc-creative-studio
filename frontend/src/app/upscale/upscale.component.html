@@ -131,7 +131,7 @@
               <div class="flex gap-2">
                 <button *ngFor="let factor of upscaleFactors" 
                         (click)="setUpscaleFactor(factor)"
-                        [class.bg-blue-600]="upscaleFactor === factor"
+                        [ngClass]="{'bg-[#a8875f]': upscaleFactor === factor}"
                         [class.text-white]="upscaleFactor === factor"
                         [class.bg-gray-700]="upscaleFactor !== factor"
                         [class.text-gray-300]="upscaleFactor !== factor"
@@ -162,7 +162,7 @@
             </div>
 
             <button mat-raised-button 
-                    class="w-full !py-1 !text-lg !font-bold !rounded-full !bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 !text-white" 
+                    class="w-full !py-1 !text-lg !font-bold !rounded-full !bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] !text-white" 
                     [disabled]="!selectedAsset || isLoadingUpscale"
                     (click)="startUpscale()">
                <mat-icon class="mr-2">auto_awesome</mat-icon> Upscale

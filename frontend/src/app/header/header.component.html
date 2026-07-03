@@ -20,7 +20,7 @@
   [class.fixed-menu]="menuFixed"
   (mouseenter)="menuIsHovered = true"
   (mouseleave)="menuIsHovered = false"
-  class="mat-menu-floating p-3 fixed bg-gradient-to-b from-zinc-500/50 to-neutral-700/20 rounded-[48px] shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-[10px] z-[1000] !overflow-visible"
+  class="mat-menu-floating p-3 fixed bg-gradient-to-b from-[#342e26]/80 to-[#211d16]/50 rounded-[48px] shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-[10px] z-[1000] !overflow-visible"
   [class.fixed-menu]="menuFixed"
 >
   <div
@@ -28,7 +28,7 @@
     [matTooltip]="getTooltipText()"
     matTooltipClass="multiline-tooltip"
     matTooltipPosition="right"
-    class="user-profile-button cursor-pointer !w-14 !h-14 bg-blend-soft-light bg-white/40 !rounded-full shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] backdrop-blur-2xl inline-flex justify-center items-center gap-2.5 overflow-hidden !aspect-square"
+    class="user-profile-button cursor-pointer !w-14 !h-14 bg-blend-soft-light bg-[#342e26]/70 !rounded-full shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] backdrop-blur-2xl inline-flex justify-center items-center gap-2.5 overflow-hidden !aspect-square"
   >
     <img
       *ngIf="currentUser?.picture; else placeholder"
@@ -51,11 +51,11 @@
       routerLink="/"
       matTooltip="Images"
       matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5"
     >
       <div
         *ngIf="router.isActive('/', true)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
@@ -72,11 +72,11 @@
       routerLink="/video"
       matTooltip="Video"
       matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
       <div
         *ngIf="router.isActive('/video', true)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
@@ -93,11 +93,11 @@
       routerLink="/audio"
       matTooltip="Audio"
       matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
       <div
         *ngIf="router.isActive('/audio', false)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
@@ -116,12 +116,12 @@
       (mouseleave)="onToolsLeave()"
     >
       <div
-        [class.bg-white]="toolsMenuHovered"
-        class="cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden transition-colors duration-200"
+        [class.tools-hover]="toolsMenuHovered"
+        class="cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden transition-colors duration-200"
       >
         <div
           *ngIf="router.isActive('/fun-templates', true) || router.isActive('/vto', false)"
-          class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+          class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
         ></div>
         <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
           <button
@@ -138,18 +138,18 @@
         *ngIf="toolsMenuHovered"
         (mouseenter)="onToolsEnter()"
         (mouseleave)="onToolsLeave()"
-        class="absolute left-[70px] top-0 p-3 flex flex-col gap-3 bg-gradient-to-b from-zinc-500/50 to-neutral-700/20 rounded-[24px] shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-[10px] z-[1001] min-w-[220px]"
+        class="absolute left-[70px] top-0 p-3 flex flex-col gap-3 bg-gradient-to-b from-[#342e26]/80 to-[#211d16]/50 rounded-[24px] shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-[10px] z-[1001] min-w-[220px]"
         [@fadeSlideInOut]
       >
         <div class="absolute -left-[20px] top-0 bottom-0 w-[20px] bg-transparent"></div>
 
         <div
           routerLink="/vto"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/vto', false)"
-             class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+             class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -160,11 +160,11 @@
 
         <div
           routerLink="/fun-templates"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/fun-templates', true)"
-            class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+            class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -179,11 +179,11 @@
           routerLink="/workflows"
           matTooltip="Workflows"
           matTooltipPosition="right"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/workflows', true)"
-             class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+             class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -195,11 +195,11 @@
 
         <div
           routerLink="/imagen-upscale"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/imagen-upscale', true)"
-            class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+            class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -211,11 +211,11 @@
 
         <div
           routerLink="/translations"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/translations', true)"
-            class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+            class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -227,11 +227,11 @@
 
         <div
           routerLink="/data-query"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/data-query', true)"
-            class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+            class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -242,11 +242,11 @@
 
         <div
           routerLink="/deep-research"
-          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
             *ngIf="router.isActive('/deep-research', true)"
-            class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+            class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
@@ -264,11 +264,11 @@
       routerLink="/gallery"
       matTooltip="Media Gallery"
       matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
       <div
         *ngIf="router.isActive('/gallery', false)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
@@ -285,11 +285,11 @@
       routerLink="/workbench"
       matTooltip="Workbench"
       matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
        <div
         *ngIf="router.isActive('/workbench', true)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
@@ -308,11 +308,11 @@
       *ngIf="authService.isUserAdmin()"
       matTooltip="Admin"
       matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
       <div
         *ngIf="router.isActive('/admin', false)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
@@ -329,7 +329,7 @@
       (click)="logout()"
       matTooltip="Logout"
       matTooltipPosition="right"
-      class="cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+      class="cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button

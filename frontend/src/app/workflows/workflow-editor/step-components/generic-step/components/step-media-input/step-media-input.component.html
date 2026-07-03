@@ -36,9 +36,9 @@
 
       <!-- Case 2: Linked Output -->
       <ng-container *ngIf="isStepOutputReference(item)">
-        <div class="h-full w-full flex flex-col items-center justify-center p-1 text-center bg-blue-900/20">
-          <mat-icon class="text-blue-400 !w-5 !h-5 !text-lg">link</mat-icon>
-          <span class="text-[9px] text-blue-200 leading-tight mt-1 line-clamp-2">
+        <div class="h-full w-full flex flex-col items-center justify-center p-1 text-center bg-[#3a2f1f]/20">
+          <mat-icon class="text-[#d4b896] !w-5 !h-5 !text-lg">link</mat-icon>
+          <span class="text-[9px] text-[#ecd9c0] leading-tight mt-1 line-clamp-2">
             {{ getLinkedOutputLabel(item) }}
           </span>
         </div>
@@ -67,10 +67,10 @@
   
     <!-- Add Linked -->
     <div 
-      class="h-10 w-10 flex flex-col items-center justify-center cursor-pointer rounded-lg border-2 border-dashed border-neutral-700 hover:border-blue-500/50 hover:bg-blue-900/10 transition-colors gap-1"
+      class="h-10 w-10 flex flex-col items-center justify-center cursor-pointer rounded-lg border-2 border-dashed border-neutral-700 hover:border-[#d4b896]/50 hover:bg-[#3a2f1f]/10 transition-colors gap-1"
       [matMenuTriggerFor]="outputMenu"
       matTooltip="Add Output Reference">
-      <mat-icon class="text-blue-400 !w-5 !h-5 !text-xl">link</mat-icon>
+      <mat-icon class="text-[#d4b896] !w-5 !h-5 !text-xl">link</mat-icon>
     </div>
   
     <mat-menu #outputMenu="matMenu">

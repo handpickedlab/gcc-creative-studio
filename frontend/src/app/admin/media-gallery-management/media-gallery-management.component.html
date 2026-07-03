@@ -113,8 +113,8 @@
         <th mat-header-cell *matHeaderCellDef class="!pl-4">Preview</th>
         <td mat-cell *matCellDef="let item" class="!py-2">
             <!-- Audio Icon Display -->
-            <div *ngIf="item.metadata?.mimeType?.startsWith('audio') || item.metadata?.assetType === 'audio'" class="w-12 h-12 bg-blue-900/30 flex items-center justify-center rounded border border-blue-500/20">
-                <mat-icon class="text-blue-400">audiotrack</mat-icon>
+            <div *ngIf="item.metadata?.mimeType?.startsWith('audio') || item.metadata?.assetType === 'audio'" class="w-12 h-12 bg-[#3a2f1f]/30 flex items-center justify-center rounded border border-[#d4b896]/20">
+                <mat-icon class="text-[#d4b896]">audiotrack</mat-icon>
             </div>
 
             <!-- Standard Image Display (Hidden if Audio) -->
@@ -159,7 +159,7 @@
           <div class="flex flex-wrap gap-1">
             <!-- AI Generated -->
             <ng-container *ngIf="item.itemType === 'media_item'">
-              <mat-chip class="!bg-blue-600/20 !text-blue-400 !border !border-blue-500/30">
+              <mat-chip class="!bg-[#a8875f]/20 !text-[#d4b896] !border !border-[#d4b896]/30">
                 AI Generated
               </mat-chip>
               <mat-chip *ngIf="item.metadata?.model" class="!bg-slate-700/50 !text-slate-300 !border !border-slate-600/30">
@@ -169,7 +169,7 @@
 
             <!-- User Uploaded -->
             <ng-container *ngIf="item.itemType === 'source_asset'">
-              <mat-chip class="!bg-purple-600/20 !text-purple-400 !border !border-purple-500/30">
+              <mat-chip class="!bg-[#a8875f]/20 !text-[#d4b896] !border !border-[#c9a87d]/30">
                 User Upload
               </mat-chip>
               <mat-chip *ngIf="item.metadata?.assetType" class="!bg-slate-700/50 !text-slate-300 !border !border-slate-600/30">

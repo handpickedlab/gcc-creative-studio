@@ -24,13 +24,13 @@
 // Be sure that you only ever include this mixin once!
 @include mat.core();
 
-// Define the theme object.
+// Define the theme object. Warm palette to match the Hunkemöller "noir" look.
 $creative-studio-theme: mat.define-theme(
   (
     color: (
       theme-type: dark,
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
+      primary: mat.$orange-palette,
+      tertiary: mat.$yellow-palette,
     ),
     density: (
       scale: 0,
@@ -38,32 +38,43 @@ $creative-studio-theme: mat.define-theme(
   )
 );
 
-// To get the theme colors and typography styles to apply, you must include a theme.
-// Here, we're using a pre-built theme. You can also create your own.
-// https://material.angular.io/guide/theming
-@import '@angular/material/prebuilt-themes/azure-blue.css';
-
 // Include theme styles for core and each component used in your app.
 // Alternatively, you can import and @include the theme mixins for each component
 // that you are using.
 :root {
   @include mat.all-component-themes($creative-studio-theme);
 
-  --color-bg1: #2e3031;
+  // Hunkemöller "noir" design tokens — the studio-wide source of truth.
+  // The Translations / Deep Research / Data Query pages carry the same values
+  // in their scoped styles; keep them in sync.
+  --hkm-bg: #19160f;
+  --hkm-bg-sub: #211d16;
+  --hkm-surface: #2a251d;
+  --hkm-surface-h: #342e26;
+  --hkm-border: #403830;
+  --hkm-border-lt: #34302a;
+  --hkm-text: #f0e8df;
+  --hkm-text-m: #9a8a7a;
+  --hkm-text-s: #635850;
+  --hkm-accent: #d4b896;
+  --hkm-accent-h: #e2c8a8;
+  --hkm-accent-deep: #a8875f;
+
+  --color-bg1: var(--hkm-bg-sub);
   --color-primary-value: #{mat.get-theme-color($creative-studio-theme, primary)};
-  --color-bg2: #2e3031;
-  --color1: 238, 77, 93; // #EE4D5D red
-  --color2: 45, 124, 239; // #2D7CEF dark blue
-  --color3: 238, 77, 93; // #EE4D5D red
-  --color4: 29, 141, 248; // #1D8DF8 light blue
-  --color5: 238, 77, 93; // #EE4D5D red
-  // --color5: 251, 188, 4; // #fbbc04 yellow
-  --color-interactive: 140, 100, 255;
+  --color-bg2: var(--hkm-bg);
+  --color1: 212, 184, 150; // champagne
+  --color2: 168, 135, 95; // bronze
+  --color3: 226, 200, 168; // light champagne
+  --color4: 154, 138, 122; // warm taupe
+  --color5: 212, 184, 150; // champagne
+  --color-interactive: 226, 200, 168;
   --circle-size: 90%;
   --blending: hard-light;
-  --gem-sys-color--brand-blue:#3186FF;
-  --gem-sys-color--brand-transition-blue-1:#346BF1;
-  --gem-sys-color--brand-transition-blue-2:#4FA0FF;
+  // Legacy variable names (referenced across pages) — remapped to HKM golds.
+  --gem-sys-color--brand-blue: #d4b896;
+  --gem-sys-color--brand-transition-blue-1: #c9a87d;
+  --gem-sys-color--brand-transition-blue-2: #e2c8a8;
   --Greeting-gradient:linear-gradient(77deg, var(--gem-sys-color--brand-blue) 6.99%, var(--gem-sys-color--brand-transition-blue-1) 45.46%, var(--gem-sys-color--brand-transition-blue-2) 88.2%);
   --z-index-notification: 99999;
 
@@ -77,8 +88,7 @@ $creative-studio-theme: mat.define-theme(
 // @include mat.color-variants-backwards-compatibility($creative-studio-theme);
 /* You can add global styles to this file, and also import other style files */
 
-@import url(//fonts.googleapis.com/css2?family=Google+Sans);
-// Hunkemöller editorial pairing — used by the Translations page.
+// Hunkemöller editorial pairing — studio-wide.
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
 
 html,
@@ -87,12 +97,10 @@ body {
 }
 body {
   margin: 0;
-  font-family: 'Google Sans', Roboto, Arial, 'Helvetica Neue', sans-serif !important;
+  font-family: 'DM Sans', system-ui, Roboto, Arial, 'Helvetica Neue', sans-serif !important;
 }
 
 body,
-h1,
-h2,
 h3,
 h4,
 h5,
@@ -103,7 +111,17 @@ optgroup,
 select,
 span,
 textarea {
-  font-family: 'Google Sans', Roboto, Arial, 'Helvetica Neue', sans-serif !important;
+  font-family: 'DM Sans', system-ui, Roboto, Arial, 'Helvetica Neue', sans-serif !important;
+}
+
+// Editorial serif display headings, matching the HKM tool pages.
+h1,
+h2,
+h1 span,
+h2 span {
+  font-family: 'Cormorant Garamond', Georgia, serif !important;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
 @tailwind base;
@@ -324,25 +342,25 @@ textarea {
 
 .mat-mdc-button-base {
   background-color: transparent !important;
-  color: white !important;
-  fill: white !important;
+  color: var(--hkm-text) !important;
+  fill: var(--hkm-text) !important;
 }
 
 svg {
-  fill: white !important;
+  fill: var(--hkm-text) !important;
 }
 
 ::ng-deep .mat-mdc-cell,
 ::ng-deep .mat-mdc-header-cell,
 ::ng-deep .mat-mdc-paginator-container,
 table {
-  background-color: #2e3031 !important;
-  color: white !important;
+  background-color: var(--hkm-surface) !important;
+  color: var(--hkm-text) !important;
 }
 
 ::ng-deep .mat-mdc-paginator-touch-target,
 ::ng-deep .mat-mdc-select-value {
-  color: white !important;
+  color: var(--hkm-text) !important;
 }
 
 app-workspace-switcher .top-left-container {
@@ -374,7 +392,7 @@ app-workspace-switcher .workspace-container::before {
   right: 0;
   bottom: 0;
   z-index: -1; // Place it behind the content
-  background: linear-gradient(to right, #3b82f6, #8b5cf6, #f87171);
+  background: linear-gradient(to right, #e2c8a8, #d4b896, #a8875f);
   opacity: 0;
   transition: opacity 0.5s ease-in-out;
 }
@@ -411,7 +429,7 @@ app-workspace-switcher .workspace-name {
 /* For Firefox */
 * {
   // scrollbar-width: thin;
-  scrollbar-color: #6b7280 transparent; /* thumb and track color */
+  scrollbar-color: #635850 transparent; /* thumb and track color */
 }
 
 /* For Webkit browsers (Chrome, Safari, Edge) */
@@ -424,7 +442,7 @@ app-workspace-switcher .workspace-name {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(107, 114, 128, 0.5); /* A semi-transparent gray */
+  background-color: rgba(99, 88, 80, 0.5); /* semi-transparent warm taupe */
   border-radius: 5px;
   border: 2px solid transparent;
   background-clip: content-box; /* Ensures border acts as padding */
@@ -432,7 +450,7 @@ app-workspace-switcher .workspace-name {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(107, 114, 128, 0.8); /* More opaque on hover */
+  background-color: rgba(99, 88, 80, 0.8); /* More opaque on hover */
 }
 
 ::-webkit-scrollbar-button {
@@ -449,7 +467,7 @@ app-workspace-switcher .workspace-name {
   html {
     min-height: 100vh;
     height: auto;
-    background: radial-gradient(ellipse 100% 100% at 50% 0%, #4D4D4D 0%, #161616 100%) !important;
+    background: radial-gradient(ellipse 100% 100% at 50% 0%, #3b3327 0%, #17130d 100%) !important;
     background-attachment: fixed;
     background-repeat: no-repeat;
     background-size: cover;
@@ -494,7 +512,7 @@ app-workspace-switcher .workspace-name {
 // Custom Snackbar Styles
 .gallery-hint-snackbar {
   .mat-mdc-snack-bar-action {
-    color: #004a99 !important; // Darker blue for better visibility on light snackbar background
+    color: #6f5638 !important; // Dark champagne for visibility on light snackbar background
     font-weight: 600;
   }
 }

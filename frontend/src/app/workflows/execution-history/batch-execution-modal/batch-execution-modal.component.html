@@ -105,9 +105,9 @@
 
         <!-- Summary Stats -->
         <div *ngIf="results.length > 0" class="grid grid-cols-2 gap-4">
-            <div class="rounded-xl bg-blue-500/10 border border-blue-500/20 p-4 flex flex-col items-center">
-                <span class="text-2xl font-bold text-blue-400">{{ successCount }}</span>
-                <span class="text-xs uppercase tracking-wider text-blue-300/70 font-medium">Submitted</span>
+            <div class="rounded-xl bg-[#d4b896]/10 border border-[#d4b896]/20 p-4 flex flex-col items-center">
+                <span class="text-2xl font-bold text-[#d4b896]">{{ successCount }}</span>
+                <span class="text-xs uppercase tracking-wider text-[#e2c8a8]/70 font-medium">Submitted</span>
             </div>
             <div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 flex flex-col items-center">
                 <span class="text-2xl font-bold text-red-400">{{ failureCount }}</span>
@@ -120,18 +120,17 @@
             <div *ngFor="let res of results" 
                  class="flex items-center gap-3 p-3 rounded-lg border transition-colors"
                  [ngClass]="{
-                    'bg-blue-500/5 border-blue-500/10': res.status === 'SUCCESS',
+                    'bg-[#d4b896]/5 border-[#d4b896]/10': res.status === 'SUCCESS',
                     'bg-red-500/5 border-red-500/10': res.status === 'FAILED'
                  }">
                 
                 <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
                      [ngClass]="{
-                        'bg-blue-500/20': res.status === 'SUCCESS',
+                        'bg-[#d4b896]/20': res.status === 'SUCCESS',
                         'bg-red-500/20': res.status === 'FAILED'
                      }">
                     <span class="text-xs font-bold" 
-                          [class.text-blue-400]="res.status === 'SUCCESS'"
-                          [class.text-red-400]="res.status === 'FAILED'">
+                          [ngClass]="{'text-[#d4b896]': res.status === 'SUCCESS', 'text-red-400': res.status === 'FAILED'}">
                         {{ res.row_index + 1 }}
                     </span>
                 </div>
@@ -139,8 +138,7 @@
                 <div class="flex flex-col min-w-0 flex-1">
                     <div class="flex items-center gap-2">
                         <span class="text-sm font-medium"
-                              [class.text-blue-300]="res.status === 'SUCCESS'"
-                              [class.text-red-300]="res.status === 'FAILED'">
+                              [ngClass]="{'text-[#e2c8a8]': res.status === 'SUCCESS', 'text-red-300': res.status === 'FAILED'}">
                             {{ res.status === 'SUCCESS' ? 'SUBMITTED' : res.status }}
                         </span>
                         <span *ngIf="res.execution_id" class="text-xs text-neutral-500 font-mono bg-neutral-900 px-1.5 py-0.5 rounded truncate max-w-[150px]">
@@ -155,7 +153,7 @@
                     </p>
                 </div>
 
-                <mat-icon *ngIf="res.status === 'SUCCESS'" class="text-blue-500 icon-sm">check_circle</mat-icon>
+                <mat-icon *ngIf="res.status === 'SUCCESS'" class="text-[#d4b896] icon-sm">check_circle</mat-icon>
                 <mat-icon *ngIf="res.status === 'FAILED'" class="text-red-500 icon-sm">error</mat-icon>
             </div>
         </div>
