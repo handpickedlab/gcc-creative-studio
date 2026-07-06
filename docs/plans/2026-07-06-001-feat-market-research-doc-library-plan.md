@@ -290,7 +290,7 @@ flowchart TD
 
 ## Implementation Units
 
-- [ ] **Unit 1: research_library module foundation (schema, migration, CRUD API)**
+- [x] **Unit 1: research_library module foundation (schema, migration, CRUD API)**
 
 **Goal:** The library exists: documents can be registered via signed-URL upload
 flow, listed with status/tier, tier-patched, deleted; claims/pages tables ready.
@@ -341,7 +341,7 @@ generate-upload-url.
 column accepts a 768-float row on real Postgres; CRUD endpoints exercised via
 FastAPI test client.
 
-- [ ] **Unit 2: conversion + page rendering pipeline**
+- [x] **Unit 2: conversion + page rendering pipeline**
 
 **Goal:** Any accepted document becomes a normalized sequence of page images
 (+ thumbnails) in GCS.
@@ -381,7 +381,7 @@ then failed with reason; PNG input produces exactly one page.
 **Verification:** a real corpus PPT and DOCX convert and render locally;
 rendered slide is visually legible at target resolution.
 
-- [ ] **Unit 3: claim extraction + embeddings + background worker**
+- [x] **Unit 3: claim extraction + embeddings + background worker**
 
 **Goal:** A finalized document ends at COMPLETED (or COMPLETED_WITH_ERRORS)
 with claims + embeddings queryable in Postgres.
@@ -424,7 +424,7 @@ embeddings renormalized (unit norm); Gemini mocked per `tests/multimodal/test_ge
 real Vertex; spot-check claims of a known slide (e.g. Thuiswinkel "46% smartphone
 2030") for correct metric/value/segment/period/source.
 
-- [ ] **Unit 4: tag & metric canonicalization**
+- [x] **Unit 4: tag & metric canonicalization**
 
 **Goal:** Cross-deck filters actually work: raw tags/metrics map to a canonical
 vocabulary, rebuildable at any time without re-extraction.
@@ -458,7 +458,7 @@ concepts don't; idempotent re-run on unchanged corpus.
 ~50–150 canonical tags; a canonical-tag filter returns claims from multiple
 publishers.
 
-- [ ] **Unit 5: search_claims service + hybrid agent + citations protocol**
+- [x] **Unit 5: search_claims service + hybrid agent + citations protocol**
 
 **Goal:** One question can combine deck facts and DuckDB math; every deck fact
 carries a document+page citation the frontend can render.
@@ -501,7 +501,7 @@ model asks otherwise; tier change flips ranking order of two comparable claims.
 regression); a Dutch question over an English deck returns the right claim
 with citation.
 
-- [ ] **Unit 6: frontend — library management**
+- [x] **Unit 6: frontend — library management**
 
 **Goal:** Users upload the corpus in batches and manage it: status, tier,
 duplicates, delete/reprocess.
@@ -529,7 +529,7 @@ MSG shows reason; tier change round-trips; poller stops when all terminal.
 **Verification:** upload 3–4 real corpus files through the UI against a local
 backend; statuses progress to terminal states without refresh.
 
-- [ ] **Unit 7: frontend — citations + slide viewer in chat**
+- [x] **Unit 7: frontend — citations + slide viewer in chat**
 
 **Goal:** Answers render as markdown with source chips; clicking one shows the
 original slide next to the answer.
@@ -556,6 +556,8 @@ one answer; image load failure degrades to text citation.
 whose chip opens the correct slide.
 
 - [ ] **Unit 8: bulk ingest of the real corpus + golden-question eval**
+
+*(script + runbook landed; the actual corpus run and eval await an operator — see `2026-07-06-corpus-ingest-runbook.md`)*
 
 **Goal:** All 151 files processed (minus rejects/dupes); extraction quality,
 cost and latency measured; success criteria from the origin doc demonstrated.
