@@ -83,3 +83,23 @@ class ResearchClaimRepository(BaseRepository[ResearchClaim, ResearchClaimModel])
         )
         await self.db.commit()
         return result.rowcount or 0
+
+    async def delete_claims_except_run(
+        self,
+        document_id: int,
+        ingest_run_id: str,
+    ) -> int:
+        """Deletes a document's claims from every run EXCEPT the given one.
+
+        The worker calls this after a run finished writing successfully; the
+        reprocess flow assigns the new run id before the worker starts, so
+        "everything that isn't the current run" is exactly the superseded
+        claims (including runs whose id was lost to an interim failure).
+        """
+        result = await self.db.execute(
+            delete(self.model)
+            .where(self.model.document_id == document_id)
+            .where(self.model.ingest_run_id != ingest_run_id),
+        )
+        await self.db.commit()
+        return result.rowcount or 0
