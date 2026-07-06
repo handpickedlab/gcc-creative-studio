@@ -1,0 +1,81 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Configuration for the research library ingest pipeline and claim search.
+
+Mirrors ``src.deep_research.agent.config``'s per-role env-var pattern
+(``DR_*`` there, ``RL_*`` here) so models, concurrency and thresholds can be
+tuned without touching code. The extraction model defaults to the app-wide
+``GEMINI_MODEL_ID`` (see ``src.config.config_service``).
+"""
+
+import os
+
+from src.config.config_service import config_service
+
+# Model used for per-page multimodal claim extraction. Defaults to the
+# app-wide Gemini model (chart-heavy corpus favors the more accurate tier).
+EXTRACT_MODEL = os.getenv("RL_EXTRACT_MODEL", config_service.GEMINI_MODEL_ID)
+
+# Embedding model + output dimensionality for claim vectors. gemini-embedding-001
+# explicitly supports the corpus's EN/NL/DE mix; text-embedding-005 is
+# English-only and is not used here.
+EMBED_MODEL = os.getenv("RL_EMBED_MODEL", "gemini-embedding-001")
+EMBED_DIMENSIONS = int(os.getenv("RL_EMBED_DIMENSIONS", "768"))
+
+# Target long-edge resolution (pixels) for rendered page images and their
+# thumbnails.
+RENDER_LONG_EDGE = int(os.getenv("RL_RENDER_LONG_EDGE", "1800"))
+THUMB_LONG_EDGE = int(os.getenv("RL_THUMB_LONG_EDGE", "400"))
+
+# Hard cap on pages processed per document (protects against monster decks
+# such as the 700-page Euromonitor Passport export).
+MAX_PAGES = int(os.getenv("RL_MAX_PAGES", "250"))
+
+# Size of the dedicated ingest ThreadPoolExecutor (kept separate from the
+# shared app.state.executor so a bulk ingest run can't starve other jobs).
+INGEST_WORKERS = int(os.getenv("RL_INGEST_WORKERS", "2"))
+
+# Bounded concurrency for per-page extraction calls within a single document.
+EXTRACT_CONCURRENCY = int(os.getenv("RL_EXTRACT_CONCURRENCY", "4"))
+
+# Maximum accepted upload size, in bytes. Defaults to 300 MiB.
+MAX_UPLOAD_BYTES = int(os.getenv("RL_MAX_UPLOAD_BYTES", str(300 * 1024 * 1024)))
+
+
+def _parse_tier_weights(raw: str) -> dict[str, float]:
+    """Parses a ``key=value,key=value`` string into a tier -> weight map."""
+    weights: dict[str, float] = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        key, _, value = pair.partition("=")
+        key = key.strip()
+        if not key or not value.strip():
+            continue
+        weights[key] = float(value.strip())
+    return weights
+
+
+# Score multiplier applied to a claim's cosine similarity based on its
+# document's priority tier, so primary sources outrank background ones at
+# equal semantic relevance. Overridable as "primary=1.0,supporting=0.85,
+# background=0.7".
+TIER_WEIGHTS = _parse_tier_weights(
+    os.getenv(
+        "RL_TIER_WEIGHTS",
+        "primary=1.0,supporting=0.85,background=0.7",
+    ),
+)

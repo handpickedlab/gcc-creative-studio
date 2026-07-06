@@ -48,6 +48,10 @@ from src.media_templates.media_templates_controller import (
     router as media_template_router,
 )
 from src.multimodal.gemini_controller import router as gemini_router
+from src.research_library import config as research_library_config
+from src.research_library.research_library_controller import (
+    router as research_library_router,
+)
 from src.source_assets.source_asset_controller import (
     router as source_asset_router,
 )
@@ -143,12 +147,22 @@ async def lifespan(app: FastAPI):
     # Create the pool and attach it to the app's state
     app.state.executor = ThreadPoolExecutor(max_workers=4)
 
+    logger.info("Creating research library ingest ThreadPoolExecutor...")
+    # Dedicated pool so a bulk research-library ingest run can't starve
+    # other background jobs (video, brand guidelines, ...) on the shared one.
+    app.state.research_ingest_executor = ThreadPoolExecutor(
+        max_workers=research_library_config.INGEST_WORKERS,
+    )
+
     yield
 
     logger.info("Application shutdown terminating")
 
     logger.info("Closing ThreadPoolExecutor...")
     app.state.executor.shutdown(wait=True)
+
+    logger.info("Closing research library ingest ThreadPoolExecutor...")
+    app.state.research_ingest_executor.shutdown(wait=True)
     # Your shutdown logic here, e.g., closing database connections
 
 
@@ -213,3 +227,4 @@ app.include_router(briefings_router)
 app.include_router(feedback_router)
 app.include_router(public_feedback_router)
 app.include_router(data_query_router)
+app.include_router(research_library_router)

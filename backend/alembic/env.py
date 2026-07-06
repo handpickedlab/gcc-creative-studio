@@ -24,6 +24,12 @@ from src.database import Base, get_conn_string
 from src.deep_research.schema.deep_research_model import (
     DeepResearchReport,
 )  # Import to ensure registered with Base.metadata
+from src.research_library.schema.research_document_model import (
+    ResearchClaim,
+    ResearchDocument,
+    ResearchDocumentPage,
+    TagAlias,
+)  # Import to ensure registered with Base.metadata
 from src.tags.schema.tags_model import (
     Tag,
 )  # Import to ensure registered with Base.metadata
