@@ -40,10 +40,21 @@ export interface SqlResult {
   error?: string;
 }
 
+/** A citation behind a research-library fact in the answer. */
+export interface ClaimSource {
+  claim_id: number;
+  document_id: number;
+  document: string;
+  page: number;
+  statement?: string;
+  period?: string | null;
+  source_citation?: string | null;
+}
+
 /** One event from the streaming agent. */
 export interface AgentEvent {
-  t: 'tool' | 'tool_result' | 'text' | 'error' | 'done';
-  v?: string;
+  t: 'tool' | 'tool_result' | 'text' | 'sources' | 'error' | 'done';
+  v?: string | ClaimSource[];
   name?: string;
   input?: Record<string, unknown>;
   summary?: string;
@@ -75,10 +86,18 @@ export class DataQueryService {
    * manual token handling needed. Parses the server-sent-events frames as they
    * accumulate in `partialText`.
    */
-  ask(question: string, allowedTables: string[] | null): Observable<AgentEvent> {
+  ask(
+    question: string,
+    allowedTables: string[] | null,
+    allowedDocuments: number[] | null = null,
+  ): Observable<AgentEvent> {
     const req = this.http.post(
       `${this.baseUrl}/ask`,
-      {question, allowed_tables: allowedTables},
+      {
+        question,
+        allowed_tables: allowedTables,
+        allowed_documents: allowedDocuments,
+      },
       {observe: 'events', responseType: 'text', reportProgress: true},
     );
     return new Observable<AgentEvent>(sub => {

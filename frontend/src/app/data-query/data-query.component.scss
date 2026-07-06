@@ -95,8 +95,17 @@ textarea:focus { outline: none; border-color: var(--accent); }
 /* live transcript */
 .dq-stream .s-text {
   background: var(--surface); border: 1px solid var(--border-lt); border-radius: var(--r);
-  padding: 12px 14px; white-space: pre-wrap; margin: 10px 0; font-size: 13px; line-height: 1.6;
+  padding: 12px 14px; margin: 10px 0; font-size: 13px; line-height: 1.6;
 }
+.dq-stream .s-text markdown p:first-child { margin-top: 0; }
+.dq-stream .s-text markdown p:last-child { margin-bottom: 0; }
+
+/* citations under the answer */
+.dq-sources { margin-top: 14px; }
+.dq-sources .src-chip {
+  display: inline-flex; align-items: center; gap: 5px; margin: 0 7px 7px 0;
+}
+.dq-sources .src-chip mat-icon { font-size: 13px; width: 13px; height: 13px; }
 .dq-stream .s-tool { font-size: 13px; margin: 11px 0; }
 .dq-stream .s-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .dq-stream .s-tool b { color: var(--accent-h); font-weight: 600; }

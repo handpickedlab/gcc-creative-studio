@@ -93,6 +93,8 @@ import {HeaderComponent} from './header/header.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {DataQueryComponent} from './data-query/data-query.component';
+import {LibraryPanelComponent} from './data-query/library-panel/library-panel.component';
+import {SlideViewerComponent} from './data-query/slide-viewer/slide-viewer.component';
 import {TranslationsComponent} from './translations/translations.component';
 import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
 import {VideoComponent} from './video/video.component';
@@ -146,6 +148,8 @@ import {UpscaleComponent} from './upscale/upscale.component';
     BatchExecutionModalComponent,
     UpscaleComponent,
     DataQueryComponent,
+    LibraryPanelComponent,
+    SlideViewerComponent,
     TranslationsComponent,
     TranslatorFeedbackComponent,
   ],

@@ -7,8 +7,10 @@
     <main class="dq-main">
       <h1 class="dq-title">Ask your data</h1>
       <p class="dq-sub">
-        Upload sheets and ask questions in plain English — the agent explores the
-        tables and writes real SQL (Gemini). Exact numbers, no guesswork.
+        Upload sheets and research documents (slide decks, trend reports) and
+        ask questions in plain language — the agent writes real SQL for exact
+        numbers and searches the report library for facts, citing the original
+        slide behind every claim.
       </p>
 
       <div class="dq-card">
@@ -32,7 +34,9 @@
 
       <div class="dq-stream">
         <ng-container *ngFor="let s of steps">
-          <div *ngIf="s.kind === 'text'" class="s-text">{{ s.text }}</div>
+          <div *ngIf="s.kind === 'text'" class="s-text">
+            <markdown [data]="s.text"></markdown>
+          </div>
 
           <div *ngIf="s.kind === 'tool'" class="s-tool">
             <span class="s-head">
@@ -62,11 +66,24 @@
             </div>
           </div>
         </ng-container>
+
+        <div class="dq-sources" *ngIf="answerSources.length">
+          <div class="dq-label">Sources</div>
+          <span
+            class="dq-chip src-chip"
+            *ngFor="let src of answerSources"
+            (click)="openSource(src)"
+            [title]="src.statement || ''"
+          >
+            <mat-icon>image</mat-icon>
+            {{ src.document }} · p. {{ src.page }}
+          </span>
+        </div>
       </div>
     </main>
 
     <aside class="dq-card dq-side">
-      <div class="dq-label">Sources</div>
+      <div class="dq-label">Sheets</div>
       <button class="dq-btn ghost" (click)="fileInput.click()" [disabled]="uploading">
         <mat-icon>upload_file</mat-icon> Load sheet
       </button>
@@ -90,6 +107,15 @@
         {{ s.table }} <span class="dq-muted">· {{ s.n_rows }}</span>
       </div>
       <div class="dq-muted dq-hint">Click a source to exclude it from the query.</div>
+
+      <app-library-panel
+        (allowedDocumentsChange)="allowedDocuments = $event"
+      ></app-library-panel>
     </aside>
   </div>
 </div>
+
+<app-slide-viewer
+  [source]="viewerSource"
+  (closed)="viewerSource = null"
+></app-slide-viewer>

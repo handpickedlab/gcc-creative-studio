@@ -1,0 +1,32 @@
+<!--
+ Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ Slide viewer: the original page behind a cited claim.
+-->
+<div class="sv-backdrop" *ngIf="source" (click)="close()">
+  <div class="sv-panel" (click)="$event.stopPropagation()">
+    <div class="sv-head">
+      <span class="sv-title"
+        >{{ source.document }} · p. {{ source.page }}</span
+      >
+      <mat-icon class="sv-close" (click)="close()">close</mat-icon>
+    </div>
+
+    <div class="sv-body">
+      <div class="sv-loading" *ngIf="loading">loading slide…</div>
+      <img *ngIf="imageUrl" [src]="imageUrl" alt="cited slide" />
+      <div class="sv-fallback" *ngIf="failed">
+        The slide image could not be loaded.
+        <div class="sv-cite" *ngIf="source.source_citation">
+          {{ source.source_citation }}
+        </div>
+      </div>
+    </div>
+
+    <div class="sv-statement" *ngIf="source.statement">
+      “{{ source.statement }}”
+      <span class="sv-cite" *ngIf="source.source_citation">
+        — {{ source.source_citation }}</span
+      >
+    </div>
+  </div>
+</div>

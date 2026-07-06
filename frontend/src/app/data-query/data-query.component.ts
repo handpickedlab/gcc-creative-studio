@@ -18,6 +18,7 @@ import {Component, OnInit} from '@angular/core';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {
   AgentEvent,
+  ClaimSource,
   DataQueryService,
   SourceTable,
   SqlResult,
@@ -50,6 +51,12 @@ export class DataQueryComponent implements OnInit {
   steps: Step[] = [];
   private curText: Step | null = null;
   private curTool: Step | null = null;
+
+  /** Citations behind the current answer + the slide open in the viewer. */
+  answerSources: ClaimSource[] = [];
+  viewerSource: ClaimSource | null = null;
+  /** Document whitelist emitted by the library panel (null = all). */
+  allowedDocuments: number[] | null = null;
 
   readonly examples = [
     'How many rows does each table have?',
@@ -117,12 +124,14 @@ export class DataQueryComponent implements OnInit {
     this.steps = [];
     this.curText = null;
     this.curTool = null;
+    this.answerSources = [];
+    this.viewerSource = null;
 
     const allowed = this.off.size
       ? this.sources.map(s => s.table).filter(t => !this.off.has(t))
       : null;
 
-    this.service.ask(q, allowed).subscribe({
+    this.service.ask(q, allowed, this.allowedDocuments).subscribe({
       next: ev => this.handle(ev),
       error: err => {
         this.busy = false;
@@ -157,6 +166,9 @@ export class DataQueryComponent implements OnInit {
         }
         this.curText.text = (this.curText.text || '') + (ev.v || '');
         break;
+      case 'sources':
+        this.answerSources = (ev.v as ClaimSource[]) || [];
+        break;
       case 'error':
         this.steps.push({kind: 'text', text: '⚠️ ' + (ev.message || 'error')});
         break;
@@ -164,6 +176,10 @@ export class DataQueryComponent implements OnInit {
         this.busy = false;
         break;
     }
+  }
+
+  openSource(source: ClaimSource): void {
+    this.viewerSource = source;
   }
 
   // ── template helpers ───────────────────────────────────────────
