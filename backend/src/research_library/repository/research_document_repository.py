@@ -154,3 +154,17 @@ class ResearchDocumentRepository(
         )
         pages = result.scalars().all()
         return [ResearchDocumentPageModel.model_validate(p) for p in pages]
+
+    async def get_page(
+        self, document_id: int, page_no: int
+    ) -> ResearchDocumentPageModel | None:
+        """Returns one page row of a document, if it exists."""
+        result = await self.db.execute(
+            select(ResearchDocumentPage)
+            .where(ResearchDocumentPage.document_id == document_id)
+            .where(ResearchDocumentPage.page_no == page_no),
+        )
+        page = result.scalar_one_or_none()
+        if not page:
+            return None
+        return ResearchDocumentPageModel.model_validate(page)

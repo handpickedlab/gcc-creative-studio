@@ -14,7 +14,7 @@
 
 """API routes for the research document library."""
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from src.auth.auth_guard import RoleChecker
 from src.common.dto.pagination_response_dto import PaginationResponseDto
@@ -130,3 +130,24 @@ async def reprocess_document(
 ):
     executor = request.app.state.research_ingest_executor
     return await service.reprocess_document(document_id, executor)
+
+
+@router.get(
+    "/documents/{document_id}/pages/{page_no}/image",
+    summary="The rendered page image (or thumbnail) behind a citation",
+)
+async def get_page_image(
+    document_id: int,
+    page_no: int,
+    thumb: bool = False,
+    service: ResearchLibraryService = Depends(),
+):
+    """Streams the rendered page image so the frontend can show the original
+    slide next to a cited claim.
+    """
+    image_bytes = await service.get_page_image(document_id, page_no, thumb)
+    return Response(
+        content=image_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )

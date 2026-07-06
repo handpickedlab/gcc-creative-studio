@@ -24,3 +24,8 @@ class AskRequestDto(BaseModel):
         description="Optional whitelist of table names the agent may use. "
         "None = all uploaded tables.",
     )
+    allowed_documents: list[int] | None = Field(
+        default=None,
+        description="Optional whitelist of research-library document ids the "
+        "agent may search. None = the whole library.",
+    )

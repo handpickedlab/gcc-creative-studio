@@ -74,7 +74,11 @@ def ask(body: AskRequestDto, service: DataQueryService = Depends()):
 
     def gen():
         try:
-            for event in service.stream(body.question, body.allowed_tables):
+            for event in service.stream(
+                body.question,
+                body.allowed_tables,
+                body.allowed_documents,
+            ):
                 yield "data: " + json.dumps(event, default=str) + "\n\n"
         except Exception as e:  # surface any failure to the client
             yield "data: " + json.dumps(

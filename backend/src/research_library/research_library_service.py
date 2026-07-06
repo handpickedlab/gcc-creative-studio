@@ -269,6 +269,40 @@ class ResearchLibraryService:
             )
         return updated
 
+    async def get_page_image(
+        self,
+        document_id: int,
+        page_no: int,
+        thumb: bool = False,
+    ) -> bytes:
+        """Returns the rendered page image (or thumbnail) bytes for a
+        citation viewer.
+        """
+        document = await self.repo.find_active_by_id(document_id)
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Research document not found.",
+            )
+
+        page = await self.repo.get_page(document_id, page_no)
+        gcs_uri = (page.thumb_gcs_uri if thumb else page.image_gcs_uri) if page else None
+        if not gcs_uri:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Page image not found.",
+            )
+
+        image_bytes = await asyncio.to_thread(
+            self.gcs_service.download_bytes_from_gcs, gcs_uri
+        )
+        if not image_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Page image could not be read from storage.",
+            )
+        return image_bytes
+
     def _delete_document_assets_best_effort(self, gcs_uri: str) -> None:
         """Deletes every blob under a document's GCS prefix.
 
