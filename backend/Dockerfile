@@ -42,6 +42,19 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Update package lists and install ffmpeg
 RUN apt-get update && apt-get install -y ffmpeg
 
+# Headless LibreOffice converts DOCX/PPT/PPTX/ODP research-library uploads to
+# PDF. The crosextra fonts are metric-compatible Calibri/Cambria substitutes:
+# without them LibreOffice silently swaps fonts and slide layouts reflow.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-core \
+    libreoffice-writer \
+    libreoffice-impress \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
+    fonts-liberation \
+    fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
