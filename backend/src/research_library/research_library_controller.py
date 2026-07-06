@@ -18,17 +18,25 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from src.auth.auth_guard import RoleChecker
 from src.common.dto.pagination_response_dto import PaginationResponseDto
+from src.multimodal.gemini_service import GeminiService
+from src.research_library import canonicalization_service, config
 from src.research_library.dto.research_library_dto import (
+    BootstrapCanonicalizationDto,
     FinalizeUploadDto,
     GenerateUploadUrlDto,
     GenerateUploadUrlResponseDto,
     UpdateDocumentDto,
+    UpsertTagAliasDto,
+)
+from src.research_library.repository.tag_alias_repository import (
+    TagAliasRepository,
 )
 from src.research_library.research_library_service import (
     ResearchLibraryService,
 )
 from src.research_library.schema.research_document_model import (
     ResearchDocumentModel,
+    TagAliasModel,
 )
 from src.users.user_model import UserRoleEnum
 
@@ -151,3 +159,55 @@ async def get_page_image(
         media_type="image/png",
         headers={"Cache-Control": "private, max-age=3600"},
     )
+
+
+@router.post(
+    "/canonicalize/bootstrap",
+    summary="Rebuild the tag/metric canonicalization from the corpus",
+)
+async def canonicalize_bootstrap(
+    request_dto: BootstrapCanonicalizationDto,
+    tag_alias_repo: TagAliasRepository = Depends(),
+    gemini_service: GeminiService = Depends(),
+):
+    """Clusters all raw tags/metrics, names the clusters, rewrites the alias
+    mapping and re-resolves every claim's canonical tags. Returns a
+    human-reviewable summary of the clusters. Safe to re-run at any time.
+    """
+    return await canonicalization_service.bootstrap(
+        gemini_service.client,
+        config.EXTRACT_MODEL,
+        tag_alias_repo,
+        threshold=request_dto.threshold
+        or canonicalization_service.DEFAULT_CLUSTER_THRESHOLD,
+    )
+
+
+@router.get(
+    "/tags",
+    response_model=list[TagAliasModel],
+    summary="List the raw -> canonical tag/metric aliases",
+)
+async def list_tag_aliases(
+    tag_alias_repo: TagAliasRepository = Depends(),
+):
+    return await tag_alias_repo.list_aliases()
+
+
+@router.patch(
+    "/tags",
+    response_model=TagAliasModel,
+    summary="Manually correct one tag/metric alias",
+)
+async def upsert_tag_alias(
+    request_dto: UpsertTagAliasDto,
+    tag_alias_repo: TagAliasRepository = Depends(),
+):
+    alias = await tag_alias_repo.upsert_alias(
+        request_dto.raw.strip().lower(),
+        request_dto.canonical.strip().lower(),
+        request_dto.kind.value,
+    )
+    if request_dto.resolve:
+        await canonicalization_service.resolve_all_claims(tag_alias_repo)
+    return alias

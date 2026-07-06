@@ -48,7 +48,7 @@ from google.cloud.logging.handlers import CloudLoggingHandler
 
 from src.common.storage_service import GcsService
 from src.multimodal.schema.gemini_model_setup import GeminiModelSetup
-from src.research_library import config
+from src.research_library import canonicalization_service, config
 from src.research_library.ingest import (
     conversion_service,
     embedding_service,
@@ -60,6 +60,9 @@ from src.research_library.repository.research_claim_repository import (
 )
 from src.research_library.repository.research_document_repository import (
     ResearchDocumentRepository,
+)
+from src.research_library.repository.tag_alias_repository import (
+    TagAliasRepository,
 )
 from src.research_library.schema.research_document_model import (
     DocKindEnum,
@@ -132,6 +135,7 @@ async def _run_ingest_pipeline(
         async with db_factory() as db:
             doc_repo = ResearchDocumentRepository(db)
             claim_repo = ResearchClaimRepository(db)
+            tag_alias_repo = TagAliasRepository(db)
 
             document = await doc_repo.find_active_by_id(document_id)
             if not document:
@@ -145,6 +149,14 @@ async def _run_ingest_pipeline(
             gcs_service = GcsService()
             client = GeminiModelSetup.init()
 
+            # Canonical vocabulary steers the extraction prompt toward
+            # existing tags; the alias map resolves canonical_tags at write
+            # time (unseen tags fall back to themselves until the next
+            # canonicalization bootstrap re-resolves everything).
+            aliases = await tag_alias_repo.list_aliases()
+            alias_map = {a.raw: a.canonical for a in aliases}
+            vocabulary = canonicalization_service.load_vocabulary(aliases)
+
             try:
                 summary = await _ingest_document(
                     document,
@@ -153,6 +165,8 @@ async def _run_ingest_pipeline(
                     gcs_service,
                     client,
                     worker_logger,
+                    vocabulary=vocabulary,
+                    alias_map=alias_map,
                 )
             except Exception as e:
                 worker_logger.error(
@@ -250,6 +264,8 @@ async def _ingest_document(
     gcs_service: GcsService,
     client,
     worker_logger: logging.Logger,
+    vocabulary: list[str] | None = None,
+    alias_map: dict[str, str] | None = None,
 ) -> dict:
     """Runs the convert -> render -> extract -> embed -> persist pipeline."""
     extension = os.path.splitext(document.filename)[1].lower()
@@ -339,6 +355,7 @@ async def _ingest_document(
                         gcs_service,
                         client,
                         worker_logger,
+                        vocabulary=vocabulary,
                     )
                     for page in batch
                 ),
@@ -346,7 +363,7 @@ async def _ingest_document(
 
             for result in results:
                 claim_count += await _persist_page(
-                    result, document, doc_repo, claim_repo
+                    result, document, doc_repo, claim_repo, alias_map
                 )
                 if result.error:
                     failed_pages.append(result.page_no)
@@ -375,6 +392,7 @@ async def _process_page_network(
     gcs_service: GcsService,
     client,
     worker_logger: logging.Logger,
+    vocabulary: list[str] | None = None,
 ) -> _PageResult:
     """The network-only half of one page: upload images, extract, embed.
 
@@ -403,6 +421,7 @@ async def _process_page_network(
             client,
             config.EXTRACT_MODEL,
             result.image_gcs_uri,
+            vocabulary,
         )
         statements = [c.statement for c in result.extraction.claims]
         if statements:
@@ -428,6 +447,7 @@ async def _persist_page(
     document,
     doc_repo: ResearchDocumentRepository,
     claim_repo: ResearchClaimRepository,
+    alias_map: dict[str, str] | None = None,
 ) -> int:
     """The sequential database half of one page. Returns claims written."""
     await doc_repo.upsert_page(
@@ -460,7 +480,9 @@ async def _persist_page(
             source_citation=claim.source_citation,
             sample=claim.sample,
             raw_tags=claim.tags,
-            canonical_tags=[],
+            canonical_tags=canonicalization_service.apply_aliases(
+                claim.tags, claim.metric, alias_map or {}
+            ),
             embedding=embedding,
             ingest_run_id=document.ingest_run_id,
         )

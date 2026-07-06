@@ -19,6 +19,7 @@ from pydantic import Field
 from src.common.base_dto import BaseDto
 from src.research_library.schema.research_document_model import (
     PriorityTierEnum,
+    TagAliasKindEnum,
 )
 
 
@@ -64,4 +65,29 @@ class UpdateDocumentDto(BaseDto):
 
     priority_tier: PriorityTierEnum = Field(
         description="The new ranking tier for this document's claims.",
+    )
+
+
+class BootstrapCanonicalizationDto(BaseDto):
+    """Request body for the tag canonicalization bootstrap."""
+
+    threshold: float | None = Field(
+        default=None,
+        gt=0,
+        le=1,
+        description="Cosine similarity above which two tags merge. "
+        "Omit for the default.",
+    )
+
+
+class UpsertTagAliasDto(BaseDto):
+    """Manual correction of one raw -> canonical alias."""
+
+    raw: str = Field(description="The raw tag or metric string.")
+    canonical: str = Field(description="Its canonical (English) form.")
+    kind: TagAliasKindEnum = Field(default=TagAliasKindEnum.TAG)
+    resolve: bool = Field(
+        default=True,
+        description="Whether to re-resolve all claims' canonical tags "
+        "immediately after this change.",
     )

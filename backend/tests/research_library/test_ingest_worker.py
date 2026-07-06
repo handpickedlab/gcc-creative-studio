@@ -68,6 +68,12 @@ def _extraction(statement: str) -> PageExtraction:
     )
 
 
+def _tag_alias_repo() -> AsyncMock:
+    repo = AsyncMock()
+    repo.list_aliases.return_value = []
+    return repo
+
+
 def _worker_database(db) -> MagicMock:
     session_cm = MagicMock()
     session_cm.__aenter__ = AsyncMock(return_value=db)
@@ -118,6 +124,10 @@ def _run(doc_repo, claim_repo, gcs, pages, extractions, page_count=None):
             "src.research_library.ingest.ingest_worker."
             "ResearchClaimRepository",
             return_value=claim_repo,
+        ),
+        patch(
+            "src.research_library.ingest.ingest_worker.TagAliasRepository",
+            return_value=_tag_alias_repo(),
         ),
         patch(
             "src.research_library.ingest.ingest_worker.GcsService",
