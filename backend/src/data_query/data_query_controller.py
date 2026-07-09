@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from src.auth.auth_guard import RoleChecker
 from src.data_query.data_query_service import DataQueryService
 from src.data_query.dto.data_query_dto import AskRequestDto
+from src.data_query.schema.data_query_sheet_model import DataQuerySheetModel
 from src.users.user_model import UserRoleEnum
 
 router = APIRouter(
@@ -57,20 +58,46 @@ async def upload_sheet(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail="File too large (max 25 MB).",
             )
-    return {"loaded": service.ingest(file.filename or "upload", data)}
+    return {"loaded": await service.ingest(file.filename or "upload", data)}
 
 
-@router.get("/sources", summary="List the uploaded tables")
+@router.get("/sources", summary="List the uploaded tables (query sidebar)")
 async def list_sources(service: DataQueryService = Depends()):
-    return {"tables": service.list_sources()}
+    return {"tables": await service.list_sources()}
+
+
+@router.get(
+    "/sheets",
+    response_model=list[DataQuerySheetModel],
+    summary="List uploaded sheets with metadata (manage page)",
+)
+async def list_sheets(service: DataQueryService = Depends()):
+    return await service.list_sheets()
+
+
+@router.delete(
+    "/sheets/{sheet_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an uploaded sheet (catalog + warehouse + raw file)",
+)
+async def delete_sheet(sheet_id: int, service: DataQueryService = Depends()):
+    if not await service.delete_sheet(sheet_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Sheet not found."
+        )
 
 
 @router.post(
     "/ask",
     summary="Ask a question over the data; streams the agent's steps (SSE)",
 )
-def ask(body: AskRequestDto, service: DataQueryService = Depends()):
-    """Server-sent-events stream of the agent's work + final answer."""
+async def ask(body: AskRequestDto, service: DataQueryService = Depends()):
+    """Server-sent-events stream of the agent's work + final answer.
+
+    Rehydrate the DuckDB warehouse from the durable catalog first (async),
+    then stream the agent's synchronous generator.
+    """
+    await service.ensure_loaded()
 
     def gen():
         try:

@@ -32,6 +32,18 @@ export interface SourceTable {
   n_rows: number | null;
 }
 
+/** A durably-cataloged uploaded sheet (manage page). */
+export interface SheetInfo {
+  id: number;
+  tableName: string;
+  sourceFile: string;
+  sheet: string | null;
+  nRows: number | null;
+  nCols: number | null;
+  columns: string[];
+  createdAt?: string;
+}
+
 export interface SqlResult {
   columns?: string[];
   rows?: Record<string, unknown>[];
@@ -75,9 +87,19 @@ export class DataQueryService {
     return this.http.post<{loaded: LoadedTable[]}>(`${this.baseUrl}/upload`, form);
   }
 
-  /** List the uploaded tables. */
+  /** List the uploaded tables (lightweight, for the query sidebar). */
   sources(): Observable<{tables: SourceTable[]}> {
     return this.http.get<{tables: SourceTable[]}>(`${this.baseUrl}/sources`);
+  }
+
+  /** List uploaded sheets with metadata (manage page). */
+  sheets(): Observable<SheetInfo[]> {
+    return this.http.get<SheetInfo[]>(`${this.baseUrl}/sheets`);
+  }
+
+  /** Delete an uploaded sheet (catalog row + warehouse table + raw file). */
+  deleteSheet(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/sheets/${id}`);
   }
 
   /**

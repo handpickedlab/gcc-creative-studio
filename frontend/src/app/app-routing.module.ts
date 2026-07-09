@@ -20,6 +20,7 @@ import {AdminAuthGuard} from './admin/admin-auth.guard';
 import {AudioComponent} from './audio/audio.component';
 import {AuthGuardService} from './common/services/auth.guard.service';
 import {DataQueryComponent} from './data-query/data-query.component';
+import {DataSourcesComponent} from './data-query/data-sources/data-sources.component';
 import {DeepResearchComponent} from './deep-research/deep-research.component';
 import {FunTemplatesComponent} from './fun-templates/fun-templates.component';
 import {MediaDetailComponent} from './gallery/media-detail/media-detail.component';
@@ -58,6 +59,11 @@ const routes: Routes = [
   {
     path: 'data-query',
     component: DataQueryComponent,
+    canActivate: [AuthGuardService],
+  },
+  {
+    path: 'data-sources',
+    component: DataSourcesComponent,
     canActivate: [AuthGuardService],
   },
   {

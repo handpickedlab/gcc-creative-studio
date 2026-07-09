@@ -25,6 +25,7 @@ app) still imports before `uv sync` installs the dependency.
 import io
 import os
 import re
+import threading
 
 import pandas as pd
 
@@ -32,6 +33,11 @@ DB_PATH = os.environ.get(
     "DATA_QUERY_DB_PATH",
     os.path.join(os.path.dirname(__file__), "..", "..", "data_query.duckdb"),
 )
+
+# DuckDB allows a single writer per file. Ingest and drop take a write
+# connection, so serialize them across threads on one instance to avoid
+# "database is locked" errors when concurrent requests rehydrate.
+_write_lock = threading.Lock()
 
 # read-only guard for run_sql: one statement, SELECT/WITH only, no dangerous verbs
 _FORBIDDEN = re.compile(
@@ -142,26 +148,58 @@ def ingest_bytes(filename: str, data: bytes) -> list[dict]:
 
     multi = len(frames) > 1
     out = []
-    con = _connect(read_only=False)
+    with _write_lock:
+        con = _connect(read_only=False)
+        try:
+            _ensure_catalog(con)
+            for sheet, df in frames.items():
+                tbl = (f"up_{stem}" + (f"_{_slug(sheet)}" if multi else ""))[:60]
+                con.register("df_in", df)
+                con.execute(f'CREATE OR REPLACE TABLE "{tbl}" AS SELECT * FROM df_in')
+                con.unregister("df_in")
+                n = con.execute(f'SELECT count(*) FROM "{tbl}"').fetchone()[0]
+                cols = list(df.columns)
+                con.execute("DELETE FROM uploads_catalog WHERE table_name = ?", [tbl])
+                con.execute(
+                    "INSERT INTO uploads_catalog VALUES (?,?,?,?,?,?)",
+                    [tbl, os.path.basename(filename), sheet, n, len(cols), ",".join(cols)],
+                )
+                out.append({"table": tbl, "sheet": sheet, "n_rows": n, "columns": cols,
+                            "source_file": os.path.basename(filename)})
+        finally:
+            con.close()
+    return out
+
+
+def loaded_table_names() -> set[str]:
+    """Names of user tables currently present in this instance's DuckDB."""
+    if not os.path.exists(DB_PATH):
+        return set()
+    con = _connect(read_only=True)
     try:
-        _ensure_catalog(con)
-        for sheet, df in frames.items():
-            tbl = (f"up_{stem}" + (f"_{_slug(sheet)}" if multi else ""))[:60]
-            con.register("df_in", df)
-            con.execute(f'CREATE OR REPLACE TABLE "{tbl}" AS SELECT * FROM df_in')
-            con.unregister("df_in")
-            n = con.execute(f'SELECT count(*) FROM "{tbl}"').fetchone()[0]
-            cols = list(df.columns)
-            con.execute("DELETE FROM uploads_catalog WHERE table_name = ?", [tbl])
-            con.execute(
-                "INSERT INTO uploads_catalog VALUES (?,?,?,?,?,?)",
-                [tbl, os.path.basename(filename), sheet, n, len(cols), ",".join(cols)],
-            )
-            out.append({"table": tbl, "sheet": sheet, "n_rows": n, "columns": cols,
-                        "source_file": os.path.basename(filename)})
+        return {
+            r[0]
+            for r in con.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema='main'"
+            ).fetchall()
+            if r[0] != "uploads_catalog"
+        }
     finally:
         con.close()
-    return out
+
+
+def drop_table(name: str) -> None:
+    """Drop a user table from the local DuckDB (used on delete)."""
+    if not os.path.exists(DB_PATH):
+        return
+    with _write_lock:
+        con = _connect(read_only=False)
+        try:
+            con.execute(f'DROP TABLE IF EXISTS "{name}"')
+            con.execute("DELETE FROM uploads_catalog WHERE table_name = ?", [name])
+        finally:
+            con.close()
 
 
 # --- introspection + query (read-only) ------------------------------------

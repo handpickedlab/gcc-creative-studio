@@ -21,6 +21,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from src.database import Base, get_conn_string
+from src.data_query.schema.data_query_sheet_model import (
+    DataQuerySheet,
+)  # Import to ensure registered with Base.metadata
 from src.deep_research.schema.deep_research_model import (
     DeepResearchReport,
 )  # Import to ensure registered with Base.metadata

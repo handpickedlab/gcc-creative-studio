@@ -1,0 +1,61 @@
+<!--
+ Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ Data sources: manage the durably-stored uploaded spreadsheets.
+-->
+<div class="ds-wrap">
+  <div class="ds-head">
+    <div>
+      <h1 class="ds-title">Data sources</h1>
+      <p class="ds-sub">
+        Uploaded spreadsheets are stored persistently and queried on the
+        <a routerLink="/data-query">Ask your data</a> page. Manage them here.
+      </p>
+    </div>
+    <button class="dq-btn primary" (click)="fileInput.click()" [disabled]="uploadsPending > 0">
+      <mat-icon>upload_file</mat-icon>
+      Upload sheet
+    </button>
+    <input
+      #fileInput
+      type="file"
+      accept=".csv,.xlsx,.xlsm,.xls"
+      multiple
+      (change)="onFilesSelected($event)"
+      hidden
+    />
+  </div>
+
+  <div class="dq-muted ds-pending" *ngIf="uploadsPending > 0">
+    uploading… {{ uploadsPending }} left
+  </div>
+
+  <div class="dq-muted" *ngIf="loading">Loading…</div>
+  <div class="dq-muted ds-empty" *ngIf="!loading && !sheets.length">
+    No sheets uploaded yet. Upload a .csv or .xlsx to get started.
+  </div>
+
+  <table class="ds-table" *ngIf="!loading && sheets.length">
+    <thead>
+      <tr>
+        <th>Source file</th>
+        <th>Table</th>
+        <th class="num">Rows</th>
+        <th class="num">Cols</th>
+        <th>Columns</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let s of sheets">
+        <td class="ds-file">{{ s.sourceFile }}<span class="dq-muted" *ngIf="s.sheet"> · {{ s.sheet }}</span></td>
+        <td><code>{{ s.tableName }}</code></td>
+        <td class="num">{{ s.nRows ?? '—' }}</td>
+        <td class="num">{{ s.nCols ?? '—' }}</td>
+        <td class="dq-muted ds-cols">{{ columnsPreview(s) }}</td>
+        <td class="ds-actions">
+          <mat-icon (click)="delete(s)" title="delete sheet">delete</mat-icon>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

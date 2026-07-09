@@ -93,6 +93,7 @@ import {HeaderComponent} from './header/header.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {DataQueryComponent} from './data-query/data-query.component';
+import {DataSourcesComponent} from './data-query/data-sources/data-sources.component';
 import {LibraryPanelComponent} from './data-query/library-panel/library-panel.component';
 import {SlideViewerComponent} from './data-query/slide-viewer/slide-viewer.component';
 import {TranslationsComponent} from './translations/translations.component';
@@ -148,6 +149,7 @@ import {UpscaleComponent} from './upscale/upscale.component';
     BatchExecutionModalComponent,
     UpscaleComponent,
     DataQueryComponent,
+    DataSourcesComponent,
     LibraryPanelComponent,
     SlideViewerComponent,
     TranslationsComponent,
