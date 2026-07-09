@@ -27,6 +27,9 @@ from src.deep_research.schema.deep_research_model import (
 from src.tags.schema.tags_model import (
     Tag,
 )  # Import to ensure registered with Base.metadata
+from src.translations.schema.language_config_model import (
+    TranslationLanguageConfig,
+)  # Import to ensure registered with Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

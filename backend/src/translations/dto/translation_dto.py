@@ -39,10 +39,6 @@ class TranslateRequestDto(BaseModel):
         description="Languages to translate into, e.g. ['Dutch', 'French'].",
         min_length=1,
     )
-    tone: str | None = Field(
-        default=None,
-        description="Optional tone, e.g. 'formal' or 'informal'.",
-    )
 
 
 class TranslationResult(BaseModel):
