@@ -94,6 +94,8 @@ import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {DataQueryComponent} from './data-query/data-query.component';
 import {DataSourcesComponent} from './data-query/data-sources/data-sources.component';
+import {MarketResearchComponent} from './market-research/market-research.component';
+import {DataManagementComponent} from './market-research/data-management/data-management.component';
 import {LibraryPanelComponent} from './data-query/library-panel/library-panel.component';
 import {SlideViewerComponent} from './data-query/slide-viewer/slide-viewer.component';
 import {TranslationsComponent} from './translations/translations.component';
@@ -150,6 +152,8 @@ import {UpscaleComponent} from './upscale/upscale.component';
     UpscaleComponent,
     DataQueryComponent,
     DataSourcesComponent,
+    MarketResearchComponent,
+    DataManagementComponent,
     LibraryPanelComponent,
     SlideViewerComponent,
     TranslationsComponent,

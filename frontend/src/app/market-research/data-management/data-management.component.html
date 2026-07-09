@@ -1,0 +1,142 @@
+<!--
+ Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ Data management: research documents, spreadsheets, and the fact library.
+-->
+<div class="dm-wrap">
+  <h1 class="dm-title">Data management</h1>
+  <p class="dm-sub">
+    Upload and manage the sources behind "Ask your data": research documents
+    (slide decks, reports) and spreadsheets, and browse every extracted fact.
+  </p>
+
+  <div class="dm-seg">
+    <button [class.active]="view === 'documents'" (click)="setView('documents')">
+      Documents <span class="dm-count">{{ documents.length }}</span>
+    </button>
+    <button [class.active]="view === 'spreadsheets'" (click)="setView('spreadsheets')">
+      Spreadsheets <span class="dm-count">{{ sheets.length }}</span>
+    </button>
+    <button [class.active]="view === 'facts'" (click)="setView('facts')">
+      Facts <span class="dm-count">{{ factsTotal.toLocaleString() }}</span>
+    </button>
+  </div>
+
+  <!-- ── Documents ─────────────────────────────────────────── -->
+  <section *ngIf="view === 'documents'">
+    <div class="dm-actions-bar">
+      <span class="dm-muted">
+        PDF, DOCX, PPT/PPTX, ODP or image — converted, rendered and extracted
+        into facts automatically.
+      </span>
+      <button class="dm-btn primary" (click)="docInput.click()" [disabled]="docUploadsPending > 0">
+        <mat-icon>library_add</mat-icon> Upload documents
+      </button>
+      <input #docInput type="file" [accept]="docAccept" multiple hidden (change)="onDocsSelected($event)" />
+    </div>
+    <div class="dm-muted dm-pending" *ngIf="docUploadsPending > 0">uploading… {{ docUploadsPending }} left</div>
+
+    <div class="dm-muted" *ngIf="docsLoading">Loading…</div>
+    <div class="dm-muted dm-empty" *ngIf="!docsLoading && !documents.length">No documents yet.</div>
+
+    <table class="dm-table" *ngIf="documents.length">
+      <thead>
+        <tr><th>Document</th><th>Kind</th><th>Lang</th><th>Status</th><th>Tier</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let d of documents">
+          <td class="dm-name">{{ d.filename }}</td>
+          <td class="dm-muted">{{ d.docKind || '—' }}</td>
+          <td class="dm-muted">{{ d.language || '—' }}</td>
+          <td>
+            <span class="dm-status {{ d.status }}">{{ docStatusDetail(d) }}</span>
+          </td>
+          <td>
+            <select class="dm-tier" [value]="d.priorityTier"
+                    (change)="setTier(d, $any($event.target).value)"
+                    [disabled]="d.status === 'rejected'">
+              <option *ngFor="let t of tiers" [value]="t">{{ t }}</option>
+            </select>
+          </td>
+          <td class="dm-row-actions">
+            <mat-icon *ngIf="d.status !== 'processing' && d.status !== 'rejected'"
+                      (click)="reprocess(d)" title="re-process">refresh</mat-icon>
+            <mat-icon (click)="deleteDoc(d)" title="delete">delete</mat-icon>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Spreadsheets ──────────────────────────────────────── -->
+  <section *ngIf="view === 'spreadsheets'">
+    <div class="dm-actions-bar">
+      <span class="dm-muted">
+        CSV or XLSX — loaded into the query warehouse for exact numeric
+        answers. Stored persistently.
+      </span>
+      <button class="dm-btn primary" (click)="sheetInput.click()" [disabled]="sheetUploadsPending > 0">
+        <mat-icon>upload_file</mat-icon> Upload spreadsheets
+      </button>
+      <input #sheetInput type="file" [accept]="sheetAccept" multiple hidden (change)="onSheetsSelected($event)" />
+    </div>
+    <div class="dm-muted dm-pending" *ngIf="sheetUploadsPending > 0">uploading… {{ sheetUploadsPending }} left</div>
+
+    <div class="dm-muted" *ngIf="sheetsLoading">Loading…</div>
+    <div class="dm-muted dm-empty" *ngIf="!sheetsLoading && !sheets.length">No spreadsheets yet.</div>
+
+    <table class="dm-table" *ngIf="sheets.length">
+      <thead>
+        <tr><th>Source file</th><th>Table</th><th class="num">Rows</th><th class="num">Cols</th><th>Columns</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of sheets">
+          <td class="dm-name">{{ s.sourceFile }}<span class="dm-muted" *ngIf="s.sheet"> · {{ s.sheet }}</span></td>
+          <td><code>{{ s.tableName }}</code></td>
+          <td class="num">{{ s.nRows ?? '—' }}</td>
+          <td class="num">{{ s.nCols ?? '—' }}</td>
+          <td class="dm-muted dm-cols">{{ sheetColumns(s) }}</td>
+          <td class="dm-row-actions">
+            <mat-icon (click)="deleteSheet(s)" title="delete">delete</mat-icon>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Facts ─────────────────────────────────────────────── -->
+  <section *ngIf="view === 'facts'">
+    <div class="dm-actions-bar">
+      <input
+        class="dm-search"
+        type="text"
+        [(ngModel)]="factsQuery"
+        (ngModelChange)="onFactsQueryChange()"
+        placeholder="Search facts… (e.g. smartphone, iDEAL, sustainability)"
+      />
+      <span class="dm-muted dm-range">{{ factsRangeLabel }}</span>
+    </div>
+
+    <div class="dm-muted" *ngIf="factsLoading">Searching…</div>
+    <div class="dm-muted dm-empty" *ngIf="!factsLoading && !facts.length">No facts match.</div>
+
+    <table class="dm-table dm-facts" *ngIf="facts.length">
+      <thead>
+        <tr><th>Fact</th><th>Value</th><th>Period</th><th>Source</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let f of facts">
+          <td class="dm-fact">{{ f.statement }}</td>
+          <td class="dm-val">{{ f.value || '—' }}</td>
+          <td class="dm-muted">{{ f.period || '—' }}</td>
+          <td class="dm-muted dm-src">{{ f.filename }} · p.{{ f.page_no }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="dm-pager" *ngIf="facts.length">
+      <button class="dm-btn" (click)="prevFactsPage()" [disabled]="factsOffset === 0">Previous</button>
+      <span class="dm-muted">{{ factsRangeLabel }}</span>
+      <button class="dm-btn" (click)="nextFactsPage()" [disabled]="factsOffset + pageSize >= factsTotal">Next</button>
+    </div>
+  </section>
+</div>

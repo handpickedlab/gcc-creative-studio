@@ -21,6 +21,8 @@ import {AudioComponent} from './audio/audio.component';
 import {AuthGuardService} from './common/services/auth.guard.service';
 import {DataQueryComponent} from './data-query/data-query.component';
 import {DataSourcesComponent} from './data-query/data-sources/data-sources.component';
+import {MarketResearchComponent} from './market-research/market-research.component';
+import {DataManagementComponent} from './market-research/data-management/data-management.component';
 import {DeepResearchComponent} from './deep-research/deep-research.component';
 import {FunTemplatesComponent} from './fun-templates/fun-templates.component';
 import {MediaDetailComponent} from './gallery/media-detail/media-detail.component';
@@ -57,15 +59,18 @@ const routes: Routes = [
     canActivate: [AuthGuardService],
   },
   {
-    path: 'data-query',
-    component: DataQueryComponent,
+    path: 'market-research',
+    component: MarketResearchComponent,
     canActivate: [AuthGuardService],
+    children: [
+      {path: '', redirectTo: 'ask', pathMatch: 'full'},
+      {path: 'ask', component: DataQueryComponent},
+      {path: 'manage', component: DataManagementComponent},
+    ],
   },
-  {
-    path: 'data-sources',
-    component: DataSourcesComponent,
-    canActivate: [AuthGuardService],
-  },
+  // Backwards-compatible redirects for the old standalone routes.
+  {path: 'data-query', redirectTo: 'market-research/ask'},
+  {path: 'data-sources', redirectTo: 'market-research/manage'},
   {
     path: 'workbench',
     component: WorkbenchComponent,

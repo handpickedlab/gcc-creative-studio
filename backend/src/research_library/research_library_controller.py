@@ -184,6 +184,31 @@ async def canonicalize_bootstrap(
 
 
 @router.get(
+    "/claims",
+    summary="Browse/search the extracted fact library (keyword + filters)",
+)
+async def browse_claims(
+    q: str | None = None,
+    document_id: int | None = None,
+    tag: str | None = None,
+    period: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    service: ResearchLibraryService = Depends(),
+):
+    """Paginated keyword browse over all extracted claims, for the Data
+    Management fact viewer."""
+    return await service.browse_claims(
+        q=q,
+        document_id=document_id,
+        tag=tag,
+        period=period,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
     "/tags",
     response_model=list[TagAliasModel],
     summary="List the raw -> canonical tag/metric aliases",

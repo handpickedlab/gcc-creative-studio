@@ -1,0 +1,112 @@
+/* Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0. */
+/* Data management — HKM noir theme. */
+
+:host {
+  --bg-sub: #211d16;
+  --surface: #2a251d;
+  --surf-h: #342e26;
+  --border: #403830;
+  --border-lt: #34302a;
+  --text: #f0e8df;
+  --text-m: #9a8a7a;
+  --text-s: #635850;
+  --accent: #d4b896;
+  --bad: #c77;
+  --ok: #8aa87a;
+  --r: 4px;
+  display: block;
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+
+.dm-wrap {
+  --maxw: 1150px;
+  max-width: var(--maxw);
+  margin-bottom: 6vh;
+  margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--maxw) / 2));
+  margin-right: 5vw;
+}
+
+.dm-title { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 4px; }
+.dm-sub { color: var(--text-m); font-size: 13px; line-height: 1.6; margin: 0 0 20px; max-width: 680px; }
+.dm-muted { color: var(--text-m); }
+.dm-empty { margin-top: 18px; font-size: 13px; }
+.dm-pending { font-size: 12px; margin: 10px 0; }
+
+/* segmented control */
+.dm-seg { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--border-lt); }
+.dm-seg button {
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  background: transparent; border: none; color: var(--text-m);
+  padding: 10px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.dm-seg button:hover { color: var(--text); }
+.dm-seg button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.dm-count {
+  font-size: 10.5px; background: var(--surface); border: 1px solid var(--border-lt);
+  border-radius: 100px; padding: 1px 7px; color: var(--text-m);
+}
+
+.dm-actions-bar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.dm-actions-bar .dm-muted { flex: 1; min-width: 200px; font-size: 12px; line-height: 1.5; }
+
+.dm-btn {
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--r);
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--text);
+  padding: 9px 16px; display: inline-flex; align-items: center; gap: 7px; transition: all 0.15s; flex: none;
+}
+.dm-btn:hover:not(:disabled) { background: var(--surf-h); }
+.dm-btn.primary { background: var(--text); border-color: var(--text); color: #19160f; }
+.dm-btn:disabled { opacity: 0.5; cursor: default; }
+.dm-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+/* tables */
+.dm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.dm-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-s); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.dm-table td { padding: 9px 12px; border-bottom: 1px solid var(--border-lt); vertical-align: top; }
+.dm-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dm-name { max-width: 280px; word-break: break-word; }
+.dm-cols { max-width: 260px; }
+.dm-table code {
+  font-family: 'DM Mono', monospace; font-size: 0.9em; color: var(--text);
+  background: var(--bg-sub); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-lt);
+}
+
+.dm-status { font-size: 11.5px; }
+.dm-status.completed { color: var(--ok); }
+.dm-status.completed_with_errors { color: var(--accent); }
+.dm-status.processing { color: var(--text-m); }
+.dm-status.failed, .dm-status.rejected { color: var(--bad); }
+
+.dm-tier {
+  background: var(--bg-sub); color: var(--text-m); border: 1px solid var(--border-lt);
+  border-radius: var(--r); font: inherit; font-size: 10.5px; padding: 3px 5px;
+}
+.dm-tier:focus { outline: none; border-color: var(--accent); }
+
+.dm-row-actions { text-align: right; white-space: nowrap; }
+.dm-row-actions mat-icon {
+  font-size: 16px; width: 16px; height: 16px; color: var(--text-s); cursor: pointer; margin-left: 8px;
+}
+.dm-row-actions mat-icon:hover { color: var(--text); }
+
+/* facts */
+.dm-search {
+  flex: 1; min-width: 260px; background: var(--surface); color: var(--text);
+  border: 1.5px solid var(--border-lt); border-radius: var(--r); padding: 9px 12px; font: inherit; font-size: 13px;
+}
+.dm-search:focus { outline: none; border-color: var(--accent); }
+.dm-range { font-size: 11.5px; white-space: nowrap; }
+.dm-facts .dm-fact { max-width: 560px; line-height: 1.5; }
+.dm-facts .dm-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dm-facts .dm-src { max-width: 220px; word-break: break-word; }
+
+.dm-pager { display: flex; align-items: center; gap: 14px; margin-top: 16px; }

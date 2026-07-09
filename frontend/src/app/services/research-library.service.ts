@@ -51,6 +51,40 @@ interface GenerateUploadUrlResponse {
   gcsUri: string;
 }
 
+/** One extracted fact in the searchable fact library. */
+export interface ClaimRow {
+  id: number;
+  document_id: number;
+  page_no: number;
+  statement: string;
+  metric: string | null;
+  value: string | null;
+  unit: string | null;
+  segment: string | null;
+  geography: string | null;
+  period: string | null;
+  claim_type: string | null;
+  source_citation: string | null;
+  canonical_tags: string[];
+  filename: string;
+}
+
+export interface ClaimPage {
+  total: number;
+  limit: number;
+  offset: number;
+  items: ClaimRow[];
+}
+
+export interface ClaimQuery {
+  q?: string;
+  documentId?: number;
+  tag?: string;
+  period?: string;
+  limit?: number;
+  offset?: number;
+}
+
 @Injectable({providedIn: 'root'})
 export class ResearchLibraryService {
   private readonly baseUrl = `${environment.backendURL}/research-library`;
@@ -118,6 +152,19 @@ export class ResearchLibraryService {
       `${this.baseUrl}/documents/${id}/reprocess`,
       {},
     );
+  }
+
+  /** Keyword browse over the extracted fact library (with filters). */
+  browseClaims(query: ClaimQuery): Observable<ClaimPage> {
+    let params: Record<string, string | number> = {
+      limit: query.limit ?? 50,
+      offset: query.offset ?? 0,
+    };
+    if (query.q) params['q'] = query.q;
+    if (query.documentId != null) params['document_id'] = query.documentId;
+    if (query.tag) params['tag'] = query.tag;
+    if (query.period) params['period'] = query.period;
+    return this.http.get<ClaimPage>(`${this.baseUrl}/claims`, {params});
   }
 
   /** The rendered page image behind a citation, as a blob (auth applies). */

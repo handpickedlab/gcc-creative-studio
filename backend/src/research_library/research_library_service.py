@@ -40,6 +40,9 @@ from src.research_library.dto.research_library_dto import (
     UpdateDocumentDto,
 )
 from src.research_library.ingest.ingest_worker import run_ingest
+from src.research_library.repository.research_claim_repository import (
+    ResearchClaimRepository,
+)
 from src.research_library.repository.research_document_repository import (
     ResearchDocumentRepository,
 )
@@ -91,10 +94,32 @@ class ResearchLibraryService:
         repo: ResearchDocumentRepository = Depends(),
         gcs_service: GcsService = Depends(),
         iam_signer_credentials: IamSignerCredentials = Depends(),
+        claim_repo: ResearchClaimRepository = Depends(),
     ):
         self.repo = repo
         self.gcs_service = gcs_service
         self.iam_signer_credentials = iam_signer_credentials
+        self.claim_repo = claim_repo
+
+    async def browse_claims(
+        self,
+        q: str | None = None,
+        document_id: int | None = None,
+        tag: str | None = None,
+        period: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Keyword browse over the fact library for the management UI."""
+        rows, total = await self.claim_repo.browse(
+            q=q,
+            document_id=document_id,
+            tag=tag,
+            period=period,
+            limit=limit,
+            offset=offset,
+        )
+        return {"total": total, "limit": limit, "offset": offset, "items": rows}
 
     async def generate_upload_url(
         self,

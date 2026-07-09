@@ -20,8 +20,11 @@ full before the previous run's claims are deleted, so a failed reprocess
 never leaves a document with zero claims).
 """
 
+import json
+from typing import Any
+
 from fastapi import Depends
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.base_repository import BaseRepository
@@ -31,12 +34,65 @@ from src.research_library.schema.research_document_model import (
     ResearchClaimModel,
 )
 
+# Keyword browse over the fact library: substring match on the claim text +
+# metric, optional document/tag/period filters, with a window-function total
+# for pagination. Facts join their document for the filename shown in the UI.
+_BROWSE_SQL = """
+SELECT
+    c.id, c.document_id, c.page_no, c.statement, c.metric, c.value, c.unit,
+    c.segment, c.geography, c.period, c.claim_type, c.source_citation,
+    c.sample, c.canonical_tags, d.filename,
+    count(*) OVER() AS total_count
+FROM research_claims c
+JOIN research_documents d ON d.id = c.document_id
+WHERE d.deleted_at IS NULL
+  AND (CAST(:q AS text) IS NULL
+       OR c.statement ILIKE '%' || :q || '%'
+       OR c.metric ILIKE '%' || :q || '%')
+  AND (CAST(:document_id AS int) IS NULL OR c.document_id = :document_id)
+  AND (CAST(:tag AS text) IS NULL
+       OR c.canonical_tags @> CAST(:tag_json AS jsonb)
+       OR c.raw_tags @> CAST(:tag_json AS jsonb))
+  AND (CAST(:period AS text) IS NULL OR c.period ILIKE '%' || :period || '%')
+ORDER BY c.document_id, c.page_no, c.id
+LIMIT :limit OFFSET :offset
+"""
+
 
 class ResearchClaimRepository(BaseRepository[ResearchClaim, ResearchClaimModel]):
     """Handles database operations for research claims."""
 
     def __init__(self, db: AsyncSession = Depends(get_db)):
         super().__init__(model=ResearchClaim, schema=ResearchClaimModel, db=db)
+
+    async def browse(
+        self,
+        q: str | None = None,
+        document_id: int | None = None,
+        tag: str | None = None,
+        period: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Paginated keyword browse over the fact library. Returns
+        (rows, total_matches)."""
+        result = await self.db.execute(
+            text(_BROWSE_SQL),
+            {
+                "q": q or None,
+                "document_id": document_id,
+                "tag": tag or None,
+                "tag_json": json.dumps([tag]) if tag else None,
+                "period": period or None,
+                "limit": max(1, min(limit, 200)),
+                "offset": max(0, offset),
+            },
+        )
+        rows = [dict(r) for r in result.mappings().all()]
+        total = rows[0]["total_count"] if rows else 0
+        for r in rows:
+            r.pop("total_count", None)
+        return rows, total
 
     async def bulk_insert_claims(
         self,
