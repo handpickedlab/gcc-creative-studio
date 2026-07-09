@@ -17,6 +17,7 @@ import logging
 from fastapi import Depends, HTTPException, status
 
 from src.multimodal.gemini_service import GeminiService
+from src.translations import localization
 from src.translations.dto.translation_dto import (
     GlossaryTermCreateDto,
     GlossaryTermUpdateDto,
@@ -88,24 +89,39 @@ class TranslationService:
         text: str,
         language: str,
         glossary: list[GlossaryTermModel],
-        tone: str | None,
+        do_not_translate: list[GlossaryTermModel] | None = None,
     ) -> str:
-        """Builds the Gemini prompt for a single target language."""
+        """Builds the Gemini prompt for a single target language.
+
+        Mirrors the briefing flow's localization-first framing (see
+        `localization`): localize rather than translate literally, keep
+        ALL-CAPS lines uppercase, and reproduce do-not-translate names verbatim.
+        """
         lines = [
-            f"Translate the following text into {language}.",
-            "Return ONLY the translated text, with no explanations, "
-            "quotes, or extra commentary.",
+            f"Localize (do not translate literally) the following marketing "
+            f"copy into {language}.",
+            "Return ONLY the localized text, with no explanations, quotes, or "
+            "extra commentary.",
+            "- Prioritize natural, on-brand, idiomatic phrasing over a literal "
+            "1-to-1 translation.",
+            "- Preserve any HTML tags and placeholders such as [Name] exactly.",
+            "- If a line is written in ALL CAPS (e.g. a CTA), keep it ALL CAPS.",
         ]
-        if tone:
-            lines.append(f"Use a {tone} tone.")
+        if do_not_translate:
+            lines.append(
+                "- Never translate the following brand / product / collection "
+                "names; reproduce each exactly as written, including casing:"
+            )
+            for term in do_not_translate:
+                lines.append(f'    "{term.source}"')
         if glossary:
             lines.append(
-                "Apply this glossary strictly. Whenever a source term "
+                "- Apply this glossary strictly. Whenever a source term "
                 "appears, translate it exactly as specified (adjust "
                 "grammar/inflection to fit the sentence naturally):"
             )
             for term in glossary:
-                lines.append(f'- "{term.source}" -> "{term.target}"')
+                lines.append(f'    "{term.source}" -> "{term.target}"')
         lines.append("")
         lines.append("Text to translate:")
         lines.append(text)
@@ -118,11 +134,13 @@ class TranslationService:
 
         results: list[TranslationResult] = []
         for language in request.target_languages:
-            # Each language uses only its own dictionary.
-            glossary = [t for t in all_terms if t.language == language]
-            prompt = self._build_prompt(
-                request.text, language, glossary, request.tone
+            # Each language uses only its own dictionary, split into normal
+            # hints vs. do-not-translate names (word-boundary matched).
+            lang_terms = [t for t in all_terms if t.language == language]
+            glossary, dnt = localization.split_glossary_terms(
+                lang_terms, request.text
             )
+            prompt = self._build_prompt(request.text, language, glossary, dnt)
             try:
                 translation = self.gemini_service.generate_text(prompt)
             except Exception as e:
@@ -131,6 +149,8 @@ class TranslationService:
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Translation to {language} failed: {e}",
                 )
+            # Deterministic ALL-CAPS guardrail, consistent with the briefing flow.
+            translation = localization.apply_caps(request.text, translation)
             results.append(
                 TranslationResult(language=language, translation=translation)
             )

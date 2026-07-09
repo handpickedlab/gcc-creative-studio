@@ -14,7 +14,14 @@
 
 import datetime
 from pydantic import Field
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from src.common.base_repository import BaseDocument
 from src.database import Base
@@ -39,6 +46,11 @@ class GlossaryTerm(Base):
     language: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     target: Mapped[str] = mapped_column(String, nullable=False)
+    # When true, `source` is a do-not-translate brand/product/collection name:
+    # it must be reproduced verbatim in the target instead of translated.
+    do_not_translate: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
@@ -63,4 +75,11 @@ class GlossaryTermModel(BaseDocument):
     source: str = Field(description="The source word/term to match in the text.")
     target: str = Field(
         description="The fixed translation to always use for the source term."
+    )
+    do_not_translate: bool = Field(
+        default=False,
+        description=(
+            "When true, the source term is reproduced verbatim (a brand / "
+            "product / collection name) instead of being translated."
+        ),
     )
