@@ -117,11 +117,13 @@ _TOOLS = [
                 },
                 "period": {
                     "type": "string",
-                    "description": "optional period filter, e.g. '2025' or 'Q1 2025'",
+                    "description": "optional period hint, e.g. '2025' or 'Q1 2025' "
+                                   "(soft relevance signal, not a hard filter)",
                 },
                 "geography": {
                     "type": "string",
-                    "description": "optional geography filter, e.g. 'NL'",
+                    "description": "optional geography hint, e.g. 'Netherlands' "
+                                   "(soft relevance signal, not a hard filter)",
                 },
                 "max_results": {"type": "integer"},
             },

@@ -74,12 +74,16 @@ WHERE d.deleted_at IS NULL
   AND (CAST(:tags AS text[]) IS NULL
        OR jsonb_exists_any(c.canonical_tags, CAST(:tags AS text[]))
        OR jsonb_exists_any(c.raw_tags, CAST(:tags AS text[])))
-  AND (CAST(:period AS text) IS NULL OR c.period ILIKE '%' || :period || '%')
-  AND (CAST(:geography AS text) IS NULL
-       OR c.geography ILIKE '%' || :geography || '%')
 ORDER BY c.embedding <=> CAST(:query_embedding AS vector)
 LIMIT :pool
 """
+
+# NB: geography and period are deliberately NOT hard SQL filters. Both are
+# free-text fields ("The Netherlands" vs a "NL" filter, "Q1 2025" vs "2025")
+# where a substring match silently EXCLUDES the right claims. Instead they
+# fold into the embedding query as soft hints (see search_claims_sync); the
+# statement text already carries geography/period, so similarity ranks them
+# well, and the agent reads each result's period field for conflict handling.
 
 
 def search_claims_sync(
@@ -93,16 +97,18 @@ def search_claims_sync(
 ) -> dict[str, Any]:
     """Searches the claim library; safe to call from the sync agent loop."""
     max_results = max(1, min(int(max_results or 8), 25))
+    # geography/period are soft hints: fold them into the embedded query text
+    # rather than filtering on the free-text columns (which silently excludes
+    # e.g. "The Netherlands" when the agent passes "NL").
+    augmented = " ".join(p for p in (query, geography, period) if p)
     try:
         query_embedding = embedding_service.embed_text(
-            client, query, embedding_service.TASK_QUERY
+            client, augmented, embedding_service.TASK_QUERY
         )
         rows = asyncio.run(
             _fetch_candidates(
                 query_embedding,
                 tags=tags,
-                period=period,
-                geography=geography,
                 allowed_documents=allowed_documents,
             ),
         )
@@ -120,8 +126,6 @@ def search_claims_sync(
 async def _fetch_candidates(
     query_embedding: list[float],
     tags: list[str] | None,
-    period: str | None,
-    geography: str | None,
     allowed_documents: list[int] | None,
 ) -> list[dict[str, Any]]:
     """Runs the pgvector similarity query on a fresh worker engine."""
@@ -136,8 +140,6 @@ async def _fetch_candidates(
                     "query_embedding": embedding_literal,
                     "document_ids": allowed_documents,
                     "tags": tags,
-                    "period": period,
-                    "geography": geography,
                     "pool": _CANDIDATE_POOL,
                 },
             )
