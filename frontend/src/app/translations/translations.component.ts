@@ -11,6 +11,8 @@ import {
   BriefingSegment,
   FeedbackStatus,
   FeedbackTicket,
+  Formality,
+  LanguageConfig,
   MarketOverview,
   MarketTranslation,
   TranslationService,
@@ -87,7 +89,7 @@ export class TranslationsComponent implements OnInit {
   readonly bars = [0, 1, 2, 3, 4, 5, 6, 7];
   readonly targets = MARKETS.filter(m => !m.source);
 
-  view: 'empty' | 'intake' | 'work' | 'dict' = 'empty';
+  view: 'empty' | 'intake' | 'work' | 'dict' | 'lang' = 'empty';
   workTab: 'briefing' | 'results' = 'briefing';
   toast = '';
 
@@ -110,7 +112,6 @@ export class TranslationsComponent implements OnInit {
   briefing: BriefingVM | null = null;
   marketFilter = '';
   selected: string[] = [];
-  tone: 'informeel' | 'formeel' = 'informeel';
   metaOpen = false;
 
   // results
@@ -131,10 +132,21 @@ export class TranslationsComponent implements OnInit {
   glossaryTotal = 0;
   glossaryPerMarket: {market: string; count: number}[] = [];
   dictMarket = 'NL';
-  dictTerms: {id: number; source: string; target: string}[] = [];
+  dictTerms: {id: number; source: string; target: string; doNotTranslate: boolean}[] = [];
   dictQuery = '';
   newSource = '';
   newTarget = '';
+  newDnt = false;
+
+  // language settings (per-language localization profiles)
+  readonly formalities: {value: Formality; label: string}[] = [
+    {value: 'default', label: 'Default (natural register)'},
+    {value: 'formal', label: 'Formal (vous / Sie / u)'},
+    {value: 'informal', label: 'Informal (tu / du / je)'},
+  ];
+  langConfigs: Record<string, LanguageConfig> = {};
+  langSaving = new Set<string>();
+  langLoaded = false;
 
   constructor(
     private service: TranslationService,
@@ -397,6 +409,17 @@ export class TranslationsComponent implements OnInit {
     const n = 'B' + (this.blocks.length + 1);
     this.briefing?.fields.push({id: fid(), block: n, name: 'Header', limit: 40, text: ''});
   }
+  /** Adds a push-copy line — a normal segment that translates and exports like
+   * any other field, so push copy is no longer un-selectable (R5). */
+  addPushCopy(): void {
+    this.briefing?.fields.push({
+      id: fid(),
+      block: 'Push',
+      name: 'Push copy',
+      limit: 90,
+      text: '',
+    });
+  }
   removeField(f: FieldVM): void {
     if (this.briefing) this.briefing.fields = this.briefing.fields.filter(x => x.id !== f.id);
   }
@@ -449,7 +472,7 @@ export class TranslationsComponent implements OnInit {
     this.workTab = 'results';
     const backend = this.toBackend(this.briefing);
     this.selected.forEach(code => {
-      this.service.translate(backend, [code], this.tone).subscribe({
+      this.service.translate(backend, [code]).subscribe({
         next: res => {
           const tr = res.translations[0];
           this.mstate[code] = {
@@ -471,7 +494,7 @@ export class TranslationsComponent implements OnInit {
     if (!this.briefing) return;
     this.mstate[code] = {status: 'loading', approval: 'pending', texts: {}};
     const backend = this.toBackend(this.briefing);
-    this.service.translate(backend, [code], this.tone).subscribe({
+    this.service.translate(backend, [code]).subscribe({
       next: res => {
         const tr = res.translations[0];
         this.mstate[code] = {status: 'done', approval: 'pending', texts: tr ? this.textsFromSegments(tr.segments) : {}};
@@ -490,7 +513,7 @@ export class TranslationsComponent implements OnInit {
       meta: {},
       segments: [{block: f.block, field: f.name, label: f.name, charLimit: f.limit, text: f.text}],
     };
-    this.service.translate(single, [code], this.tone).subscribe({
+    this.service.translate(single, [code]).subscribe({
       next: res => {
         const seg = res.translations[0]?.segments[0];
         if (seg && this.mstate[code]) this.mstate[code].texts[f.id] = seg.text;
@@ -794,31 +817,119 @@ export class TranslationsComponent implements OnInit {
   }
   loadDictTerms(): void {
     this.service.getGlossaryTerms(this.dictMarket, this.dictQuery || undefined).subscribe({
-      next: t => (this.dictTerms = t),
+      next: t =>
+        (this.dictTerms = t.map(x => ({
+          id: x.id,
+          source: x.source,
+          target: x.target,
+          doNotTranslate: !!x.doNotTranslate,
+        }))),
       error: () => {},
     });
   }
   addDictTerm(): void {
     const s = this.newSource.trim();
     const t = this.newTarget.trim();
-    if (!s || !t) return;
-    this.service.createGlossaryTerm(this.dictMarket, s, t).subscribe({
+    // A "keep as-is" term needs no translation (target defaults to source).
+    if (!s || (!this.newDnt && !t)) return;
+    this.service.createGlossaryTerm(this.dictMarket, s, t, this.newDnt).subscribe({
       next: term => {
-        this.dictTerms = [{id: term.id, source: term.source, target: term.target}, ...this.dictTerms];
+        this.dictTerms = [
+          {
+            id: term.id,
+            source: term.source,
+            target: term.target,
+            doNotTranslate: !!term.doNotTranslate,
+          },
+          ...this.dictTerms,
+        ];
         this.newSource = '';
         this.newTarget = '';
+        this.newDnt = false;
       },
       error: err => handleErr(this.snackBar, err, 'Failed to add term'),
     });
   }
-  saveDictTerm(t: {id: number; source: string; target: string}): void {
-    this.service.updateGlossaryTerm(t.id, {source: t.source, target: t.target}).subscribe({error: () => {}});
+  saveDictTerm(t: {id: number; source: string; target: string; doNotTranslate: boolean}): void {
+    this.service
+      .updateGlossaryTerm(t.id, {
+        source: t.source,
+        target: t.target,
+        doNotTranslate: t.doNotTranslate,
+      })
+      .subscribe({error: () => {}});
+  }
+  toggleDnt(t: {id: number; source: string; target: string; doNotTranslate: boolean}): void {
+    t.doNotTranslate = !t.doNotTranslate;
+    this.saveDictTerm(t);
   }
   deleteDictTerm(t: {id: number}): void {
     this.service.deleteGlossaryTerm(t.id).subscribe({
       next: () => (this.dictTerms = this.dictTerms.filter(x => x.id !== t.id)),
       error: () => {},
     });
+  }
+
+  // ── language settings (per-language localization profiles) ─────
+  openLangSettings(): void {
+    this.view = 'lang';
+    this.loadLangConfigs();
+  }
+  loadLangConfigs(): void {
+    this.service.getLanguageConfigs().subscribe({
+      next: configs => {
+        const map: Record<string, LanguageConfig> = {};
+        // Seed a neutral default for every target so the editor binds cleanly.
+        this.targets.forEach(m => {
+          map[m.code] = {
+            language: m.code,
+            formality: 'default',
+            preserveCasing: true,
+            guidance: '',
+          };
+        });
+        configs.forEach(c => (map[c.language] = c));
+        this.langConfigs = map;
+        this.langLoaded = true;
+      },
+      error: () => (this.langLoaded = true),
+    });
+  }
+  /** Existing profile for a market, or an in-memory neutral default. */
+  configFor(code: string): LanguageConfig {
+    if (!this.langConfigs[code]) {
+      this.langConfigs[code] = {
+        language: code,
+        formality: 'default',
+        preserveCasing: true,
+        guidance: '',
+      };
+    }
+    return this.langConfigs[code];
+  }
+  saveLangConfig(code: string): void {
+    const c = this.configFor(code);
+    this.langSaving.add(code);
+    this.service
+      .upsertLanguageConfig(code, {
+        formality: c.formality,
+        preserveCasing: c.preserveCasing,
+        guidance: c.guidance ?? '',
+      })
+      .subscribe({
+        next: saved => {
+          this.langConfigs[code] = saved;
+          this.langSaving.delete(code);
+          this.flash(`${code} tone of voice saved`);
+        },
+        error: err => {
+          this.langSaving.delete(code);
+          handleErr(this.snackBar, err, 'Could not save profile');
+        },
+      });
+  }
+  isLangSaving(code: string): boolean {
+    return this.langSaving.has(code);
   }
 
   // ── mapping helpers ────────────────────────────────────────────

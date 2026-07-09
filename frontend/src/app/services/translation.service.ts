@@ -79,6 +79,18 @@ export interface GlossaryTerm {
   language: string; // market code
   source: string;
   target: string;
+  doNotTranslate?: boolean;
+}
+
+export type Formality = 'default' | 'formal' | 'informal';
+
+/** Persistent per-language localization profile (shared per language). */
+export interface LanguageConfig {
+  id?: number;
+  language: string; // market code
+  formality: Formality;
+  preserveCasing: boolean;
+  guidance?: string | null;
 }
 
 // --- Feedback loop ---
@@ -181,17 +193,19 @@ export class TranslationService {
     market: string,
     source: string,
     target: string,
+    doNotTranslate = false,
   ): Observable<GlossaryTerm> {
     return this.http.post<GlossaryTerm>(`${this.baseUrl}/glossary`, {
       market,
       source,
       target,
+      doNotTranslate,
     });
   }
 
   updateGlossaryTerm(
     id: number,
-    data: {source?: string; target?: string},
+    data: {source?: string; target?: string; doNotTranslate?: boolean},
   ): Observable<GlossaryTerm> {
     return this.http.put<GlossaryTerm>(`${this.baseUrl}/glossary/${id}`, data);
   }
@@ -200,14 +214,29 @@ export class TranslationService {
     return this.http.delete<void>(`${this.baseUrl}/glossary/${id}`);
   }
 
+  // --- Per-language localization profiles ---
+
+  getLanguageConfigs(): Observable<LanguageConfig[]> {
+    return this.http.get<LanguageConfig[]>(`${this.baseUrl}/language-config`);
+  }
+
+  upsertLanguageConfig(
+    market: string,
+    data: {formality?: Formality; preserveCasing?: boolean; guidance?: string | null},
+  ): Observable<LanguageConfig> {
+    return this.http.put<LanguageConfig>(
+      `${this.baseUrl}/language-config/${encodeURIComponent(market)}`,
+      data,
+    );
+  }
+
   translate(
     briefing: Briefing,
     markets: string[],
-    tone?: string,
   ): Observable<{translations: MarketTranslation[]}> {
     return this.http.post<{translations: MarketTranslation[]}>(
       `${this.baseUrl}/translate`,
-      {briefing, markets, tone},
+      {briefing, markets},
     );
   }
 
