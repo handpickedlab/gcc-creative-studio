@@ -58,10 +58,18 @@ export class DataQueryComponent implements OnInit {
   /** Document whitelist emitted by the library panel (null = all). */
   allowedDocuments: number[] | null = null;
 
+  // Grounded starter questions that hint at the kinds of things the research
+  // library can answer (verified against the corpus). Span single facts,
+  // trends, cross-document synthesis and cross-language sources.
   readonly examples = [
-    'How many rows does each table have?',
-    'What is the average per category?',
-    'Top 5 rows by the most important column',
+    'Hoeveel van de online aankopen gaat via de smartphone, nu en richting 2030?',
+    'Welke betaalmethodes domineren de online bestedingen in Nederland?',
+    'Hoe ontdekt Gen Z nieuwe merken en mode?',
+    'Wat zijn de belangrijkste wereldwijde consumententrends voor 2026?',
+    'Hoe belangrijk vinden consumenten duurzaamheid bij mode-aankopen?',
+    'Welk deel van de online bestedingen gaat naar buitenlandse webshops?',
+    'Wat zegt de ARD/ZDF-studie over mediagebruik in Duitsland?',
+    'Welke rol speelt AI in de toekomst van retail en mode?',
   ];
 
   constructor(

@@ -27,6 +27,7 @@
           </button>
           <span class="dq-muted" *ngIf="busy">working…</span>
         </div>
+        <div class="dq-label" style="margin-top: 14px">Try one of these</div>
         <div class="dq-chips">
           <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
         </div>
