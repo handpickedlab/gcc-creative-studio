@@ -30,7 +30,9 @@
 .dq-wrap {
   --maxw: 1200px;
   max-width: var(--maxw);
-  margin-top: 10vh;
+  /* No top margin: the Market Research section shell provides the top
+     offset below the workspace chrome. */
+  margin-top: 0;
   margin-bottom: 5vh;
   margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--maxw) / 2));
   margin-right: 5vw;

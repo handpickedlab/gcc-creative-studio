@@ -13,15 +13,14 @@
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
+/* Offset the whole section below the fixed workspace switcher / top chrome
+   (padding, not margin, to avoid margin-collapse with the child). */
+.mr-shell { padding-top: 10vh; }
+
 .mr-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 20;
   display: flex;
   gap: 8px;
-  padding: 14px 5vw 14px max(calc(5vw + 4.5rem), 2rem);
-  background: linear-gradient(to bottom, #19160f 70%, rgba(25, 22, 15, 0));
-  backdrop-filter: blur(6px);
+  padding: 0 5vw 14px max(calc(5vw + 4.5rem), 2rem);
 }
 
 .mr-tab {
@@ -47,9 +46,9 @@
   color: #19160f;
 }
 
-/* Pull the routed child up under the sticky tab bar (children keep their
-   own left margin to clear the rail). */
+/* The tab bar already provides the top offset; the routed child sits
+   directly under it (children keep their own left margin to clear the rail). */
 .mr-shell ::ng-deep .dq-wrap,
 .mr-shell ::ng-deep .dm-wrap {
-  margin-top: 2vh;
+  margin-top: 0;
 }
