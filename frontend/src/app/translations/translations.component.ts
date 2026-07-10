@@ -8,6 +8,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {
   Briefing,
   BriefingFeedback,
+  BriefingMeta,
   BriefingSegment,
   FeedbackStatus,
   FeedbackTicket,
@@ -35,6 +36,7 @@ interface FieldVM {
   text: string;
   type?: string; // block | push | sms | banner | social
   translate?: boolean; // include this field in the translation (default true)
+  loose?: boolean; // intake-only: copy that sits outside the e-mail blocks (push/SMS/banner/social)
 }
 
 interface TokenPart {
@@ -138,8 +140,14 @@ export class TranslationsComponent implements OnInit {
   selectedSheet = '';
   requests: {index: number; label: string; filled: number}[] = [];
   selectedRequestIndex: number | null = null;
-  isUploading = false;
+  isUploading = false; // busy on file upload / sheet switch
+  loadingRequest = false; // busy fetching the selected request's segments
   fileName = '';
+  intakeName = '';
+  intakeMeta: BriefingMeta | null = null;
+  intakeFields: FieldVM[] = []; // selectable rows for the currently opened request
+  showAddCustom = false;
+  customRow: {name: string; text: string; type: string} = {name: '', text: '', type: 'block'};
 
   // working briefing
   briefing: BriefingVM | null = null;
@@ -241,6 +249,7 @@ export class TranslationsComponent implements OnInit {
       next: res => {
         this.briefing = this.fromBackend(res.briefing, id);
         this.mstate = {};
+        const fields = this.briefing.fields;
         const codes: string[] = [];
         (res.translations || []).forEach(tr => {
           codes.push(tr.market);
@@ -252,7 +261,7 @@ export class TranslationsComponent implements OnInit {
             status: 'done',
             approval,
             comment: (tr as any).comment ?? undefined,
-            texts: this.textsFromSegments(tr.segments),
+            texts: this.textsFromSegments(fields, tr.segments),
           };
         });
         this.selected = codes;
@@ -347,12 +356,16 @@ export class TranslationsComponent implements OnInit {
     this.selectedFile = file;
     this.fileName = file.name;
     this.selectedRequestIndex = null;
+    this.intakeFields = [];
+    this.showAddCustom = false;
     this.isUploading = true;
     this.service.upload(file).subscribe({
       next: res => {
         this.sheets = res.sheets;
         this.selectedSheet = res.selectedSheet ?? res.sheets[0] ?? '';
-        this.requests = res.requests;
+        // The Translation-Memories tab is a dictionary, not a briefing source —
+        // never surface it as a request list.
+        this.requests = this.isTm(this.selectedSheet) ? [] : res.requests;
         this.isUploading = false;
         this.view = 'intake';
         if (res.sheets.includes('Translation Memories')) this.autoImportTm(file);
@@ -364,18 +377,25 @@ export class TranslationsComponent implements OnInit {
     });
   }
 
-  onSheetChange(): void {
-    if (!this.selectedFile) return;
+  /** Sheet tabs across the top of the intake screen (design requirement). */
+  selectSheet(sheet: string): void {
+    this.selectedSheet = sheet;
     this.selectedRequestIndex = null;
+    this.intakeFields = [];
+    this.showAddCustom = false;
+    if (!this.selectedFile || this.isTm(sheet)) {
+      this.requests = [];
+      return;
+    }
     this.isUploading = true;
-    this.service.upload(this.selectedFile, this.selectedSheet).subscribe({
+    this.service.upload(this.selectedFile, sheet).subscribe({
       next: res => {
         this.requests = res.requests;
         this.isUploading = false;
       },
       error: err => {
         this.isUploading = false;
-        handleErr(this.snackBar, err, 'Kon blad niet lezen');
+        handleErr(this.snackBar, err, 'Could not read sheet');
       },
     });
   }
@@ -391,44 +411,133 @@ export class TranslationsComponent implements OnInit {
     });
   }
 
+  /** Translation-Memories sheets are a merged dictionary, not a briefing —
+   * heuristic on the sheet name since the backend has no dedicated flag. */
+  isTm(sheet: string): boolean {
+    return /translation\s*memor/i.test(sheet);
+  }
+  get isTmSheet(): boolean {
+    return this.isTm(this.selectedSheet);
+  }
+
   get selectedRequest() {
     return this.requests.find(r => r.index === this.selectedRequestIndex);
   }
 
+  /** Loose copy (push / SMS / banner / social) sits outside the e-mail
+   * blocks — no backend flag for this, so we heuristically detect it from
+   * the segment having no block, or its field/label naming the channel. */
+  private isLooseSegment(s: BriefingSegment): boolean {
+    const hay = `${s.field ?? ''} ${s.label ?? ''}`.toLowerCase();
+    return !s.block || /push|sms|banner|social/i.test(hay);
+  }
+  private guessType(s: BriefingSegment): string {
+    const hay = `${s.field ?? ''} ${s.label ?? ''}`.toLowerCase();
+    if (/sms/.test(hay)) return 'sms';
+    if (/push/.test(hay)) return 'push';
+    if (/banner/.test(hay)) return 'banner';
+    if (/social/.test(hay)) return 'social';
+    return 'block';
+  }
+  private segmentToRow(s: BriefingSegment, i: number): FieldVM {
+    const loose = this.isLooseSegment(s);
+    return {
+      id: 'f' + i,
+      block: s.block ?? '',
+      type: this.guessType(s),
+      name: s.field,
+      limit: s.charLimit,
+      text: s.text,
+      // Loose copy is unchecked by default — the user must opt in.
+      translate: !loose,
+      loose,
+    };
+  }
+
+  /** Selecting a request fetches its segments and renders them as
+   * selectable rows (include checkbox, tokenized source text, type select). */
+  selectRequest(index: number): void {
+    if (!this.selectedFile) return;
+    this.selectedRequestIndex = index;
+    this.intakeFields = [];
+    this.showAddCustom = false;
+    this.loadingRequest = true;
+    this.service.upload(this.selectedFile, this.selectedSheet, index).subscribe({
+      next: res => {
+        this.loadingRequest = false;
+        this.intakeName = res.briefingName ?? 'Briefing';
+        this.intakeMeta = res.meta ?? null;
+        this.intakeFields = (res.segments ?? []).map((s, i) => this.segmentToRow(s, i));
+      },
+      error: err => {
+        this.loadingRequest = false;
+        handleErr(this.snackBar, err, 'Could not load request');
+      },
+    });
+  }
+
+  get includedCount(): number {
+    return this.intakeFields.filter(f => f.translate !== false).length;
+  }
+  get allIntakeIncluded(): boolean {
+    return this.intakeFields.length > 0 && this.intakeFields.every(f => f.translate !== false);
+  }
+  get hasUncheckedLoose(): boolean {
+    return this.intakeFields.some(f => f.loose && f.translate === false);
+  }
+  selectAllIntake(): void {
+    const all = this.allIntakeIncluded;
+    this.intakeFields.forEach(f => (f.translate = !all));
+  }
+  removeIntakeRow(f: FieldVM): void {
+    this.intakeFields = this.intakeFields.filter(x => x.id !== f.id);
+  }
+  addCustomRow(): void {
+    const name = this.customRow.name.trim();
+    if (!name) return;
+    this.intakeFields.push({
+      id: fid(),
+      block: '',
+      type: this.customRow.type,
+      name,
+      limit: null,
+      text: this.customRow.text,
+      translate: true,
+      loose: this.customRow.type !== 'block',
+    });
+    this.customRow = {name: '', text: '', type: 'block'};
+    this.showAddCustom = false;
+  }
+
+  cancelIntake(): void {
+    this.view = this.briefing ? 'work' : 'empty';
+  }
+
+  /** Builds the BriefingVM from the included rows only — loose copy left
+   * unchecked never enters the briefing. */
   confirmIntake(): void {
-    if (!this.selectedFile || this.selectedRequestIndex == null) return;
-    this.isUploading = true;
-    this.service
-      .upload(this.selectedFile, this.selectedSheet, this.selectedRequestIndex)
-      .subscribe({
-        next: res => {
-          this.isUploading = false;
-          this.briefing = {
-            id: null,
-            name: res.briefingName ?? 'Briefing',
-            requestor: res.meta?.requestor ?? '',
-            due: res.meta?.due ?? '',
-            notes: res.meta?.notes ?? '',
-            fields: res.segments.map((s, i) => ({
-              id: 'f' + i,
-              block: s.block ?? 'B1',
-              type: 'block',
-              name: s.field,
-              limit: s.charLimit,
-              text: s.text,
-              translate: true,
-            })),
-          };
-          this.mstate = {};
-          this.selected = [];
-          this.workTab = 'briefing';
-          this.view = 'work';
-        },
-        error: err => {
-          this.isUploading = false;
-          handleErr(this.snackBar, err, 'Could not load request');
-        },
-      });
+    const included = this.intakeFields.filter(f => f.translate !== false);
+    if (!included.length) return;
+    this.briefing = {
+      id: null,
+      name: this.intakeName || 'Briefing',
+      requestor: this.intakeMeta?.requestor ?? '',
+      due: this.intakeMeta?.due ?? '',
+      notes: this.intakeMeta?.notes ?? '',
+      fields: included.map((f, i) => ({
+        id: 'f' + i,
+        block: f.block || 'B1',
+        type: f.type ?? 'block',
+        name: f.name,
+        limit: f.limit,
+        text: f.text,
+        translate: true,
+      })),
+    };
+    this.mstate = {};
+    this.selected = [];
+    this.workTab = 'briefing';
+    this.view = 'work';
   }
 
   // ── briefing editor ────────────────────────────────────────────
@@ -534,6 +643,7 @@ export class TranslationsComponent implements OnInit {
     this.active = this.selected[0];
     this.workTab = 'results';
     const backend = this.toBackend(this.briefing);
+    const fields = this.briefing.fields;
     this.selected.forEach(code => {
       this.service.translate(backend, [code]).subscribe({
         next: res => {
@@ -541,7 +651,7 @@ export class TranslationsComponent implements OnInit {
           this.mstate[code] = {
             status: 'done',
             approval: 'pending',
-            texts: tr ? this.textsFromSegments(tr.segments) : {},
+            texts: tr ? this.textsFromSegments(fields, tr.segments) : {},
           };
           if (!this.isTranslating) this.persist(true); // save once all done
         },
@@ -557,10 +667,11 @@ export class TranslationsComponent implements OnInit {
     if (!this.briefing) return;
     this.mstate[code] = {status: 'loading', approval: 'pending', texts: {}};
     const backend = this.toBackend(this.briefing);
+    const fields = this.briefing.fields;
     this.service.translate(backend, [code]).subscribe({
       next: res => {
         const tr = res.translations[0];
-        this.mstate[code] = {status: 'done', approval: 'pending', texts: tr ? this.textsFromSegments(tr.segments) : {}};
+        this.mstate[code] = {status: 'done', approval: 'pending', texts: tr ? this.textsFromSegments(fields, tr.segments) : {}};
       },
       error: () => (this.mstate[code] = {status: 'error', approval: 'pending', texts: {}}),
     });
@@ -1035,9 +1146,12 @@ export class TranslationsComponent implements OnInit {
       })),
     };
   }
-  private textsFromSegments(segs: BriefingSegment[]): Record<string, string> {
+  /** Keys translated text by the actual field id sent for the request
+   * (falling back to positional 'f'+i) so lookups survive fid()-based ids,
+   * reordering after removeField(), and any future field-exclusion filter. */
+  private textsFromSegments(fields: FieldVM[], segs: BriefingSegment[]): Record<string, string> {
     const out: Record<string, string> = {};
-    (segs ?? []).forEach((s, i) => (out['f' + i] = s.text));
+    (segs ?? []).forEach((s, i) => (out[fields[i]?.id ?? 'f' + i] = s.text));
     return out;
   }
 }

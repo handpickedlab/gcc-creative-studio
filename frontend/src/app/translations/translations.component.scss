@@ -312,6 +312,15 @@
   background: var(--surface); color: var(--text-m); font-size: 10.5px; cursor: pointer; font-family: inherit; transition: all .12s; }
 .loose-pill:hover { border-color: var(--accent); color: var(--text); }
 
+/* ---- intake rows (rich upload intake — selectable field rows) ---- */
+.tab .tag-tm { font-size: 8px; font-weight: 600; letter-spacing: .06em; color: var(--text-s); background: var(--surface);
+  border: 1px solid var(--border-lt); border-radius: 100px; padding: 1px 6px; margin-left: 6px; }
+.loose-badge { font-size: 9px; font-weight: 600; letter-spacing: .06em; color: var(--warn); background: rgba(217,154,64,.12);
+  border: 1px solid var(--warn); border-radius: 100px; padding: 2px 7px; white-space: nowrap; }
+.intake-row.loose { border-color: rgba(217,154,64,.45); }
+.intake-row.off { opacity: .55; }
+.intake-row .head input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+
 /* ---- Instructies rail + editor ---- */
 .lang-layout { display: grid; grid-template-columns: 232px 1fr; gap: 26px; align-items: start; }
 .lang-rail { background: var(--bg-sub); border: 1px solid var(--border-lt); border-radius: var(--rl); padding: 16px 14px;

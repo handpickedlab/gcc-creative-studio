@@ -92,39 +92,105 @@
       </div>
 
       <!-- INTAKE -->
-      <div *ngIf="view==='intake'" class="canvas-inner intake" style="max-width:680px">
+      <div *ngIf="view==='intake'" class="canvas-inner intake wide">
         <div style="font-size:9px; font-weight:600; color:var(--ok); letter-spacing:.12em; font-family:'DM Mono',monospace; margin-bottom:6px">✓ IMPORTED</div>
         <h2>{{ fileName }}</h2>
-        <p style="font-size:12px; color:var(--text-m); margin-bottom:24px">{{ sheets.length }} sheets found · choose the sheet and the request.</p>
-        <div class="field-stack">
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:16px">{{ sheets.length }} sheets found · choose the sheet, then the request.</p>
+
+        <!-- 00 · sheet tabs across the top -->
+        <div class="tabs">
+          <button *ngFor="let s of sheets" class="tab" [class.on]="selectedSheet===s" (click)="selectSheet(s)">
+            <span class="code">{{ s }}</span>
+            <span *ngIf="isTm(s)" class="tag-tm">TM</span>
+          </button>
+        </div>
+
+        <!-- Translation-Memories sheet: dictionary, no briefings -->
+        <div *ngIf="isTmSheet" class="dict-box" style="margin-top:16px">
           <div>
-            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Sheet</span></div><p class="hint">Select the tab containing the briefing fields.</p></div>
-            <select class="sel" [(ngModel)]="selectedSheet" (change)="onSheetChange()">
-              <option *ngFor="let s of sheets" [value]="s">{{ s }}</option>
-            </select>
+            <div style="font-size:12.5px; font-weight:500">Translation memory sheet</div>
+            <p>This tab is a dictionary, not a briefing — its terms are merged into your translation memory automatically{{ glossaryTotal ? ' (' + glossaryTotal + ' terms loaded)' : '' }}. There are no requests to select here.</p>
           </div>
+        </div>
+        <button *ngIf="isTmSheet" class="btn ghost" style="margin-top:16px" (click)="cancelIntake()">Cancel</button>
+
+        <div class="field-stack" *ngIf="!isTmSheet" style="margin-top:20px; max-width:680px">
           <div>
-            <div class="vlabel"><div class="top"><span class="n">02</span><span class="tx">Request</span></div><p class="hint">Each request shows how many fields contain text.</p></div>
-            <div style="display:flex; flex-direction:column; gap:7px">
-              <button *ngFor="let r of requests" class="req-btn" [class.on]="selectedRequestIndex===r.index" [class.empty]="r.filled===0" (click)="selectedRequestIndex=r.index">
+            <div class="vlabel"><div class="top"><span class="n">01</span><span class="tx">Request</span></div><p class="hint">Each request shows how many fields contain text.</p></div>
+            <div *ngIf="isUploading" class="skel" style="height:44px"></div>
+            <div *ngIf="!isUploading" style="display:flex; flex-direction:column; gap:7px">
+              <button *ngFor="let r of requests" class="req-btn" [class.on]="selectedRequestIndex===r.index" [class.empty]="r.filled===0" (click)="selectRequest(r.index)">
                 <span class="lbl">{{ r.label }}</span>
                 <div style="display:flex; align-items:center; gap:7px">
                   <div class="fill-bars"><span *ngFor="let i of bars" [class.f]="i < r.filled"></span></div>
                   <span class="req-count">{{ r.filled }} fields</span>
                 </div>
               </button>
+              <div *ngIf="!requests.length" class="warn-box">
+                <div><div class="t1">No requests found</div><p>This sheet has no recognizable requests — pick another sheet or start blank.</p></div>
+              </div>
             </div>
             <div *ngIf="selectedRequest?.filled===0" class="warn-box" style="margin-top:11px">
               <div><div class="t1">Empty request</div><p>This request has no filled fields — choose another or start blank.</p></div>
             </div>
           </div>
+
+          <!-- 02 · selectable field rows for the chosen request -->
+          <div *ngIf="selectedRequestIndex!=null && selectedRequest?.filled!==0">
+            <div class="vlabel">
+              <div class="top"><span class="n">02</span><span class="tx">Fields</span><span class="r" *ngIf="!loadingRequest">{{ includedCount }}/{{ intakeFields.length }} included</span></div>
+              <p class="hint">Untick fields you don't want translated. Loose copy (push / SMS / banner / social) sits outside the e-mail blocks and is unchecked by default.</p>
+            </div>
+
+            <div *ngIf="loadingRequest" class="skel" style="height:120px"></div>
+
+            <ng-container *ngIf="!loadingRequest">
+              <div *ngIf="hasUncheckedLoose" class="warn-box" style="margin-bottom:11px">
+                <div><div class="t1">Loose copy found</div><p>This request contains push / SMS / banner copy outside the e-mail blocks. It's unchecked by default — include it if it needs translation too.</p></div>
+              </div>
+
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:9px">
+                <button class="pill tiny" (click)="selectAllIntake()">{{ allIntakeIncluded ? 'Select none' : 'Select all' }}</button>
+                <button class="pill tiny" (click)="showAddCustom = !showAddCustom">{{ showAddCustom ? 'Cancel' : '+ Add custom row' }}</button>
+              </div>
+
+              <div *ngIf="showAddCustom" class="fieldrow" style="margin-bottom:9px">
+                <div class="head">
+                  <select class="type-sel" [(ngModel)]="customRow.type"><option *ngFor="let t of fieldTypes" [value]="t.key">{{ t.label }}</option></select>
+                  <input class="fname" [(ngModel)]="customRow.name" placeholder="Field name" />
+                </div>
+                <textarea class="fta" rows="2" [(ngModel)]="customRow.text" placeholder="Source text…"></textarea>
+                <div style="display:flex; justify-content:flex-end; margin-top:8px">
+                  <button class="btn primary sm" [disabled]="!customRow.name.trim()" (click)="addCustomRow()">Add row</button>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:8px">
+                <div *ngFor="let f of intakeFields" class="fieldrow intake-row" [class.loose]="f.loose" [class.off]="f.translate===false">
+                  <div class="head">
+                    <input type="checkbox" [ngModel]="f.translate!==false" (ngModelChange)="toggleTranslate(f)" title="Include in translation" />
+                    <span class="btag" *ngIf="f.block">{{ f.block }}</span>
+                    <span class="loose-badge" *ngIf="f.loose">LOOSE</span>
+                    <input class="fname" [(ngModel)]="f.name" />
+                    <select class="type-sel" [(ngModel)]="f.type" title="Field type"><option *ngFor="let t of fieldTypes" [value]="t.key">{{ t.label }}</option></select>
+                    <button class="iconbtn danger" title="Remove row" (click)="removeIntakeRow(f)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                  <div class="fmeta">
+                    <span class="tok-line"><ng-container *ngFor="let p of tokenize(f.text)"><span *ngIf="p.kind==='tag'" class="tok-tag">{{ p.v }}</span><span *ngIf="p.kind==='ph'" class="tok-ph">{{ p.v }}</span><span *ngIf="p.kind==='text'">{{ p.v }}</span></ng-container></span>
+                    <span class="count">{{ f.text.length }}/{{ f.limit || '∞' }}</span>
+                  </div>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+
           <div class="dict-box" *ngIf="glossaryTotal">
             <div><div style="font-size:12.5px; font-weight:500">Dictionary loaded</div><p>Translation memory merged — <b style="color:var(--text)">{{ glossaryTotal }} terms</b> across {{ glossaryPerMarket.length }} markets.</p></div>
           </div>
           <div style="display:flex; gap:9px">
-            <button class="btn ghost" (click)="view = briefing ? 'work' : 'empty'">Cancel</button>
-            <button class="btn primary full" style="flex:1" [disabled]="selectedRequestIndex==null || selectedRequest?.filled===0 || isUploading" (click)="confirmIntake()">
-              {{ isUploading ? 'Loading…' : (selectedRequest?.filled===0 ? 'Choose a filled request' : 'Open briefing') }}
+            <button class="btn ghost" (click)="cancelIntake()">Cancel</button>
+            <button class="btn primary full" style="flex:1" [disabled]="!includedCount || loadingRequest" (click)="confirmIntake()">
+              {{ includedCount ? 'Open briefing (' + includedCount + ' field' + (includedCount===1?'':'s') + ')' : 'Select at least one field' }}
             </button>
           </div>
         </div>
