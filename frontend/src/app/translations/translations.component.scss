@@ -87,7 +87,13 @@
 .brow .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .brow .nm { flex: 1; font-size: 12.5px; font-weight: 500; line-height: 1.3; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brow .meta { font-size: 10px; color: var(--text-s); font-family: 'DM Mono', monospace; padding-left: 13px; }
-.brow .row-acts { display: flex; gap: 1px; flex-shrink: 0; }
+.brow .row-acts { display: flex; gap: 1px; flex-shrink: 0; opacity: 0; transition: opacity .12s; }
+.brow:hover .row-acts { opacity: 1; }
+.keep-badge { font-size: 8px; font-weight: 600; letter-spacing: .08em; color: var(--accent-h); background: var(--accent-lt);
+  border: 1px solid var(--accent); border-radius: 100px; padding: 1px 6px; white-space: nowrap; margin-left: 8px; vertical-align: middle; }
+.type-sel { appearance: none; padding: 3px 8px; border: 1.5px solid var(--border-lt); border-radius: var(--r); background: var(--bg-sub);
+  color: var(--text-m); font-family: 'DM Mono', monospace; font-size: 10px; cursor: pointer; }
+.type-sel:focus { outline: none; border-color: var(--accent); }
 .brow input.rename { flex: 1; font-size: 12.5px; font-weight: 500; background: var(--bg); border: 1.5px solid var(--accent); border-radius: 3px; padding: 2px 5px; font-family: inherit; outline: none; }
 
 .dict-link { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: var(--r);

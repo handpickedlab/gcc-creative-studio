@@ -154,7 +154,7 @@
           <thead><tr><th>Source (EN)</th><th>{{ dictMarket }}</th><th style="width:90px; text-align:center">Keep as-is</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let t of dictTerms">
-              <td><input [(ngModel)]="t.source" (blur)="saveDictTerm(t)" /></td>
+              <td><input [(ngModel)]="t.source" (blur)="saveDictTerm(t)" style="width:auto; min-width:0" /><span *ngIf="t.doNotTranslate" class="keep-badge" title="Brand term — never translated">KEEP</span></td>
               <td><input [(ngModel)]="t.target" [disabled]="t.doNotTranslate" (blur)="saveDictTerm(t)" /></td>
               <td style="text-align:center"><input type="checkbox" [ngModel]="t.doNotTranslate" (ngModelChange)="toggleDnt(t)" title="Never translate — keep verbatim" /></td>
               <td style="width:40px; text-align:right"><button class="iconbtn danger" (click)="deleteDictTerm(t)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>
@@ -257,7 +257,8 @@
                 <div style="display:flex; flex-direction:column; gap:8px">
                   <div *ngFor="let f of fieldsInBlock(block)" class="fieldrow">
                     <div class="head">
-                      <span class="btag">{{ typeTag(f) }}</span>
+                      <span class="btag">{{ f.block }}</span>
+                      <select class="type-sel" [(ngModel)]="f.type" title="Field type"><option *ngFor="let t of fieldTypes" [value]="t.key">{{ t.label }}</option></select>
                       <input class="fname" [(ngModel)]="f.name" />
                       <span style="font-size:10px; color:var(--text-s)">limit</span>
                       <input class="limit-in" type="number" [(ngModel)]="f.limit" />

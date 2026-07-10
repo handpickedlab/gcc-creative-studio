@@ -327,11 +327,11 @@ export class TranslationsComponent implements OnInit {
       due: '',
       notes: '',
       fields: [
-        {id: fid(), block: 'B1', name: 'Subject line', limit: 50, text: ''},
-        {id: fid(), block: 'B1', name: 'Pre-header', limit: 90, text: ''},
-        {id: fid(), block: 'B2', name: 'Header', limit: 34, text: ''},
-        {id: fid(), block: 'B2', name: 'Body', limit: 320, text: ''},
-        {id: fid(), block: 'B2', name: 'CTA', limit: 22, text: ''},
+        {id: fid(), block: 'B1', type: 'block', name: 'Subject line', limit: 50, text: '', translate: true},
+        {id: fid(), block: 'B1', type: 'block', name: 'Pre-header', limit: 90, text: '', translate: true},
+        {id: fid(), block: 'B2', type: 'block', name: 'Header', limit: 34, text: '', translate: true},
+        {id: fid(), block: 'B2', type: 'block', name: 'Body', limit: 320, text: '', translate: true},
+        {id: fid(), block: 'B2', type: 'block', name: 'CTA', limit: 22, text: '', translate: true},
       ],
     };
     this.mstate = {};
@@ -412,9 +412,11 @@ export class TranslationsComponent implements OnInit {
             fields: res.segments.map((s, i) => ({
               id: 'f' + i,
               block: s.block ?? 'B1',
+              type: 'block',
               name: s.field,
               limit: s.charLimit,
               text: s.text,
+              translate: true,
             })),
           };
           this.mstate = {};
@@ -1025,9 +1027,11 @@ export class TranslationsComponent implements OnInit {
       fields: (b.segments ?? []).map((s, i) => ({
         id: 'f' + i,
         block: s.block ?? 'B1',
+        type: 'block',
         name: s.field,
         limit: s.charLimit,
         text: s.text,
+        translate: true,
       })),
     };
   }
