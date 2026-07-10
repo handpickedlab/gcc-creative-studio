@@ -33,6 +33,19 @@ interface FieldVM {
   name: string;
   limit: number | null;
   text: string;
+  type?: string; // block | push | sms | banner | social
+  translate?: boolean; // include this field in the translation (default true)
+}
+
+interface TokenPart {
+  kind: 'text' | 'tag' | 'ph';
+  v: string;
+}
+
+interface FieldType {
+  key: string;
+  tag: string;
+  label: string;
 }
 
 interface BriefingVM {
@@ -78,6 +91,23 @@ const MARKETS: MarketMeta[] = [
 ];
 const MARKET_GROUPS = ['English', 'Dutch', 'French', 'German', 'Scandinavian', 'Southern Europe'];
 
+const FIELD_TYPES: FieldType[] = [
+  {key: 'block', tag: 'B', label: 'E-mail block'},
+  {key: 'push', tag: 'PUSH', label: 'Push notification'},
+  {key: 'sms', tag: 'SMS', label: 'SMS'},
+  {key: 'banner', tag: 'BAN', label: 'Banner'},
+  {key: 'social', tag: 'SOC', label: 'Social'},
+];
+// Free-text guidance lines a user can one-click append to a language profile.
+const GUIDANCE_SNIPPETS = [
+  'Keep brand, product and collection names untranslated.',
+  'Respect the character limit per field.',
+  'Preserve HTML tags and [placeholders] exactly.',
+  'Use the dictionary for recurring terms.',
+  'No emoji.',
+  'Prefer short, punchy sentences.',
+];
+
 @Component({
   selector: 'app-translations',
   templateUrl: './translations.component.html',
@@ -88,6 +118,9 @@ export class TranslationsComponent implements OnInit {
   readonly groups = MARKET_GROUPS;
   readonly bars = [0, 1, 2, 3, 4, 5, 6, 7];
   readonly targets = MARKETS.filter(m => !m.source);
+  readonly fieldTypes = FIELD_TYPES;
+  readonly looseTypes = FIELD_TYPES.filter(t => t.key !== 'block');
+  readonly guidanceSnippets = GUIDANCE_SNIPPETS;
 
   view: 'empty' | 'intake' | 'work' | 'dict' | 'lang' = 'empty';
   workTab: 'briefing' | 'results' = 'briefing';
@@ -147,6 +180,7 @@ export class TranslationsComponent implements OnInit {
   langConfigs: Record<string, LanguageConfig> = {};
   langSaving = new Set<string>();
   langLoaded = false;
+  langActive = 'NL'; // selected language in the Instructies rail
 
   constructor(
     private service: TranslationService,
@@ -403,25 +437,52 @@ export class TranslationsComponent implements OnInit {
     return (this.briefing?.fields ?? []).filter(f => f.block === block);
   }
   addField(block: string): void {
-    this.briefing?.fields.push({id: fid(), block, name: 'New field', limit: 80, text: ''});
+    const type = this.briefing?.fields.find(f => f.block === block)?.type ?? 'block';
+    this.briefing?.fields.push({
+      id: fid(), block, type, name: 'New field', limit: 80, text: '', translate: true,
+    });
   }
   addBlock(): void {
     const n = 'B' + (this.blocks.length + 1);
-    this.briefing?.fields.push({id: fid(), block: n, name: 'Header', limit: 40, text: ''});
-  }
-  /** Adds a push-copy line — a normal segment that translates and exports like
-   * any other field, so push copy is no longer un-selectable (R5). */
-  addPushCopy(): void {
     this.briefing?.fields.push({
-      id: fid(),
-      block: 'Push',
-      name: 'Push copy',
-      limit: 90,
-      text: '',
+      id: fid(), block: n, type: 'block', name: 'Header', limit: 40, text: '', translate: true,
+    });
+  }
+  /** Adds a loose-copy line (push / SMS / banner / social) — a normal segment
+   * that translates and exports like any other field, so the "blank" push/SMS
+   * copy that sits outside the e-mail blocks is no longer un-selectable. */
+  addLoose(typeKey: string): void {
+    const t = FIELD_TYPES.find(x => x.key === typeKey) ?? FIELD_TYPES[1];
+    const limit = typeKey === 'sms' ? 160 : typeKey === 'push' ? 90 : 120;
+    this.briefing?.fields.push({
+      id: fid(), block: t.tag, type: t.key, name: t.label, limit, text: '', translate: true,
     });
   }
   removeField(f: FieldVM): void {
     if (this.briefing) this.briefing.fields = this.briefing.fields.filter(x => x.id !== f.id);
+  }
+  isTranslated(f: FieldVM): boolean {
+    return f.translate !== false;
+  }
+  toggleTranslate(f: FieldVM): void {
+    f.translate = f.translate === false;
+  }
+  typeTag(f: FieldVM): string {
+    return (FIELD_TYPES.find(t => t.key === f.type)?.tag) ?? f.block;
+  }
+  /** Splits copy into plain text, <html tags> and [placeholders] for chip
+   * rendering — the design's signature token highlighting. */
+  tokenize(text: string): TokenPart[] {
+    const parts = String(text ?? '').split(/(<[^>]+>|\[[^\]]+\]|\{[^}]+\})/g).filter(Boolean);
+    return parts.map(p => {
+      if (/^<[^>]+>$/.test(p)) return {kind: 'tag' as const, v: p};
+      if (/^[[{]/.test(p)) return {kind: 'ph' as const, v: p};
+      return {kind: 'text' as const, v: p};
+    });
+  }
+  /** Fields that actually take part in the translation (the "meevertalen" flag). */
+  get translatedFields(): FieldVM[] {
+    return (this.briefing?.fields ?? []).filter(f => f.translate !== false);
   }
 
   // ── market selection ───────────────────────────────────────────
@@ -930,6 +991,12 @@ export class TranslationsComponent implements OnInit {
   }
   isLangSaving(code: string): boolean {
     return this.langSaving.has(code);
+  }
+  /** One-click append a reusable guidance line to a language's profile. */
+  appendSnippet(code: string, snippet: string): void {
+    const c = this.configFor(code);
+    const cur = (c.guidance ?? '').replace(/\s*$/, '');
+    c.guidance = cur ? `${cur}\n• ${snippet}` : `• ${snippet}`;
   }
 
   // ── mapping helpers ────────────────────────────────────────────

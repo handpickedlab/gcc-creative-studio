@@ -62,7 +62,7 @@
         </button>
         <button class="dict-link" [class.active]="view==='lang'" (click)="openLangSettings()">
           <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/></svg></span>
-          <div style="flex:1"><div class="t1">Language settings</div><div class="t2">Tone of voice per language</div></div>
+          <div style="flex:1"><div class="t1">Instructions</div><div class="t2">Tone of voice per language</div></div>
         </button>
       </div>
     </div>
@@ -71,11 +71,23 @@
     <div class="canvas">
       <!-- EMPTY -->
       <div *ngIf="view==='empty'" class="empty">
-        <h1>Translations</h1>
-        <p>Upload a briefing or start blank. Translate your campaign copy per market, review per tab, and export back to Excel.</p>
-        <div class="acts">
-          <button class="btn primary" (click)="fileInput.click()">Upload .xlsx</button>
-          <button class="btn ghost" (click)="startBlank()">Start blank</button>
+        <div class="empty-inner">
+          <span class="eyebrow">Translate a briefing</span>
+          <h1>One briefing, fifteen markets</h1>
+          <p>Upload a campaign briefing or start blank. The AI localizes per market, using your dictionary for consistent brand language.</p>
+          <div class="empty-cards">
+            <button class="ecard primary" (click)="fileInput.click()">
+              <svg width="22" height="22" viewBox="0 0 22 23" fill="none"><path d="M11 15V4M7 8l4-4 4 4M4 16v1.5A2.5 2.5 0 006.5 20h9a2.5 2.5 0 002.5-2.5V16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="t">Upload .xlsx</div>
+              <div class="d">Reads sheets and requests automatically</div>
+            </button>
+            <button class="ecard" (click)="startBlank()">
+              <svg width="22" height="22" viewBox="0 0 22 23" fill="none"><rect x="4" y="3" width="14" height="16" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M8 8h6M8 11h6M8 14h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              <div class="t">Start blank</div>
+              <div class="d">Build a briefing from scratch</div>
+            </button>
+          </div>
+          <p class="empty-foot">Or open a saved briefing from the library <span>on the left</span>.</p>
         </div>
       </div>
 
@@ -152,35 +164,53 @@
         <p *ngIf="!dictTerms.length" style="color:var(--text-s); font-style:italic">No terms for {{ dictMarket }} yet.</p>
       </div>
 
-      <!-- LANGUAGE SETTINGS -->
+      <!-- INSTRUCTIES / LANGUAGE SETTINGS -->
       <div *ngIf="view==='lang'" class="canvas-inner">
         <button class="btn ghost sm" (click)="view = briefing ? 'work' : 'empty'" style="margin-bottom:18px">← Back</button>
-        <h2 class="serif" style="font-size:26px; font-weight:600; letter-spacing:-.02em; margin-bottom:4px">Language settings</h2>
-        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">Set the tone of voice per language. These profiles are shared by everyone and steer every translation into that language — form of address, whether ALL-CAPS CTAs stay uppercase, and free-text guidance for the localizer.</p>
-        <div style="display:flex; flex-direction:column; gap:12px">
-          <div *ngFor="let m of targets" class="lang-card" style="border:1px solid var(--border); border-radius:12px; padding:14px 16px">
-            <ng-container *ngIf="configFor(m.code) as c">
-              <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
-                <span class="btag">{{ m.code }}</span>
-                <span style="font-weight:600; font-size:13px">{{ m.label }}</span>
-                <button class="btn primary sm" style="margin-left:auto" [disabled]="isLangSaving(m.code)" (click)="saveLangConfig(m.code)">{{ isLangSaving(m.code) ? 'Saving…' : 'Save' }}</button>
+        <span class="eyebrow">Instructions</span>
+        <h1 class="serif" style="font-size:32px; font-weight:600; letter-spacing:-.025em; margin:8px 0 8px; line-height:1.05">Tone of voice per language</h1>
+        <p style="font-size:13px; color:var(--text-m); line-height:1.6; max-width:560px; margin-bottom:22px">Each language has its own profile — form of address, whether ALL-CAPS CTAs stay uppercase, and free-text guidance. These instructions steer every translation into that language. Shared by everyone.</p>
+
+        <div class="lang-layout">
+          <!-- language rail -->
+          <div class="lang-rail">
+            <div class="fld-label" style="padding-left:2px">Languages</div>
+            <button *ngFor="let m of targets" class="lang-pick" [class.on]="langActive===m.code" (click)="langActive=m.code">
+              <span class="code mono">{{ m.code }}</span>
+              <span class="nm">{{ m.label }}</span>
+              <span class="dot" [class.set]="configFor(m.code).formality!=='default' || !!configFor(m.code).guidance"></span>
+            </button>
+          </div>
+
+          <!-- editor -->
+          <div class="lang-editor" *ngIf="configFor(langActive) as c">
+            <div class="lang-head">
+              <div style="display:flex; align-items:center; gap:9px">
+                <h3 class="serif" style="font-size:22px; font-weight:600; letter-spacing:-.02em">{{ marketLabel(langActive) }}</h3>
+                <span class="btag">{{ langActive }}</span>
               </div>
-              <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end">
-                <div style="min-width:220px">
-                  <div class="fld-label">Form of address</div>
-                  <select class="sel" [(ngModel)]="c.formality">
-                    <option *ngFor="let f of formalities" [value]="f.value">{{ f.label }}</option>
-                  </select>
-                </div>
-                <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-m); cursor:pointer; padding-bottom:8px">
-                  <input type="checkbox" [(ngModel)]="c.preserveCasing" /> Keep ALL-CAPS CTAs uppercase
-                </label>
+              <button class="btn primary sm" [disabled]="isLangSaving(langActive)" (click)="saveLangConfig(langActive)">{{ isLangSaving(langActive) ? 'Saving…' : 'Save' }}</button>
+            </div>
+
+            <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px">
+              <div style="min-width:240px">
+                <div class="fld-label">Form of address</div>
+                <select class="sel" [(ngModel)]="c.formality">
+                  <option *ngFor="let f of formalities" [value]="f.value">{{ f.label }}</option>
+                </select>
               </div>
-              <div style="margin-top:12px">
-                <div class="fld-label">Tone &amp; style guidance</div>
-                <textarea class="tinput" rows="2" [(ngModel)]="c.guidance" placeholder="e.g. Warm and premium; avoid literal translations; prefer short, punchy sentences."></textarea>
-              </div>
-            </ng-container>
+              <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-m); cursor:pointer; padding-bottom:8px">
+                <input type="checkbox" [(ngModel)]="c.preserveCasing" /> Keep ALL-CAPS CTAs uppercase
+              </label>
+            </div>
+
+            <div class="fld-label">Tone &amp; style guidance</div>
+            <textarea class="tinput" rows="8" [(ngModel)]="c.guidance" placeholder="e.g. Warm and premium; localize rather than translate literally; prefer short, punchy sentences." style="line-height:1.6; margin-bottom:14px"></textarea>
+
+            <div class="vlabel"><div class="top"><span class="tx">Add a rule</span></div><p class="hint">Click to append a common instruction to the guidance above.</p></div>
+            <div class="snip-row">
+              <button *ngFor="let s of guidanceSnippets" class="snip" (click)="appendSnippet(langActive, s)">+ {{ s }}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -227,21 +257,27 @@
                 <div style="display:flex; flex-direction:column; gap:8px">
                   <div *ngFor="let f of fieldsInBlock(block)" class="fieldrow">
                     <div class="head">
-                      <span class="btag">{{ f.block }}</span>
+                      <span class="btag">{{ typeTag(f) }}</span>
                       <input class="fname" [(ngModel)]="f.name" />
                       <span style="font-size:10px; color:var(--text-s)">limit</span>
                       <input class="limit-in" type="number" [(ngModel)]="f.limit" />
                       <button class="iconbtn danger" title="Delete field" (click)="removeField(f)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                     </div>
                     <textarea class="fta" [rows]="f.name==='Body'?3:1" [(ngModel)]="f.text"></textarea>
-                    <div class="fmeta"><span></span><span class="count" [class.over]="!!f.limit && f.text.length > f.limit">{{ f.text.length }}/{{ f.limit || '∞' }}</span></div>
+                    <div class="fmeta">
+                      <span class="tok-line">
+                        <ng-container *ngFor="let p of tokenize(f.text)"><span *ngIf="p.kind==='tag'" class="tok-tag">{{ p.v }}</span><span *ngIf="p.kind==='ph'" class="tok-ph">{{ p.v }}</span><span *ngIf="p.kind==='text'">{{ p.v }}</span></ng-container>
+                      </span>
+                      <span class="count" [class.over]="!!f.limit && f.text.length > f.limit">{{ f.text.length }}/{{ f.limit || '∞' }}</span>
+                    </div>
                   </div>
                   <button class="addline" (click)="addField(block)">+ Add field to {{ block }}</button>
                 </div>
               </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap">
-                <button class="addblock" (click)="addBlock()">+ Add block</button>
-                <button class="addblock" (click)="addPushCopy()" title="Add a push-copy line to translate">+ Add push copy</button>
+              <button class="addblock" (click)="addBlock()">+ Add block</button>
+              <div class="loose-row">
+                <span class="loose-lbl">Add loose copy:</span>
+                <button *ngFor="let t of looseTypes" class="loose-pill" (click)="addLoose(t.key)">+ {{ t.label }}</button>
               </div>
             </div>
           </div>
@@ -324,8 +360,8 @@
 
               <div class="tbl-head"><span>Field</span><span>Source · EN</span><span>Translation · {{ active }}</span><span></span></div>
               <div *ngFor="let f of briefing.fields" class="frow">
-                <div><div class="fl-block"><span class="btag">{{ f.block }}</span></div><div class="fl-name">{{ f.name }}</div></div>
-                <div class="src">{{ f.text }}</div>
+                <div><div class="fl-block"><span class="btag">{{ typeTag(f) }}</span></div><div class="fl-name">{{ f.name }}</div></div>
+                <div class="src"><ng-container *ngFor="let p of tokenize(f.text)"><span *ngIf="p.kind==='tag'" class="tok-tag">{{ p.v }}</span><span *ngIf="p.kind==='ph'" class="tok-ph">{{ p.v }}</span><span *ngIf="p.kind==='text'">{{ p.v }}</span></ng-container></div>
                 <div class="tcell">
                   <div *ngIf="isRetranslating(active, f)" class="skel"></div>
                   <ng-container *ngIf="!isRetranslating(active, f)">
