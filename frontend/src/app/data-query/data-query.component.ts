@@ -62,14 +62,14 @@ export class DataQueryComponent implements OnInit {
   // library can answer (verified against the corpus). Span single facts,
   // trends, cross-document synthesis and cross-language sources.
   readonly examples = [
-    'Hoeveel van de online aankopen gaat via de smartphone, nu en richting 2030?',
-    'Welke betaalmethodes domineren de online bestedingen in Nederland?',
-    'Hoe ontdekt Gen Z nieuwe merken en mode?',
-    'Wat zijn de belangrijkste wereldwijde consumententrends voor 2026?',
-    'Hoe belangrijk vinden consumenten duurzaamheid bij mode-aankopen?',
-    'Welk deel van de online bestedingen gaat naar buitenlandse webshops?',
-    'Wat zegt de ARD/ZDF-studie over mediagebruik in Duitsland?',
-    'Welke rol speelt AI in de toekomst van retail en mode?',
+    'What share of online purchases is made via smartphone, now and toward 2030?',
+    'Which payment methods dominate online spending in the Netherlands?',
+    'How does Gen Z discover new brands and fashion?',
+    'What are the most important global consumer trends for 2026?',
+    'How important is sustainability to consumers when buying fashion?',
+    'What share of online spending goes to foreign webshops?',
+    'What does the ARD/ZDF study say about media use in Germany?',
+    'What role does AI play in the future of retail and fashion?',
   ];
 
   constructor(
