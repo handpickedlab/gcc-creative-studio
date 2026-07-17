@@ -55,6 +55,11 @@ B. A research library of claims extracted from slide decks and trend reports
 BE THOROUGH — search deeply, hybridly and ITERATIVELY. One `search_claims`
 call returns only its ~10 closest matches: that is a keyhole, never the whole
 answer. For almost every question you should make SEVERAL tool calls:
+- When a question is broad or vague ("brand awareness", "competitors",
+  "price image", "what do customers think"), call `list_tags` FIRST to see
+  which topics the library actually covers, then search the matching tags.
+  Never fire one literal query, get 8 claims from a single document, and give
+  up — that is the failure mode this guidance exists to prevent.
 - Call `list_tables` early to see which uploaded survey/tracker sheets exist,
   then `describe_table` + `run_sql` on the relevant ones to pull ACTUAL
   numbers. Do not answer a metric question from the decks alone if a sheet
@@ -68,6 +73,14 @@ answer. For almost every question you should make SEVERAL tool calls:
   after a single search — reformulate (English, full brand name, add a
   geography or period hint) AND check the sheets first. Only report something
   as missing after several genuinely different attempts came up empty.
+
+ASK BACK WHEN TRULY AMBIGUOUS: if, after orienting (`list_tags`) and a few
+searches plus the sheets, the question is still genuinely ambiguous in a way
+that changes the answer — which market (NL / DE / BE / global)? aided vs
+spontaneous awareness? which period? — briefly summarise what you DID find,
+then ask the user ONE short clarifying question instead of guessing. This is a
+multi-turn tool, so a clarifying question is a valid answer. But do NOT ask
+back for clear questions: do the work first, clarify only as a last resort.
 
 Tool guidance:
 - `search_claims` results are ranked by relevance × the document's priority
@@ -164,11 +177,21 @@ _TOOLS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "list_tags",
+        "description": "List the research library's topic vocabulary: every "
+                       "canonical tag and how many claims carry it (e.g. "
+                       "'brand awareness', 'competitors', 'pricing', 'nps'). "
+                       "Call this to ORIENT yourself on a broad or vague "
+                       "question — see what the corpus actually covers, then "
+                       "search the relevant tags instead of guessing one query.",
+        "parameters_json_schema": {"type": "object", "properties": {}},
+    },
 ]
 
 
 def _dispatch(name, args, allowed, claim_search=None,
-              allowed_documents=None):
+              allowed_documents=None, list_tags=None):
     if name == "list_tables":
         ts = store.list_tables()
         return [t for t in ts if allowed is None or t["table"] in allowed]
@@ -194,6 +217,10 @@ def _dispatch(name, args, allowed, claim_search=None,
             allowed_documents=allowed_documents,
             max_results=int(args.get("max_results") or 10),
         )
+    if name == "list_tags":
+        if list_tags is None:
+            return {"error": "the research library is not available in this session"}
+        return list_tags(allowed_documents=allowed_documents)
     return {"error": f"unknown tool {name!r}"}
 
 
@@ -211,6 +238,8 @@ def _summarize(name, out):
         if name == "search_claims":
             docs = {r["document"] for r in out.get("results", [])}
             return f"{out.get('count', 0)} claims from {len(docs)} documents"
+        if name == "list_tags":
+            return f"{len(out.get('tags', []))} tags"
     except Exception:
         pass
     return ""
@@ -234,7 +263,8 @@ def _collect_sources(sources, out):
 
 
 def stream_answer(client: Client, model: str, question: str, allowed=None,
-                  claim_search=None, allowed_documents=None, history=None):
+                  claim_search=None, allowed_documents=None, history=None,
+                  list_tags=None):
     """Run the function-calling loop, yielding event dicts:
     {t:'tool',name,input}, {t:'tool_result',name,summary,result}, {t:'text',v},
     {t:'sources',v} (citations for search_claims facts), {t:'done'}.
@@ -293,7 +323,8 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
             yield {"t": "tool", "name": fc.name, "input": args}
             out = _dispatch(fc.name, args, allowed,
                             claim_search=claim_search,
-                            allowed_documents=allowed_documents)
+                            allowed_documents=allowed_documents,
+                            list_tags=list_tags)
             if fc.name == "search_claims" and isinstance(out, dict):
                 _collect_sources(sources, out)
             yield {"t": "tool_result", "name": fc.name,

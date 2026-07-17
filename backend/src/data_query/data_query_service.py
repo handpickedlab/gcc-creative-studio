@@ -161,4 +161,5 @@ class DataQueryService:
             claim_search=claim_search,
             allowed_documents=allowed_documents,
             history=history,
+            list_tags=claim_search_service.list_tags_sync,
         )

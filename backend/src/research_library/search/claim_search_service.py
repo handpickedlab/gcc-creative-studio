@@ -123,6 +123,58 @@ def search_claims_sync(
     }
 
 
+_TAGS_SQL = """
+SELECT tag, COUNT(*) AS n
+FROM research_claims c
+JOIN research_documents d ON d.id = c.document_id
+CROSS JOIN LATERAL jsonb_array_elements_text(c.canonical_tags) AS tag
+WHERE d.deleted_at IS NULL
+  AND c.canonical_tags IS NOT NULL
+  AND jsonb_typeof(c.canonical_tags) = 'array'
+  AND (CAST(:document_ids AS int[]) IS NULL
+       OR c.document_id = ANY(CAST(:document_ids AS int[])))
+GROUP BY tag
+ORDER BY n DESC
+LIMIT :limit
+"""
+
+
+def list_tags_sync(
+    allowed_documents: list[int] | None = None,
+    limit: int = 300,
+) -> dict[str, Any]:
+    """The corpus's canonical topic vocabulary with per-tag claim counts.
+
+    Lets the agent orient itself — see WHICH topics the library actually
+    covers (brand awareness, competitors, NPS, ...) — before/instead of
+    guessing a single search query. Safe to call from the sync agent loop.
+    """
+    try:
+        rows = asyncio.run(_fetch_tags(allowed_documents, limit))
+    except Exception as e:
+        logger.error("list_tags failed: %s", e)
+        return {"error": f"list_tags failed: {e}"}
+    return {
+        "count": len(rows),
+        "tags": [{"tag": r["tag"], "claims": r["n"]} for r in rows],
+    }
+
+
+async def _fetch_tags(
+    allowed_documents: list[int] | None, limit: int
+) -> list[dict[str, Any]]:
+    """Distinct canonical tags + claim counts on a fresh worker engine."""
+    from src.database import WorkerDatabase
+
+    async with WorkerDatabase() as db_factory:
+        async with db_factory() as db:
+            result = await db.execute(
+                text(_TAGS_SQL),
+                {"document_ids": allowed_documents, "limit": limit},
+            )
+            return [dict(row) for row in result.mappings().all()]
+
+
 async def _fetch_candidates(
     query_embedding: list[float],
     tags: list[str] | None,
