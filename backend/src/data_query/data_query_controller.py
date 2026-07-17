@@ -99,12 +99,17 @@ async def ask(body: AskRequestDto, service: DataQueryService = Depends()):
     """
     await service.ensure_loaded()
 
+    history = (
+        [t.model_dump() for t in body.history] if body.history else None
+    )
+
     def gen():
         try:
             for event in service.stream(
                 body.question,
                 body.allowed_tables,
                 body.allowed_documents,
+                history=history,
             ):
                 yield "data: " + json.dumps(event, default=str) + "\n\n"
         except Exception as e:  # surface any failure to the client

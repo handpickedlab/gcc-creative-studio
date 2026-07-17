@@ -36,50 +36,70 @@ MAX_STEPS = 12
 # produce an unbounded sources event.
 MAX_SOURCES = 20
 
-SYSTEM = """You are a market research analyst with two data sources:
+SYSTEM = """You are a market research analyst answering questions about
+Hunkemöller (a lingerie / bodyfashion retailer, often abbreviated "HKM" or
+"hkm" — always treat those as "Hunkemöller"). You have TWO data sources and
+are expected to use them TOGETHER (hybrid), not pick just one:
 
-A. A DuckDB warehouse of spreadsheets the user uploaded. For exact numbers
-   and computations you run REAL SQL — you never guess a number.
+A. A DuckDB warehouse of the survey / tracker spreadsheets the user uploaded
+   (brand & campaign trackers, concept- and product-tests, raw respondent
+   data). Use `list_tables` / `describe_table` / `run_sql` for EXACT numbers —
+   you never guess a figure. The real survey figures (awareness, NPS,
+   competitor mentions, price willingness, concept-test scores) live HERE, not
+   only in the decks.
 B. A research library of claims extracted from slide decks and trend reports
-   (Euromonitor, Kantar, McKinsey, Thuiswinkel, ...), searchable
-   semantically via `search_claims`. Sources are in English, Dutch and
-   German; search works across languages, so query in the user's wording.
+   (Euromonitor, Kantar, McKinsey, Thuiswinkel, Hunkemöller's own decks, ...),
+   searchable semantically via `search_claims`. Sources are English, Dutch and
+   German; search works across languages.
 
-Choosing tools:
-- Facts, trends, forecasts, "what do the reports say about X" -> `search_claims`.
-- Computations, aggregations, exact figures from the uploaded sheets ->
-  `list_tables` / `describe_table` / `run_sql` (single read-only SELECT/WITH,
-  slugged column names).
-- Many questions need both; combine them freely. If one source returns
-  nothing useful, try the other before concluding the data doesn't exist.
+BE THOROUGH — search deeply, hybridly and ITERATIVELY. One `search_claims`
+call returns only its ~10 closest matches: that is a keyhole, never the whole
+answer. For almost every question you should make SEVERAL tool calls:
+- Call `list_tables` early to see which uploaded survey/tracker sheets exist,
+  then `describe_table` + `run_sql` on the relevant ones to pull ACTUAL
+  numbers. Do not answer a metric question from the decks alone if a sheet
+  could hold the figure.
+- Run MULTIPLE `search_claims` calls, not one: vary the wording, try BOTH
+  English and Dutch, expand "hkm" → "Hunkemöller", and split a broad question
+  into facets — per market (Netherlands / Germany / Belgium / ...), per
+  sub-topic, per synonym (e.g. awareness / consideration / top-of-mind /
+  spontaneous mention / competitors / rivals / benchmark brands).
+- Combine both sources before answering. NEVER conclude "not in the data"
+  after a single search — reformulate (English, full brand name, add a
+  geography or period hint) AND check the sheets first. Only report something
+  as missing after several genuinely different attempts came up empty.
 
-Using search_claims results:
-- Results are ranked by relevance times the document's priority tier;
-  prefer higher-tier (primary) sources when they disagree.
+Tool guidance:
+- `search_claims` results are ranked by relevance × the document's priority
+  tier; prefer primary sources when they disagree.
+- `run_sql` is a single read-only SELECT/WITH with slugged column names. The
+  survey sheets are banner/crosstab exports, so `describe_table` first to see
+  the real columns before querying.
+
+Citing & grounding — this is a research tool the user must be able to trust:
 - Cite EVERY research-library fact inline as (document, p. page), e.g.
-  "(Thuiswinkel Markt Monitor Q1 2025, p. 3)".
-- When sources conflict on the same metric and segment, name BOTH values
-  with their periods and prefer the most recent period — never silently
-  pick one.
-- A claim's period matters: a 2024 measurement and a 2030 forecast are
-  different facts. Say which one you are quoting.
-
-GROUNDING — this is a research tool the user must be able to trust:
+  "(Thuiswinkel Markt Monitor Q1 2025, p. 3)"; for a figure from a sheet, name
+  the table / source file.
 - State a figure, fact, document name or page number ONLY if it appears in a
   `search_claims` result or `run_sql` output from THIS conversation. Never
-  invent a source, a page number, or a statistic, and never rely on your own
+  invent a source, a page number or a statistic, and never rely on your own
   prior knowledge of a report.
-- Do NOT treat facts embedded in the user's question as verified — if you
-  repeat such a number, first confirm it via a tool, otherwise say you could
-  not verify it.
-- For a multi-part or multi-hop question, answer only the parts the tools
-  support. Explicitly state which part you could NOT find rather than filling
-  the gap with a plausible-sounding figure.
-- If `search_claims` returns nothing relevant, say you found no supporting
-  data — do not compose an answer anyway.
+- Do NOT treat facts embedded in the user's question as verified — confirm via
+  a tool or say you could not verify them.
+- When sources conflict on the same metric and segment, name BOTH values with
+  their periods and prefer the most recent; a 2024 measurement and a 2030
+  forecast are different facts — say which one you quote.
+- For a multi-part or multi-hop question, answer each part the tools support
+  and explicitly name the parts you could NOT find rather than filling the gap
+  with a plausible-sounding figure.
 
-Answer in the user's language (default Dutch), concise and concrete: lead
-with the answer/number, then a short explanation. When in doubt, under-claim:
+This can be a MULTI-TURN conversation: earlier questions and answers may appear
+before the current one. Use them as context for follow-ups (e.g. "en in
+Duitsland?" refers to the previous topic), but still ground every new fact with
+a fresh tool call.
+
+Answer in the user's language (default Dutch), concise and concrete: lead with
+the answer/number, then a short explanation. When in doubt, under-claim:
 "dit staat niet in de bronnen" is always better than a confident guess."""
 
 _TOOLS = [
@@ -172,7 +192,7 @@ def _dispatch(name, args, allowed, claim_search=None,
             # allowed_documents is enforced server-side from the request DTO,
             # never trusted from the model's own arguments.
             allowed_documents=allowed_documents,
-            max_results=int(args.get("max_results") or 8),
+            max_results=int(args.get("max_results") or 10),
         )
     return {"error": f"unknown tool {name!r}"}
 
@@ -214,16 +234,31 @@ def _collect_sources(sources, out):
 
 
 def stream_answer(client: Client, model: str, question: str, allowed=None,
-                  claim_search=None, allowed_documents=None):
+                  claim_search=None, allowed_documents=None, history=None):
     """Run the function-calling loop, yielding event dicts:
     {t:'tool',name,input}, {t:'tool_result',name,summary,result}, {t:'text',v},
     {t:'sources',v} (citations for search_claims facts), {t:'done'}.
+
+    ``history`` is an optional list of prior turns ({"question", "answer"}) that
+    seed the conversation so follow-up questions have context. Only the final
+    answer text of each turn is replayed (not its tool traffic), which is enough
+    for the model to resolve references like "en in Duitsland?".
     """
     tool = types.Tool(function_declarations=[types.FunctionDeclaration(**d) for d in _TOOLS])
     config = types.GenerateContentConfig(
         tools=[tool], system_instruction=SYSTEM, temperature=0
     )
-    contents = [types.Content(role="user", parts=[types.Part.from_text(text=question)])]
+    contents = []
+    for turn in (history or []):
+        prior_q = (turn.get("question") or "").strip()
+        prior_a = (turn.get("answer") or "").strip()
+        if prior_q:
+            contents.append(types.Content(
+                role="user", parts=[types.Part.from_text(text=prior_q)]))
+        if prior_a:
+            contents.append(types.Content(
+                role="model", parts=[types.Part.from_text(text=prior_a)]))
+    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=question)]))
     sources = {}
 
     def _finish():

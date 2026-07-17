@@ -141,9 +141,12 @@ class DataQueryService:
         question: str,
         allowed_tables: list[str] | None = None,
         allowed_documents: list[int] | None = None,
+        history: list[dict] | None = None,
     ) -> Iterator[dict]:
         """Yield the agent's streaming events. Callers must `await
-        ensure_loaded()` before iterating so the DuckDB warehouse is current."""
+        ensure_loaded()` before iterating so the DuckDB warehouse is current.
+
+        ``history`` seeds prior question/answer turns for follow-up context."""
         client = self.gemini.client
         model = self.gemini.cfg.GEMINI_MODEL_ID
         allowed = set(allowed_tables) if allowed_tables else None
@@ -157,4 +160,5 @@ class DataQueryService:
             allowed,
             claim_search=claim_search,
             allowed_documents=allowed_documents,
+            history=history,
         )

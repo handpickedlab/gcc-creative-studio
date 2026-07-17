@@ -19,68 +19,47 @@
           [(ngModel)]="question"
           (keydown.meta.enter)="ask()"
           (keydown.control.enter)="ask()"
-          placeholder="e.g. What is the average per category?"
+          [placeholder]="conversation.length ? 'Ask a follow-up…' : 'e.g. What is the average per category?'"
         ></textarea>
         <div class="dq-row">
           <button class="dq-btn primary" (click)="ask()" [disabled]="busy">
             Ask
           </button>
+          <button
+            class="dq-btn ghost"
+            (click)="newConversation()"
+            *ngIf="conversation.length && !busy"
+          >
+            New conversation
+          </button>
           <span class="dq-muted" *ngIf="busy">working…</span>
         </div>
-        <div class="dq-label" style="margin-top: 14px">Try one of these</div>
-        <div class="dq-chips">
-          <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
-        </div>
-      </div>
-
-      <div class="dq-stream">
-        <ng-container *ngFor="let s of steps">
-          <div *ngIf="s.kind === 'text'" class="s-text">
-            <markdown [data]="s.text"></markdown>
-          </div>
-
-          <div *ngIf="s.kind === 'tool'" class="s-tool">
-            <span class="s-head">
-              🔧 <b>{{ s.name }}</b>
-              <code *ngIf="s.name !== 'run_sql'"> {{ toolArgs(s) }}</code>
-              <span class="dq-muted"> → {{ s.summary }}</span>
-            </span>
-
-            <div *ngIf="s.name === 'run_sql'" class="s-sql">
-              <code>{{ sql(s) }}</code>
-              <div *ngIf="s.result?.error" class="s-err">{{ s.result?.error }}</div>
-              <div *ngIf="s.result?.columns" class="s-tbl">
-                <table>
-                  <thead>
-                    <tr><th *ngFor="let c of cols(s)">{{ c }}</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let row of s.result?.rows">
-                      <td *ngFor="let c of cols(s)">{{ row[c] }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="dq-muted" *ngIf="s.result?.truncated">
-                  (truncated to {{ s.result?.rows?.length }} rows)
-                </div>
-              </div>
-            </div>
+        <ng-container *ngIf="!conversation.length && !pendingQuestion">
+          <div class="dq-label" style="margin-top: 14px">Try one of these</div>
+          <div class="dq-chips">
+            <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
           </div>
         </ng-container>
-
-        <div class="dq-sources" *ngIf="answerSources.length">
-          <div class="dq-label">Sources</div>
-          <span
-            class="dq-chip src-chip"
-            *ngFor="let src of answerSources"
-            (click)="openSource(src)"
-            [title]="src.statement || ''"
-          >
-            <mat-icon>image</mat-icon>
-            {{ src.document }} · p. {{ src.page }}
-          </span>
-        </div>
       </div>
+
+      <!-- Conversation thread: completed turns, then the in-progress turn. -->
+      <ng-container *ngFor="let turn of conversation">
+        <div class="dq-qbubble">{{ turn.question }}</div>
+        <div class="dq-stream">
+          <ng-container
+            *ngTemplateOutlet="streamTpl; context: {steps: turn.steps, srcs: turn.answerSources}"
+          ></ng-container>
+        </div>
+      </ng-container>
+
+      <ng-container *ngIf="pendingQuestion">
+        <div class="dq-qbubble">{{ pendingQuestion }}</div>
+        <div class="dq-stream">
+          <ng-container
+            *ngTemplateOutlet="streamTpl; context: {steps: steps, srcs: answerSources}"
+          ></ng-container>
+        </div>
+      </ng-container>
     </main>
 
     <aside class="dq-card dq-side">
@@ -120,3 +99,53 @@
   [source]="viewerSource"
   (closed)="viewerSource = null"
 ></app-slide-viewer>
+
+<!-- Reusable renderer for one turn's steps (tool calls, SQL tables, text) + sources. -->
+<ng-template #streamTpl let-steps="steps" let-srcs="srcs">
+  <ng-container *ngFor="let s of steps">
+    <div *ngIf="s.kind === 'text'" class="s-text">
+      <markdown [data]="s.text"></markdown>
+    </div>
+
+    <div *ngIf="s.kind === 'tool'" class="s-tool">
+      <span class="s-head">
+        🔧 <b>{{ s.name }}</b>
+        <code *ngIf="s.name !== 'run_sql'"> {{ toolArgs(s) }}</code>
+        <span class="dq-muted"> → {{ s.summary }}</span>
+      </span>
+
+      <div *ngIf="s.name === 'run_sql'" class="s-sql">
+        <code>{{ sql(s) }}</code>
+        <div *ngIf="s.result?.error" class="s-err">{{ s.result?.error }}</div>
+        <div *ngIf="s.result?.columns" class="s-tbl">
+          <table>
+            <thead>
+              <tr><th *ngFor="let c of cols(s)">{{ c }}</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of s.result?.rows">
+                <td *ngFor="let c of cols(s)">{{ row[c] }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="dq-muted" *ngIf="s.result?.truncated">
+            (truncated to {{ s.result?.rows?.length }} rows)
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <div class="dq-sources" *ngIf="srcs.length">
+    <div class="dq-label">Sources</div>
+    <span
+      class="dq-chip src-chip"
+      *ngFor="let src of srcs"
+      (click)="openSource(src)"
+      [title]="src.statement || ''"
+    >
+      <mat-icon>image</mat-icon>
+      {{ src.document }} · p. {{ src.page }}
+    </span>
+  </div>
+</ng-template>

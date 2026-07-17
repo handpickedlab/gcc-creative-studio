@@ -112,11 +112,13 @@ export class DataQueryService {
     question: string,
     allowedTables: string[] | null,
     allowedDocuments: number[] | null = null,
+    history: {question: string; answer: string}[] = [],
   ): Observable<AgentEvent> {
     const req = this.http.post(
       `${this.baseUrl}/ask`,
       {
         question,
+        history,
         allowed_tables: allowedTables,
         allowed_documents: allowedDocuments,
       },

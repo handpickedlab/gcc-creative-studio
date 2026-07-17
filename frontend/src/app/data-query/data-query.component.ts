@@ -34,6 +34,13 @@ interface Step {
   result?: SqlResult | null;
 }
 
+/** A completed question/answer turn in the conversation thread. */
+interface Turn {
+  question: string;
+  steps: Step[];
+  answerSources: ClaimSource[];
+}
+
 @Component({
   selector: 'app-data-query',
   templateUrl: './data-query.component.html',
@@ -48,6 +55,9 @@ export class DataQueryComponent implements OnInit {
   sources: SourceTable[] = [];
   private off = new Set<string>();
 
+  /** Completed turns (the conversation thread) + the in-progress turn. */
+  conversation: Turn[] = [];
+  pendingQuestion: string | null = null;
   steps: Step[] = [];
   private curText: Step | null = null;
   private curTool: Step | null = null;
@@ -129,6 +139,8 @@ export class DataQueryComponent implements OnInit {
     const q = this.question.trim();
     if (!q || this.busy) return;
     this.busy = true;
+    this.pendingQuestion = q;
+    this.question = '';
     this.steps = [];
     this.curText = null;
     this.curTool = null;
@@ -138,15 +150,63 @@ export class DataQueryComponent implements OnInit {
     const allowed = this.off.size
       ? this.sources.map(s => s.table).filter(t => !this.off.has(t))
       : null;
+    // Replay prior turns so the agent can resolve follow-ups ("en in Duitsland?").
+    const history = this.conversation.map(t => ({
+      question: t.question,
+      answer: this.answerText(t.steps),
+    }));
 
-    this.service.ask(q, allowed, this.allowedDocuments).subscribe({
+    this.service.ask(q, allowed, this.allowedDocuments, history).subscribe({
       next: ev => this.handle(ev),
       error: err => {
-        this.busy = false;
+        this.discardTurn();
         handleErrorSnackbar(this.snackBar, err, 'Query');
       },
-      complete: () => (this.busy = false),
+      complete: () => this.finishTurn(),
     });
+  }
+
+  /** The concatenated answer text of a turn (for the history we send back). */
+  private answerText(steps: Step[]): string {
+    return steps
+      .filter(s => s.kind === 'text')
+      .map(s => s.text || '')
+      .join('\n')
+      .trim();
+  }
+
+  /** Move the in-progress turn into the thread. Idempotent per turn. */
+  private finishTurn(): void {
+    this.busy = false;
+    if (!this.pendingQuestion) return;
+    this.conversation.push({
+      question: this.pendingQuestion,
+      steps: this.steps,
+      answerSources: this.answerSources,
+    });
+    this.pendingQuestion = null;
+    this.steps = [];
+    this.curText = null;
+    this.curTool = null;
+    this.answerSources = [];
+  }
+
+  /** Drop a failed in-progress turn without adding it to the thread. */
+  private discardTurn(): void {
+    this.busy = false;
+    this.pendingQuestion = null;
+    this.steps = [];
+    this.curText = null;
+    this.curTool = null;
+    this.answerSources = [];
+  }
+
+  /** Start a fresh conversation (clears the thread). */
+  newConversation(): void {
+    this.discardTurn();
+    this.conversation = [];
+    this.viewerSource = null;
+    this.question = '';
   }
 
   private handle(ev: AgentEvent): void {
@@ -181,7 +241,7 @@ export class DataQueryComponent implements OnInit {
         this.steps.push({kind: 'text', text: '⚠️ ' + (ev.message || 'error')});
         break;
       case 'done':
-        this.busy = false;
+        this.finishTurn();
         break;
     }
   }

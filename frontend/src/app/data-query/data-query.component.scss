@@ -54,6 +54,7 @@
 
 .dq-card { background: var(--bg-sub); border: 1px solid var(--border-lt); border-radius: var(--rl); padding: 18px; margin-bottom: 16px; }
 .dq-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-s); font-weight: 600; margin-bottom: 9px; }
+.dq-qbubble { font-weight: 600; margin: 22px 0 8px; padding: 11px 15px; border-radius: var(--rl); background: var(--bg-sub); border: 1px solid var(--border-lt); }
 .dq-muted { color: var(--text-m); }
 
 textarea {
