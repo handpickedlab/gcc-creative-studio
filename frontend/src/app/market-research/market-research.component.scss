@@ -46,16 +46,6 @@
   color: #19160f;
 }
 
-/* External link to Virtual Audience — pushed right, accent-styled to read as
-   a distinct destination rather than an internal tab. */
-.mr-ext {
-  margin-left: auto;
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.mr-ext:hover { background: var(--accent); border-color: var(--accent); color: #19160f; }
-.mr-ext .mr-ext-icon { font-size: 14px; width: 14px; height: 14px; opacity: 0.75; }
-
 /* The tab bar already provides the top offset; the routed child sits
    directly under it (children keep their own left margin to clear the rail). */
 .mr-shell ::ng-deep .dq-wrap,
