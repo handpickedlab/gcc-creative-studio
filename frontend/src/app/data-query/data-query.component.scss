@@ -55,11 +55,12 @@
 .dq-muted { color: var(--text-m); }
 
 /* ── composer (pinned to the bottom, below the messages) ───────── */
+/* No background band: the app background is a dynamic gradient, so any solid
+   fill reads as a mismatched dark rectangle. The input itself is opaque, so
+   messages scroll cleanly behind it. */
 .dq-composer-wrap {
   position: sticky; bottom: 10px; z-index: 5;
-  margin-top: 20px; padding-top: 12px;
-  /* fade the last messages out under the composer as they scroll past */
-  background: linear-gradient(to top, var(--bg) 72%, transparent);
+  margin-top: 20px;
 }
 .dq-composer {
   display: flex; align-items: flex-end; gap: 8px;
