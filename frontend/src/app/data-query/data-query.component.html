@@ -1,6 +1,6 @@
 <!--
  Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
- Data-query tool: upload sheets, ask in natural language, stream the agent's work.
+ Data-query tool: upload sheets, ask in natural language, poll the agent's run.
 -->
 <div class="dq-wrap">
   <div class="dq-cols">
@@ -13,53 +13,102 @@
         slide behind every claim.
       </p>
 
-      <div class="dq-card">
-        <div class="dq-label">Question</div>
+      <!-- Composer -->
+      <div class="dq-composer">
         <textarea
           [(ngModel)]="question"
-          (keydown.meta.enter)="ask()"
-          (keydown.control.enter)="ask()"
-          [placeholder]="conversation.length ? 'Ask a follow-up…' : 'e.g. What is the average per category?'"
+          (keydown.enter)="onSend($event)"
+          [disabled]="busy"
+          rows="1"
+          [placeholder]="conversation.length ? 'Ask a follow-up…' : 'Ask a question about your data…'"
         ></textarea>
-        <div class="dq-row">
-          <button class="dq-btn primary" (click)="ask()" [disabled]="busy">
-            Ask
-          </button>
-          <button
-            class="dq-btn ghost"
-            (click)="newConversation()"
-            *ngIf="conversation.length && !busy"
-          >
-            New conversation
-          </button>
-          <span class="dq-muted" *ngIf="busy">working…</span>
+        <button
+          class="dq-send"
+          (click)="ask()"
+          [disabled]="busy || !question.trim()"
+          title="Ask (Enter)"
+        >
+          <mat-icon>{{ busy ? 'hourglass_empty' : 'arrow_upward' }}</mat-icon>
+        </button>
+      </div>
+      <div class="dq-composer-row">
+        <button
+          class="dq-btn ghost"
+          (click)="newConversation()"
+          *ngIf="conversation.length && !busy"
+        >
+          <mat-icon>add</mat-icon> New chat
+        </button>
+      </div>
+
+      <!-- Starter questions (only on an empty conversation) -->
+      <ng-container *ngIf="!conversation.length && !pendingQuestion">
+        <div class="dq-label" style="margin-top: 18px">Try one of these</div>
+        <div class="dq-chips">
+          <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
         </div>
-        <ng-container *ngIf="!conversation.length && !pendingQuestion">
-          <div class="dq-label" style="margin-top: 14px">Try one of these</div>
-          <div class="dq-chips">
-            <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
+      </ng-container>
+
+      <!-- Conversation thread -->
+      <div class="chat" *ngIf="conversation.length || pendingQuestion">
+        <ng-container *ngFor="let turn of conversation">
+          <div class="msg user"><div class="bubble">{{ turn.question }}</div></div>
+
+          <div class="msg bot">
+            <!-- collapsible reasoning trace, ABOVE the answer -->
+            <button
+              class="disclosure trace-toggle"
+              *ngIf="traceSteps(turn.steps).length"
+              [class.open]="turn.traceOpen"
+              (click)="turn.traceOpen = !turn.traceOpen"
+            >
+              <mat-icon>chevron_right</mat-icon>
+              <span>Reasoning · {{ traceLabel(turn.steps) }}</span>
+            </button>
+            <div class="trace" *ngIf="turn.traceOpen">
+              <ng-container *ngTemplateOutlet="traceTpl; context: {steps: turn.steps}"></ng-container>
+            </div>
+
+            <!-- the answer -->
+            <div class="answer" [class.failed]="turn.failed">
+              <markdown [data]="answerText(turn.steps)"></markdown>
+            </div>
+
+            <!-- collapsible sources, BELOW the answer -->
+            <div class="src-block" *ngIf="turn.answerSources.length">
+              <button
+                class="disclosure src-toggle"
+                [class.open]="turn.sourcesOpen"
+                (click)="turn.sourcesOpen = !turn.sourcesOpen"
+              >
+                <mat-icon>chevron_right</mat-icon>
+                <span>{{ turn.answerSources.length }} sources</span>
+              </button>
+              <div class="sources" *ngIf="turn.sourcesOpen">
+                <ng-container *ngTemplateOutlet="sourcesTpl; context: {srcs: turn.answerSources}"></ng-container>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- in-progress turn (shown the moment you hit Ask) -->
+        <ng-container *ngIf="pendingQuestion">
+          <div class="msg user" #pendingAnchor>
+            <div class="bubble">{{ pendingQuestion }}</div>
+          </div>
+          <div class="msg bot">
+            <div class="trace live" *ngIf="traceSteps(steps).length || busy">
+              <ng-container *ngTemplateOutlet="traceTpl; context: {steps: steps}"></ng-container>
+              <div class="working" *ngIf="busy">
+                <span class="dots"><i></i><i></i><i></i></span> thinking…
+              </div>
+            </div>
+            <div class="answer" *ngIf="answerText(steps)">
+              <markdown [data]="answerText(steps)"></markdown>
+            </div>
           </div>
         </ng-container>
       </div>
-
-      <!-- Conversation thread: completed turns, then the in-progress turn. -->
-      <ng-container *ngFor="let turn of conversation">
-        <div class="dq-qbubble">{{ turn.question }}</div>
-        <div class="dq-stream">
-          <ng-container
-            *ngTemplateOutlet="streamTpl; context: {steps: turn.steps, srcs: turn.answerSources}"
-          ></ng-container>
-        </div>
-      </ng-container>
-
-      <ng-container *ngIf="pendingQuestion">
-        <div class="dq-qbubble">{{ pendingQuestion }}</div>
-        <div class="dq-stream">
-          <ng-container
-            *ngTemplateOutlet="streamTpl; context: {steps: steps, srcs: answerSources}"
-          ></ng-container>
-        </div>
-      </ng-container>
     </main>
 
     <aside class="dq-card dq-side">
@@ -100,18 +149,15 @@
   (closed)="viewerSource = null"
 ></app-slide-viewer>
 
-<!-- Reusable renderer for one turn's steps (tool calls, SQL tables, text) + sources. -->
-<ng-template #streamTpl let-steps="steps" let-srcs="srcs">
-  <ng-container *ngFor="let s of steps">
-    <div *ngIf="s.kind === 'text'" class="s-text">
-      <markdown [data]="s.text"></markdown>
-    </div>
-
-    <div *ngIf="s.kind === 'tool'" class="s-tool">
+<!-- Reusable renderer for a turn's reasoning trace (tool calls + SQL tables). -->
+<ng-template #traceTpl let-steps="steps">
+  <ng-container *ngFor="let s of traceSteps(steps)">
+    <div class="s-tool">
       <span class="s-head">
-        🔧 <b>{{ s.name }}</b>
-        <code *ngIf="s.name !== 'run_sql'"> {{ toolArgs(s) }}</code>
-        <span class="dq-muted"> → {{ s.summary }}</span>
+        <mat-icon>{{ s.name === 'run_sql' ? 'database' : 'search' }}</mat-icon>
+        <b>{{ s.name }}</b>
+        <code *ngIf="s.name !== 'run_sql'">{{ toolArgs(s) }}</code>
+        <span class="dq-muted">→ {{ s.summary }}</span>
       </span>
 
       <div *ngIf="s.name === 'run_sql'" class="s-sql">
@@ -135,17 +181,17 @@
       </div>
     </div>
   </ng-container>
+</ng-template>
 
-  <div class="dq-sources" *ngIf="srcs.length">
-    <div class="dq-label">Sources</div>
-    <span
-      class="dq-chip src-chip"
-      *ngFor="let src of srcs"
-      (click)="openSource(src)"
-      [title]="src.statement || ''"
-    >
-      <mat-icon>image</mat-icon>
-      {{ src.document }} · p. {{ src.page }}
-    </span>
-  </div>
+<!-- Reusable renderer for a turn's citations. -->
+<ng-template #sourcesTpl let-srcs="srcs">
+  <span
+    class="dq-chip src-chip"
+    *ngFor="let src of srcs"
+    (click)="openSource(src)"
+    [title]="src.statement || ''"
+  >
+    <mat-icon>image</mat-icon>
+    {{ src.document }} · p. {{ src.page }}
+  </span>
 </ng-template>

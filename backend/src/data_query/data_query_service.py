@@ -32,16 +32,31 @@ from fastapi import Depends
 from src.common.storage_service import GcsService
 from src.data_query import agent
 from src.data_query import duckdb_store as store
+from src.data_query.repository.data_query_run_repository import (
+    DataQueryRunRepository,
+)
 from src.data_query.repository.data_query_sheet_repository import (
     DataQuerySheetRepository,
 )
+from src.data_query.schema.data_query_run_model import DataQueryRunModel
 from src.data_query.schema.data_query_sheet_model import DataQuerySheetModel
+from src.database import async_session_local
 from src.multimodal.gemini_service import GeminiService
 from src.research_library.search import claim_search_service
 
 logger = logging.getLogger(__name__)
 
 _SHEET_PREFIX = "data-query-sheets/global"
+
+# How often the background worker flushes the accumulating trace to the DB so
+# the client's poll (GET /ask/{id}) shows live progress. The hosting rewrite
+# buffers and times out long streaming responses (~60s), and deep retrieval can
+# run well past that, so polling — not SSE — is the reliable path in prod.
+_PROGRESS_FLUSH_S = 1.5
+# Hold references to in-flight background tasks so they aren't garbage-collected
+# if the launching request returns first (CPU stays allocated: cpu-throttling
+# is disabled and min-instances=1 keeps the instance warm while the client polls).
+_ASK_TASKS: set[asyncio.Task] = set()
 
 
 class DataQueryService:
@@ -52,10 +67,12 @@ class DataQueryService:
         self,
         gemini_service: GeminiService = Depends(),
         sheet_repo: DataQuerySheetRepository = Depends(),
+        run_repo: DataQueryRunRepository = Depends(),
         gcs_service: GcsService = Depends(),
     ):
         self.gemini = gemini_service
         self.sheet_repo = sheet_repo
+        self.run_repo = run_repo
         self.gcs = gcs_service
 
     async def ingest(self, filename: str, data: bytes) -> list[dict]:
@@ -112,10 +129,17 @@ class DataQueryService:
             await asyncio.to_thread(self.gcs.delete_blob_from_uri, sheet.gcs_uri)
         return True
 
-    async def ensure_loaded(self) -> None:
+    async def ensure_loaded(
+        self, sheet_repo: DataQuerySheetRepository | None = None
+    ) -> None:
         """Rehydrate this instance's DuckDB from GCS for any cataloged table
-        it is missing (self-healing after a restart or on a fresh instance)."""
-        sheets = await self.sheet_repo.list_active()
+        it is missing (self-healing after a restart or on a fresh instance).
+
+        Accepts an explicit ``sheet_repo`` so a background task can pass a repo
+        bound to its own DB session (the request-scoped ``self.sheet_repo`` is
+        closed once the launching request returns)."""
+        repo = sheet_repo or self.sheet_repo
+        sheets = await repo.list_active()
         if not sheets:
             return
         present = await asyncio.to_thread(store.loaded_table_names)
@@ -163,3 +187,149 @@ class DataQueryService:
             history=history,
             list_tags=claim_search_service.list_tags_sync,
         )
+
+    # ── background ask (poll model) ─────────────────────────────────
+    async def start_ask(
+        self,
+        question: str,
+        allowed_tables: list[str] | None = None,
+        allowed_documents: list[int] | None = None,
+        history: list[dict] | None = None,
+    ) -> DataQueryRunModel:
+        """Create a run row and kick the agent off in the background.
+
+        Returns immediately with the run (status ``processing``); the client
+        polls :meth:`get_run` until it is ``completed`` or ``failed``. Deep
+        retrieval can outlast the hosting rewrite's ~60s buffered-response
+        timeout, so we never hold the request open for the whole answer."""
+        run = await self.run_repo.create(
+            DataQueryRunModel(id=uuid.uuid4().hex, question=question)
+        )
+        task = asyncio.create_task(
+            self._run_ask(
+                run.id, question, allowed_tables, allowed_documents, history
+            )
+        )
+        _ASK_TASKS.add(task)
+        task.add_done_callback(_ASK_TASKS.discard)
+        logger.info("Data-query ask queued: %s", run.id)
+        return run
+
+    async def get_run(self, run_id: str) -> DataQueryRunModel | None:
+        """Fetch a run's current state (for polling)."""
+        return await self.run_repo.get_by_id(run_id)
+
+    async def _run_ask(
+        self,
+        run_id: str,
+        question: str,
+        allowed_tables: list[str] | None,
+        allowed_documents: list[int] | None,
+        history: list[dict] | None,
+    ) -> None:
+        """Background worker: run the agent, assemble the trace, and persist it.
+
+        Uses its own short-lived DB sessions (the launching request's session is
+        already closed) and runs the synchronous agent generator in a thread so
+        the event loop stays free to flush progress and serve poll requests."""
+        steps: list[dict] = []
+        sources: list[list] = [[]]  # 1-slot holder written by the worker thread
+
+        def _consume() -> None:
+            cur_text: dict | None = None
+            cur_tool: dict | None = None
+            client = self.gemini.client
+            model = self.gemini.cfg.GEMINI_MODEL_ID
+            allowed = set(allowed_tables) if allowed_tables else None
+            claim_search = partial(
+                claim_search_service.search_claims_sync, client
+            )
+            for ev in agent.stream_answer(
+                client,
+                model,
+                question,
+                allowed,
+                claim_search=claim_search,
+                allowed_documents=allowed_documents,
+                history=history,
+                list_tags=claim_search_service.list_tags_sync,
+            ):
+                t = ev.get("t")
+                if t == "tool":
+                    cur_text = None
+                    cur_tool = {
+                        "kind": "tool",
+                        "name": ev.get("name"),
+                        "input": ev.get("input"),
+                        "summary": "…",
+                    }
+                    steps.append(cur_tool)
+                elif t == "tool_result":
+                    if cur_tool is not None:
+                        cur_tool["summary"] = ev.get("summary") or ""
+                        cur_tool["result"] = ev.get("result")
+                elif t == "text":
+                    if cur_text is None:
+                        cur_text = {"kind": "text", "text": ""}
+                        steps.append(cur_text)
+                    cur_text["text"] = (cur_text.get("text") or "") + (
+                        ev.get("v") or ""
+                    )
+                elif t == "sources":
+                    sources[0] = ev.get("v") or []
+                elif t == "error":
+                    steps.append(
+                        {
+                            "kind": "text",
+                            "text": "⚠️ " + (ev.get("message") or "error"),
+                        }
+                    )
+
+        async def _flush() -> None:
+            while True:
+                await asyncio.sleep(_PROGRESS_FLUSH_S)
+                try:
+                    async with async_session_local() as db:
+                        await DataQueryRunRepository(db).update(
+                            run_id, {"steps": list(steps)}
+                        )
+                except Exception:
+                    pass  # progress is best-effort
+
+        # Rehydrate DuckDB with a fresh session before answering.
+        try:
+            async with async_session_local() as db:
+                await self.ensure_loaded(DataQuerySheetRepository(db))
+        except Exception as e:
+            logger.error("Rehydrate before ask failed for %s: %s", run_id, e)
+
+        flusher = asyncio.create_task(_flush())
+        try:
+            await asyncio.to_thread(_consume)
+            flusher.cancel()
+            async with async_session_local() as db:
+                await DataQueryRunRepository(db).update(
+                    run_id,
+                    {
+                        "status": "completed",
+                        "steps": list(steps),
+                        "answer_sources": sources[0],
+                    },
+                )
+        except Exception as e:
+            flusher.cancel()
+            logger.error(
+                "Data-query ask %s failed: %s", run_id, e, exc_info=True
+            )
+            try:
+                async with async_session_local() as db:
+                    await DataQueryRunRepository(db).update(
+                        run_id,
+                        {
+                            "status": "failed",
+                            "steps": list(steps),
+                            "error_message": f"{type(e).__name__}: {e}",
+                        },
+                    )
+            except Exception:
+                pass

@@ -14,31 +14,33 @@
  * limitations under the License.
  */
 
-import {Component, OnInit} from '@angular/core';
-import {MatSnackBar} from '@angular/material/snack-bar';
 import {
-  AgentEvent,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
+import {MatSnackBar} from '@angular/material/snack-bar';
+import {Subscription, timer} from 'rxjs';
+import {switchMap, takeWhile} from 'rxjs/operators';
+import {
+  AgentStep,
   ClaimSource,
   DataQueryService,
   SourceTable,
-  SqlResult,
 } from '../services/data-query.service';
 import {handleErrorSnackbar} from '../utils/handleMessageSnackbar';
 
-interface Step {
-  kind: 'text' | 'tool';
-  text?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  summary?: string;
-  result?: SqlResult | null;
-}
-
-/** A completed question/answer turn in the conversation thread. */
+/** A question/answer turn in the conversation thread. */
 interface Turn {
   question: string;
-  steps: Step[];
+  steps: AgentStep[];
   answerSources: ClaimSource[];
+  /** Per-turn collapse state for the trace (above) and sources (below). */
+  traceOpen: boolean;
+  sourcesOpen: boolean;
+  failed: boolean;
 }
 
 @Component({
@@ -46,7 +48,7 @@ interface Turn {
   templateUrl: './data-query.component.html',
   styleUrls: ['./data-query.component.scss'],
 })
-export class DataQueryComponent implements OnInit {
+export class DataQueryComponent implements OnInit, OnDestroy {
   question = '';
   busy = false;
   uploading = false;
@@ -55,18 +57,20 @@ export class DataQueryComponent implements OnInit {
   sources: SourceTable[] = [];
   private off = new Set<string>();
 
-  /** Completed turns (the conversation thread) + the in-progress turn. */
+  /** Completed turns (the conversation thread). */
   conversation: Turn[] = [];
+  /** The in-progress turn, shown optimistically the moment you hit Ask. */
   pendingQuestion: string | null = null;
-  steps: Step[] = [];
-  private curText: Step | null = null;
-  private curTool: Step | null = null;
+  steps: AgentStep[] = [];
+  answerSources: ClaimSource[] = [];
 
   /** Citations behind the current answer + the slide open in the viewer. */
-  answerSources: ClaimSource[] = [];
   viewerSource: ClaimSource | null = null;
   /** Document whitelist emitted by the library panel (null = all). */
   allowedDocuments: number[] | null = null;
+
+  private poll?: Subscription;
+  @ViewChild('pendingAnchor') private pendingAnchor?: ElementRef<HTMLElement>;
 
   // Grounded starter questions that hint at the kinds of things the research
   // library can answer (verified against the corpus). Span single facts,
@@ -89,6 +93,10 @@ export class DataQueryComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadSources();
+  }
+
+  ngOnDestroy(): void {
+    this.poll?.unsubscribe();
   }
 
   loadSources(): void {
@@ -129,9 +137,16 @@ export class DataQueryComponent implements OnInit {
     return this.off.has(table);
   }
 
-  // ── ask ────────────────────────────────────────────────────────
+  // ── ask (poll model) ───────────────────────────────────────────
   useExample(q: string): void {
     this.question = q;
+    this.ask();
+  }
+
+  /** Enter sends; Shift+Enter inserts a newline. */
+  onSend(ev: Event): void {
+    if ((ev as KeyboardEvent).shiftKey) return;
+    ev.preventDefault();
     this.ask();
   }
 
@@ -142,10 +157,9 @@ export class DataQueryComponent implements OnInit {
     this.pendingQuestion = q;
     this.question = '';
     this.steps = [];
-    this.curText = null;
-    this.curTool = null;
     this.answerSources = [];
     this.viewerSource = null;
+    this.scrollToPending();
 
     const allowed = this.off.size
       ? this.sources.map(s => s.table).filter(t => !this.off.has(t))
@@ -156,48 +170,70 @@ export class DataQueryComponent implements OnInit {
       answer: this.answerText(t.steps),
     }));
 
-    this.service.ask(q, allowed, this.allowedDocuments, history).subscribe({
-      next: ev => this.handle(ev),
-      error: err => {
-        this.discardTurn();
-        handleErrorSnackbar(this.snackBar, err, 'Query');
-      },
-      complete: () => this.finishTurn(),
-    });
+    this.service
+      .startAsk(q, allowed, this.allowedDocuments, history)
+      .subscribe({
+        next: run => this.startPolling(run.id),
+        error: err => {
+          this.discardTurn();
+          handleErrorSnackbar(this.snackBar, err, 'Query');
+        },
+      });
   }
 
-  /** The concatenated answer text of a turn (for the history we send back). */
-  private answerText(steps: Step[]): string {
-    return steps
-      .filter(s => s.kind === 'text')
-      .map(s => s.text || '')
-      .join('\n')
-      .trim();
+  /** Poll the run until it leaves ``processing``; render progress as it lands. */
+  private startPolling(runId: string): void {
+    this.poll?.unsubscribe();
+    this.poll = timer(0, 1500)
+      .pipe(
+        switchMap(() => this.service.getRun(runId)),
+        takeWhile(run => run.status === 'processing', true),
+      )
+      .subscribe({
+        next: run => {
+          this.steps = run.steps || [];
+          this.answerSources = run.answerSources || [];
+          if (run.status === 'completed') {
+            this.finishTurn(false);
+          } else if (run.status === 'failed') {
+            handleErrorSnackbar(
+              this.snackBar,
+              {error: {detail: run.errorMessage || 'The query failed.'}},
+              'Query',
+            );
+            this.finishTurn(true);
+          }
+        },
+        error: err => {
+          this.discardTurn();
+          handleErrorSnackbar(this.snackBar, err, 'Query');
+        },
+      });
   }
 
-  /** Move the in-progress turn into the thread. Idempotent per turn. */
-  private finishTurn(): void {
+  /** Move the in-progress turn into the thread. */
+  private finishTurn(failed: boolean): void {
     this.busy = false;
     if (!this.pendingQuestion) return;
     this.conversation.push({
       question: this.pendingQuestion,
       steps: this.steps,
       answerSources: this.answerSources,
+      traceOpen: false,
+      sourcesOpen: false,
+      failed,
     });
     this.pendingQuestion = null;
     this.steps = [];
-    this.curText = null;
-    this.curTool = null;
     this.answerSources = [];
   }
 
-  /** Drop a failed in-progress turn without adding it to the thread. */
+  /** Drop a failed/cancelled in-progress turn without adding it to the thread. */
   private discardTurn(): void {
+    this.poll?.unsubscribe();
     this.busy = false;
     this.pendingQuestion = null;
     this.steps = [];
-    this.curText = null;
-    this.curTool = null;
     this.answerSources = [];
   }
 
@@ -209,55 +245,46 @@ export class DataQueryComponent implements OnInit {
     this.question = '';
   }
 
-  private handle(ev: AgentEvent): void {
-    switch (ev.t) {
-      case 'tool':
-        this.curText = null;
-        this.curTool = {
-          kind: 'tool',
-          name: ev.name,
-          input: ev.input,
-          summary: '…',
-        };
-        this.steps.push(this.curTool);
-        break;
-      case 'tool_result':
-        if (this.curTool) {
-          this.curTool.summary = ev.summary || '';
-          this.curTool.result = ev.result ?? null;
-        }
-        break;
-      case 'text':
-        if (!this.curText) {
-          this.curText = {kind: 'text', text: ''};
-          this.steps.push(this.curText);
-        }
-        this.curText.text = (this.curText.text || '') + (ev.v || '');
-        break;
-      case 'sources':
-        this.answerSources = (ev.v as ClaimSource[]) || [];
-        break;
-      case 'error':
-        this.steps.push({kind: 'text', text: '⚠️ ' + (ev.message || 'error')});
-        break;
-      case 'done':
-        this.finishTurn();
-        break;
-    }
-  }
-
   openSource(source: ClaimSource): void {
     this.viewerSource = source;
   }
 
   // ── template helpers ───────────────────────────────────────────
-  toolArgs(s: Step): string {
+  /** The concatenated answer text of a turn (text steps only). */
+  answerText(steps: AgentStep[]): string {
+    return steps
+      .filter(s => s.kind === 'text')
+      .map(s => s.text || '')
+      .join('\n')
+      .trim();
+  }
+  /** The tool calls of a turn (the collapsible reasoning trace). */
+  traceSteps(steps: AgentStep[]): AgentStep[] {
+    return steps.filter(s => s.kind === 'tool');
+  }
+  traceLabel(steps: AgentStep[]): string {
+    const n = this.traceSteps(steps).length;
+    return n === 1 ? '1 step' : `${n} steps`;
+  }
+  toolArgs(s: AgentStep): string {
     return JSON.stringify(s.input || {});
   }
-  sql(s: Step): string {
+  sql(s: AgentStep): string {
     return (s.input?.['sql'] as string) || '';
   }
-  cols(s: Step): string[] {
+  cols(s: AgentStep): string[] {
     return s.result?.columns ?? [];
+  }
+
+  /** Scroll the just-added pending turn into view so the follow-up is visible. */
+  private scrollToPending(): void {
+    setTimeout(
+      () =>
+        this.pendingAnchor?.nativeElement?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        }),
+      60,
+    );
   }
 }

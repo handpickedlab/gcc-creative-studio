@@ -30,8 +30,6 @@
 .dq-wrap {
   --maxw: 1200px;
   max-width: var(--maxw);
-  /* No top margin: the Market Research section shell provides the top
-     offset below the workspace chrome. */
   margin-top: 0;
   margin-bottom: 5vh;
   margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--maxw) / 2));
@@ -54,30 +52,45 @@
 
 .dq-card { background: var(--bg-sub); border: 1px solid var(--border-lt); border-radius: var(--rl); padding: 18px; margin-bottom: 16px; }
 .dq-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-s); font-weight: 600; margin-bottom: 9px; }
-.dq-qbubble { font-weight: 600; margin: 22px 0 8px; padding: 11px 15px; border-radius: var(--rl); background: var(--bg-sub); border: 1px solid var(--border-lt); }
 .dq-muted { color: var(--text-m); }
 
-textarea {
-  width: 100%; min-height: 64px; resize: vertical; background: var(--surface); color: var(--text);
-  border: 1.5px solid var(--border-lt); border-radius: var(--r); padding: 12px; font: inherit; font-size: 13px; line-height: 1.55;
+/* ── composer ──────────────────────────────────────────────────── */
+.dq-composer {
+  display: flex; align-items: flex-end; gap: 8px;
+  background: var(--surface); border: 1.5px solid var(--border-lt);
+  border-radius: 14px; padding: 8px 8px 8px 14px; transition: border-color 0.15s;
 }
-textarea:focus { outline: none; border-color: var(--accent); }
+.dq-composer:focus-within { border-color: var(--accent); }
+.dq-composer textarea {
+  flex: 1; min-width: 0; border: none; background: transparent; color: var(--text);
+  resize: none; padding: 8px 0; font: inherit; font-size: 14px; line-height: 1.5;
+  max-height: 200px; overflow-y: auto;
+}
+.dq-composer textarea:focus { outline: none; }
+.dq-composer textarea::placeholder { color: var(--text-s); }
+.dq-send {
+  flex: none; width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--accent); color: var(--bg); display: inline-flex; align-items: center;
+  justify-content: center; transition: background 0.15s;
+}
+.dq-send:hover:not(:disabled) { background: var(--accent-h); }
+.dq-send:disabled { opacity: 0.4; cursor: default; }
+.dq-send mat-icon { font-size: 20px; width: 20px; height: 20px; }
 
-.dq-row { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+.dq-composer-row { display: flex; justify-content: flex-end; margin-top: 8px; min-height: 0; }
 
 .dq-btn {
-  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--r);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; border-radius: var(--r);
   border: 1.5px solid var(--border); background: var(--surface); color: var(--text);
-  padding: 9px 16px; display: inline-flex; align-items: center; gap: 7px; transition: all 0.15s;
+  padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s;
 }
 .dq-btn:hover:not(:disabled) { background: var(--surf-h); }
-.dq-btn.primary { background: var(--text); border-color: var(--text); color: var(--bg); }
-.dq-btn.primary:hover:not(:disabled) { background: var(--text-m); border-color: var(--text-m); }
-.dq-btn.ghost { width: 100%; justify-content: center; background: transparent; }
+.dq-btn.ghost { background: transparent; }
 .dq-btn.ghost:hover:not(:disabled) { background: var(--surface); }
 .dq-btn:disabled { opacity: 0.5; cursor: default; }
-.dq-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
+.dq-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
 
+/* ── starter chips ─────────────────────────────────────────────── */
 .dq-chips { margin-top: 11px; display: flex; flex-wrap: wrap; gap: 7px; }
 .dq-chip {
   display: inline-block; background: transparent; border: 1.5px solid var(--border-lt); border-radius: 100px;
@@ -85,6 +98,78 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 .dq-chip:hover { border-color: var(--accent); color: var(--text); }
 
+/* ── chat thread ───────────────────────────────────────────────── */
+.chat { margin-top: 26px; display: flex; flex-direction: column; gap: 8px; }
+
+.msg { display: flex; }
+.msg.user { justify-content: flex-end; }
+.msg.user .bubble {
+  max-width: 82%; background: var(--accent-lt); border: 1px solid var(--border);
+  color: var(--text); border-radius: 14px 14px 4px 14px; padding: 10px 15px;
+  font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+.msg.bot { flex-direction: column; align-items: stretch; margin: 2px 0 18px; }
+
+/* collapsible disclosures (reasoning trace above, sources below) */
+.disclosure {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  background: none; border: none; cursor: pointer; padding: 4px 0;
+  color: var(--text-s); font: inherit; font-size: 11.5px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; transition: color 0.12s;
+}
+.disclosure:hover { color: var(--text-m); }
+.disclosure mat-icon { font-size: 16px; width: 16px; height: 16px; transition: transform 0.15s; }
+.disclosure.open mat-icon { transform: rotate(90deg); }
+.disclosure.open { color: var(--accent); }
+
+.trace {
+  border-left: 2px solid var(--border); margin: 4px 0 10px; padding: 4px 0 4px 14px;
+}
+.trace.live { border-left-color: var(--accent); }
+
+/* answer body */
+.answer { font-size: 14px; line-height: 1.65; }
+.answer.failed { color: var(--bad); }
+.answer markdown p:first-child { margin-top: 0; }
+.answer markdown p:last-child { margin-bottom: 0; }
+.answer markdown ::ng-deep p { margin: 0 0 10px; }
+
+/* sources */
+.src-block { margin-top: 12px; }
+.sources { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.src-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: 1.5px solid var(--border-lt); border-radius: 100px;
+  padding: 5px 12px; font-size: 11.5px; color: var(--text-m); cursor: pointer; transition: all 0.12s;
+}
+.src-chip:hover { border-color: var(--accent); color: var(--text); }
+.src-chip mat-icon { font-size: 13px; width: 13px; height: 13px; }
+
+/* working indicator */
+.working { display: flex; align-items: center; gap: 8px; color: var(--text-m); font-size: 12.5px; margin-top: 8px; }
+.dots { display: inline-flex; gap: 3px; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: dq-blink 1.2s infinite both; }
+.dots i:nth-child(2) { animation-delay: 0.2s; }
+.dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dq-blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+/* tool-call rows inside the trace */
+.s-tool { font-size: 12.5px; margin: 8px 0; }
+.s-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-m); }
+.s-head mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--text-s); }
+.s-head b { color: var(--accent-h); font-weight: 600; }
+.s-sql { margin: 7px 0 2px; }
+.trace code {
+  font-family: 'DM Mono', monospace; font-size: 0.9em; color: var(--text);
+  background: var(--bg-sub); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-lt);
+}
+.s-sql code { display: block; padding: 10px 12px; white-space: pre-wrap; }
+.s-err { color: var(--bad); margin-top: 6px; font-size: 12px; }
+.s-tbl table { border-collapse: collapse; margin-top: 9px; font-size: 12px; width: 100%; display: block; overflow-x: auto; }
+.s-tbl th, .s-tbl td { border: 1px solid var(--border-lt); padding: 6px 10px; text-align: left; white-space: nowrap; }
+.s-tbl th { background: var(--bg-sub); color: var(--text-s); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── sources sidebar ───────────────────────────────────────────── */
 .dq-src {
   display: block; width: 100%; background: var(--surface); border: 1.5px solid var(--border-lt); border-radius: var(--r);
   padding: 8px 11px; font-size: 12.5px; margin-top: 7px; cursor: pointer; word-break: break-word; transition: all 0.12s;
@@ -94,31 +179,3 @@ textarea:focus { outline: none; border-color: var(--accent); }
 .dq-src.off { opacity: 0.4; text-decoration: line-through; }
 .dq-up { font-size: 11.5px; margin: 9px 0; word-break: break-word; }
 .dq-hint { font-size: 11px; margin-top: 11px; color: var(--text-s); line-height: 1.5; }
-
-/* live transcript */
-.dq-stream .s-text {
-  background: var(--surface); border: 1px solid var(--border-lt); border-radius: var(--r);
-  padding: 12px 14px; margin: 10px 0; font-size: 13px; line-height: 1.6;
-}
-.dq-stream .s-text markdown p:first-child { margin-top: 0; }
-.dq-stream .s-text markdown p:last-child { margin-bottom: 0; }
-
-/* citations under the answer */
-.dq-sources { margin-top: 14px; }
-.dq-sources .src-chip {
-  display: inline-flex; align-items: center; gap: 5px; margin: 0 7px 7px 0;
-}
-.dq-sources .src-chip mat-icon { font-size: 13px; width: 13px; height: 13px; }
-.dq-stream .s-tool { font-size: 13px; margin: 11px 0; }
-.dq-stream .s-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.dq-stream .s-tool b { color: var(--accent-h); font-weight: 600; }
-.dq-stream .s-sql { margin: 7px 0 2px; }
-.dq-stream code {
-  font-family: 'DM Mono', monospace; font-size: 0.9em; color: var(--text);
-  background: var(--bg-sub); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-lt);
-}
-.dq-stream .s-sql code { display: block; padding: 10px 12px; white-space: pre-wrap; }
-.dq-stream .s-err { color: var(--bad); margin-top: 6px; font-size: 12.5px; }
-.dq-stream table { border-collapse: collapse; margin-top: 9px; font-size: 12.5px; width: 100%; display: block; overflow-x: auto; }
-.dq-stream th, .dq-stream td { border: 1px solid var(--border-lt); padding: 6px 10px; text-align: left; white-space: nowrap; }
-.dq-stream th { background: var(--bg-sub); color: var(--text-s); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
