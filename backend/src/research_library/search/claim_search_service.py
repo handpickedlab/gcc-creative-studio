@@ -64,6 +64,7 @@ SELECT
     d.filename,
     d.priority_tier,
     d.period AS document_period,
+    d.created_at AS document_created_at,
     1 - (c.embedding <=> CAST(:query_embedding AS vector)) AS similarity
 FROM research_claims c
 JOIN research_documents d ON d.id = c.document_id
@@ -304,22 +305,54 @@ async def _fetch_candidates(
             return [dict(row) for row in result.mappings().all()]
 
 
+def _recency_factors(rows: list[dict[str, Any]]) -> dict[int, float]:
+    """Map each row index -> a recency multiplier in [1, 1 + RECENCY_WEIGHT].
+
+    Newer documents (by ``document_created_at``) score higher; the newest in
+    the pool gets the full boost, the oldest gets none. Rows without a
+    timestamp (or a pool where all share one) get a neutral 1.0, so callers /
+    tests that don't supply timestamps are unaffected.
+    """
+    stamps = {
+        i: r.get("document_created_at")
+        for i, r in enumerate(rows)
+        if r.get("document_created_at") is not None
+    }
+    if len(stamps) < 2:
+        return {i: 1.0 for i in range(len(rows))}
+    oldest, newest = min(stamps.values()), max(stamps.values())
+    span = (newest - oldest).total_seconds()
+    factors: dict[int, float] = {}
+    for i in range(len(rows)):
+        ts = stamps.get(i)
+        if ts is None or span <= 0:
+            factors[i] = 1.0
+        else:
+            norm = (ts - oldest).total_seconds() / span  # 0 oldest → 1 newest
+            factors[i] = 1.0 + config.RECENCY_WEIGHT * norm
+    return factors
+
+
 def rank_candidates(
     rows: list[dict[str, Any]],
     tier_weights: dict[str, float],
 ) -> list[dict[str, Any]]:
-    """Applies the priority-tier multiplier and re-sorts.
+    """Applies the priority-tier and recency multipliers, then re-sorts.
 
     Hard filters already happened in SQL; this is pure scoring, kept as a
     separate function so it can be tested without Postgres.
     """
     default_weight = tier_weights.get(PriorityTierEnum.PRIMARY.value, 1.0)
+    recency = _recency_factors(rows)
     scored = []
-    for row in rows:
+    for i, row in enumerate(rows):
         weight = tier_weights.get(
             row.get("priority_tier") or "", default_weight
         )
-        scored.append({**row, "score": float(row["similarity"]) * weight})
+        scored.append({
+            **row,
+            "score": float(row["similarity"]) * weight * recency[i],
+        })
     return sorted(scored, key=lambda r: r["score"], reverse=True)
 
 

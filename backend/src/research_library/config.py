@@ -79,3 +79,11 @@ TIER_WEIGHTS = _parse_tier_weights(
         "primary=1.0,supporting=0.85,background=0.7",
     ),
 )
+
+# Recency boost: newer documents are usually the most reliable, so a claim's
+# score is multiplied by (1 + RECENCY_WEIGHT × how-recent), where how-recent is
+# 0 for the oldest document in the candidate pool and 1 for the newest (by
+# upload time). At the default 0.25 the newest source gets a 25% edge over the
+# oldest at equal semantic relevance — enough to break ties toward fresh data
+# without letting an old-but-far-more-relevant claim be buried.
+RECENCY_WEIGHT = float(os.getenv("RL_RECENCY_WEIGHT", "0.25"))
