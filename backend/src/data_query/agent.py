@@ -30,7 +30,11 @@ from src.data_query import duckdb_store as store
 
 logger = logging.getLogger(__name__)
 
-MAX_STEPS = 12
+# Each step is one model turn (which may fire several tool calls). Deep hybrid
+# questions legitimately need many rounds (orient → sheets → several searches
+# per facet → synthesise); the poll model removed the request-timeout ceiling,
+# so give the agent real room before cutting it off.
+MAX_STEPS = 30
 
 # Citations the frontend can render; capped so a rambling session can't
 # produce an unbounded sources event.
@@ -60,6 +64,12 @@ answer. For almost every question you should make SEVERAL tool calls:
   which topics the library actually covers, then search the matching tags.
   Never fire one literal query, get 8 claims from a single document, and give
   up — that is the failure mode this guidance exists to prevent.
+- When a question hinges on a specific market, period or segment (Belgium?
+  2023? "the 45+ segment"?), call `list_facets` to see which geographies,
+  periods, segments, claim types and documents the corpus ACTUALLY contains.
+  If your target isn't listed there, it is genuinely absent — say so — instead
+  of concluding "not found" from a query that may simply have been phrased
+  wrong. Use the listed values to aim your searches precisely.
 - Call `list_tables` early to see which uploaded survey/tracker sheets exist,
   then `describe_table` + `run_sql` on the relevant ones to pull ACTUAL
   numbers. Do not answer a metric question from the decks alone if a sheet
@@ -187,11 +197,24 @@ _TOOLS = [
                        "search the relevant tags instead of guessing one query.",
         "parameters_json_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "list_facets",
+        "description": "List the searchable LANDSCAPE of the research library: "
+                       "which geographies, market segments, periods, claim "
+                       "types and documents actually exist, each with a claim "
+                       "count. Call this to check whether a value you want (a "
+                       "market like Belgium, a period, a segment) is even "
+                       "present BEFORE searching for it — so that if it isn't "
+                       "listed here, 'not in the data' is a real absence and "
+                       "not just a mis-phrased query. Pair with `list_tags` "
+                       "(topics) to see the full space you can search.",
+        "parameters_json_schema": {"type": "object", "properties": {}},
+    },
 ]
 
 
 def _dispatch(name, args, allowed, claim_search=None,
-              allowed_documents=None, list_tags=None):
+              allowed_documents=None, list_tags=None, list_facets=None):
     if name == "list_tables":
         ts = store.list_tables()
         return [t for t in ts if allowed is None or t["table"] in allowed]
@@ -221,6 +244,10 @@ def _dispatch(name, args, allowed, claim_search=None,
         if list_tags is None:
             return {"error": "the research library is not available in this session"}
         return list_tags(allowed_documents=allowed_documents)
+    if name == "list_facets":
+        if list_facets is None:
+            return {"error": "the research library is not available in this session"}
+        return list_facets(allowed_documents=allowed_documents)
     return {"error": f"unknown tool {name!r}"}
 
 
@@ -240,6 +267,13 @@ def _summarize(name, out):
             return f"{out.get('count', 0)} claims from {len(docs)} documents"
         if name == "list_tags":
             return f"{len(out.get('tags', []))} tags"
+        if name == "list_facets":
+            return (
+                f"{len(out.get('geographies', []))} geographies, "
+                f"{len(out.get('segments', []))} segments, "
+                f"{len(out.get('periods', []))} periods, "
+                f"{len(out.get('documents', []))} documents"
+            )
     except Exception:
         pass
     return ""
@@ -264,7 +298,7 @@ def _collect_sources(sources, out):
 
 def stream_answer(client: Client, model: str, question: str, allowed=None,
                   claim_search=None, allowed_documents=None, history=None,
-                  list_tags=None):
+                  list_tags=None, list_facets=None):
     """Run the function-calling loop, yielding event dicts:
     {t:'tool',name,input}, {t:'tool_result',name,summary,result}, {t:'text',v},
     {t:'sources',v} (citations for search_claims facts), {t:'done'}.
@@ -324,7 +358,8 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
             out = _dispatch(fc.name, args, allowed,
                             claim_search=claim_search,
                             allowed_documents=allowed_documents,
-                            list_tags=list_tags)
+                            list_tags=list_tags,
+                            list_facets=list_facets)
             if fc.name == "search_claims" and isinstance(out, dict):
                 _collect_sources(sources, out)
             yield {"t": "tool_result", "name": fc.name,

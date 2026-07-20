@@ -186,6 +186,7 @@ class DataQueryService:
             allowed_documents=allowed_documents,
             history=history,
             list_tags=claim_search_service.list_tags_sync,
+            list_facets=claim_search_service.list_facets_sync,
         )
 
     # ── background ask (poll model) ─────────────────────────────────
@@ -253,6 +254,7 @@ class DataQueryService:
                 allowed_documents=allowed_documents,
                 history=history,
                 list_tags=claim_search_service.list_tags_sync,
+                list_facets=claim_search_service.list_facets_sync,
             ):
                 t = ev.get("t")
                 if t == "tool":

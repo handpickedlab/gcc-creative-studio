@@ -54,7 +54,13 @@
 .dq-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-s); font-weight: 600; margin-bottom: 9px; }
 .dq-muted { color: var(--text-m); }
 
-/* ── composer ──────────────────────────────────────────────────── */
+/* ── composer (pinned to the bottom, below the messages) ───────── */
+.dq-composer-wrap {
+  position: sticky; bottom: 10px; z-index: 5;
+  margin-top: 20px; padding-top: 12px;
+  /* fade the last messages out under the composer as they scroll past */
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+}
 .dq-composer {
   display: flex; align-items: flex-end; gap: 8px;
   background: var(--surface); border: 1.5px solid var(--border-lt);

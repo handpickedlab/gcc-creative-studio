@@ -13,42 +13,6 @@
         slide behind every claim.
       </p>
 
-      <!-- Composer -->
-      <div class="dq-composer">
-        <textarea
-          [(ngModel)]="question"
-          (keydown.enter)="onSend($event)"
-          [disabled]="busy"
-          rows="1"
-          [placeholder]="conversation.length ? 'Ask a follow-up…' : 'Ask a question about your data…'"
-        ></textarea>
-        <button
-          class="dq-send"
-          (click)="ask()"
-          [disabled]="busy || !question.trim()"
-          title="Ask (Enter)"
-        >
-          <mat-icon>{{ busy ? 'hourglass_empty' : 'arrow_upward' }}</mat-icon>
-        </button>
-      </div>
-      <div class="dq-composer-row">
-        <button
-          class="dq-btn ghost"
-          (click)="newConversation()"
-          *ngIf="conversation.length && !busy"
-        >
-          <mat-icon>add</mat-icon> New chat
-        </button>
-      </div>
-
-      <!-- Starter questions (only on an empty conversation) -->
-      <ng-container *ngIf="!conversation.length && !pendingQuestion">
-        <div class="dq-label" style="margin-top: 18px">Try one of these</div>
-        <div class="dq-chips">
-          <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
-        </div>
-      </ng-container>
-
       <!-- Conversation thread -->
       <div class="chat" *ngIf="conversation.length || pendingQuestion">
         <ng-container *ngFor="let turn of conversation">
@@ -108,6 +72,40 @@
             </div>
           </div>
         </ng-container>
+      </div>
+
+      <!-- Starter questions (only on an empty conversation) -->
+      <ng-container *ngIf="!conversation.length && !pendingQuestion">
+        <div class="dq-label" style="margin-top: 6px">Try one of these</div>
+        <div class="dq-chips">
+          <span class="dq-chip" *ngFor="let e of examples" (click)="useExample(e)">{{ e }}</span>
+        </div>
+      </ng-container>
+
+      <!-- Composer, pinned to the bottom below the messages -->
+      <div class="dq-composer-wrap">
+        <div class="dq-composer">
+          <textarea
+            [(ngModel)]="question"
+            (keydown.enter)="onSend($event)"
+            [disabled]="busy"
+            rows="1"
+            [placeholder]="conversation.length ? 'Ask a follow-up…' : 'Ask a question about your data…'"
+          ></textarea>
+          <button
+            class="dq-send"
+            (click)="ask()"
+            [disabled]="busy || !question.trim()"
+            title="Ask (Enter)"
+          >
+            <mat-icon>{{ busy ? 'hourglass_empty' : 'arrow_upward' }}</mat-icon>
+          </button>
+        </div>
+        <div class="dq-composer-row" *ngIf="conversation.length && !busy">
+          <button class="dq-btn ghost" (click)="newConversation()">
+            <mat-icon>add</mat-icon> New chat
+          </button>
+        </div>
       </div>
     </main>
 

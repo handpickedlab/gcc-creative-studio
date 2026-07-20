@@ -175,6 +175,112 @@ async def _fetch_tags(
             return [dict(row) for row in result.mappings().all()]
 
 
+# The distinct values the agent can actually filter/aim a search at, per facet.
+# Geography/segment/period/claim_type are free-text on the claim; this shows
+# what values EXIST so the agent knows whether e.g. Belgium is even covered —
+# a genuine miss vs. a wrong query.
+_FACETS_SQL = """
+SELECT facet, value, COUNT(*) AS n
+FROM (
+    SELECT 'geography'  AS facet, NULLIF(TRIM(c.geography), '')  AS value
+    FROM research_claims c JOIN research_documents d ON d.id = c.document_id
+    WHERE d.deleted_at IS NULL
+      AND (CAST(:document_ids AS int[]) IS NULL OR c.document_id = ANY(CAST(:document_ids AS int[])))
+    UNION ALL
+    SELECT 'segment', NULLIF(TRIM(c.segment), '')
+    FROM research_claims c JOIN research_documents d ON d.id = c.document_id
+    WHERE d.deleted_at IS NULL
+      AND (CAST(:document_ids AS int[]) IS NULL OR c.document_id = ANY(CAST(:document_ids AS int[])))
+    UNION ALL
+    SELECT 'period', NULLIF(TRIM(c.period), '')
+    FROM research_claims c JOIN research_documents d ON d.id = c.document_id
+    WHERE d.deleted_at IS NULL
+      AND (CAST(:document_ids AS int[]) IS NULL OR c.document_id = ANY(CAST(:document_ids AS int[])))
+    UNION ALL
+    SELECT 'claim_type', NULLIF(TRIM(c.claim_type), '')
+    FROM research_claims c JOIN research_documents d ON d.id = c.document_id
+    WHERE d.deleted_at IS NULL
+      AND (CAST(:document_ids AS int[]) IS NULL OR c.document_id = ANY(CAST(:document_ids AS int[])))
+) s
+WHERE value IS NOT NULL
+GROUP BY facet, value
+ORDER BY facet, n DESC
+"""
+
+_DOCS_SQL = """
+SELECT d.id AS document_id, d.filename AS document, COUNT(c.id) AS n
+FROM research_documents d
+LEFT JOIN research_claims c
+       ON c.document_id = d.id AND c.embedding IS NOT NULL
+WHERE d.deleted_at IS NULL
+  AND (CAST(:document_ids AS int[]) IS NULL OR d.id = ANY(CAST(:document_ids AS int[])))
+GROUP BY d.id, d.filename
+ORDER BY n DESC
+LIMIT 150
+"""
+
+
+def list_facets_sync(
+    allowed_documents: list[int] | None = None,
+    limit_per_facet: int = 60,
+) -> dict[str, Any]:
+    """The searchable landscape of the corpus: which geographies, segments,
+    periods, claim types and documents actually exist (with claim counts).
+
+    Lets the agent see whether a value it wants (a market, a period) is even
+    present before searching, so "not in the data" is a real absence rather
+    than a mis-phrased query. Safe to call from the sync agent loop.
+    """
+    try:
+        facet_rows, doc_rows = asyncio.run(
+            _fetch_facets(allowed_documents)
+        )
+    except Exception as e:
+        logger.error("list_facets failed: %s", e)
+        return {"error": f"list_facets failed: {e}"}
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for r in facet_rows:
+        grouped.setdefault(r["facet"], [])
+        if len(grouped[r["facet"]]) < limit_per_facet:
+            grouped[r["facet"]].append(
+                {"value": r["value"], "claims": r["n"]}
+            )
+    return {
+        "geographies": grouped.get("geography", []),
+        "segments": grouped.get("segment", []),
+        "periods": grouped.get("period", []),
+        "claim_types": grouped.get("claim_type", []),
+        "documents": [
+            {
+                "document_id": r["document_id"],
+                "document": r["document"],
+                "claims": r["n"],
+            }
+            for r in doc_rows
+        ],
+    }
+
+
+async def _fetch_facets(
+    allowed_documents: list[int] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Distinct facet values + the document list on a fresh worker engine."""
+    from src.database import WorkerDatabase
+
+    async with WorkerDatabase() as db_factory:
+        async with db_factory() as db:
+            facet_res = await db.execute(
+                text(_FACETS_SQL), {"document_ids": allowed_documents}
+            )
+            facet_rows = [dict(row) for row in facet_res.mappings().all()]
+            doc_res = await db.execute(
+                text(_DOCS_SQL), {"document_ids": allowed_documents}
+            )
+            doc_rows = [dict(row) for row in doc_res.mappings().all()]
+            return facet_rows, doc_rows
+
+
 async def _fetch_candidates(
     query_embedding: list[float],
     tags: list[str] | None,
