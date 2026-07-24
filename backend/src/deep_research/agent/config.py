@@ -60,3 +60,10 @@ MAX_REVISION_PASSES = int(os.getenv("DR_MAX_REVISIONS", "1"))
 # when there are more of them than slots. Higher = broader/faster but more
 # concurrent search calls (cost).
 RESEARCH_SLOTS = int(os.getenv("DR_RESEARCH_SLOTS", "4"))
+
+# How many times a transient Vertex error (429/5xx/timeout) is retried before it
+# is allowed to fail. Each round fans out RESEARCH_SLOTS concurrent grounded
+# search calls, and ADK's ParallelAgent fails fast -- a single un-retried blip in
+# one slot cancels the others and aborts a multi-minute run. google-genai retries
+# these on the async client with exponential backoff + jitter. 1 disables retry.
+RETRY_ATTEMPTS = int(os.getenv("DR_RETRY_ATTEMPTS", "5"))
