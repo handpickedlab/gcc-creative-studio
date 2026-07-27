@@ -47,6 +47,34 @@ MAX_PAGES = int(os.getenv("RL_MAX_PAGES", "250"))
 # shared app.state.executor so a bulk ingest run can't starve other jobs).
 INGEST_WORKERS = int(os.getenv("RL_INGEST_WORKERS", "2"))
 
+# Upper bound on how many documents one process may hold in its in-memory
+# ingest queue. Everything above this stays PROCESSING in the database until
+# the sweeper has capacity for it. The bound is the whole point: the executor
+# queue lives inside the API process, so a Cloud Run scale-down throws away
+# whatever is still in it (a July 2026 bulk upload lost 120 documents that
+# way). Keeping the queue shallow keeps the database the queue of record.
+MAX_QUEUED = int(os.getenv("RL_MAX_QUEUED", str(INGEST_WORKERS * 3)))
+
+# How long a document may sit in PROCESSING without any progress before the
+# sweeper concludes its worker is gone and re-queues it. Must comfortably
+# exceed the slowest single step (downloading a 300MB deck plus a LibreOffice
+# conversion plus one extraction batch).
+STALE_AFTER_SECONDS = int(os.getenv("RL_STALE_AFTER_SECONDS", "900"))
+
+# How often the sweeper looks for stalled documents, and how long it waits
+# after boot before the first sweep (the app needs ~2 minutes to finish
+# warming up, and an instance that has just started owns no work yet).
+SWEEP_INTERVAL_SECONDS = int(os.getenv("RL_SWEEP_INTERVAL_SECONDS", "300"))
+SWEEP_INITIAL_DELAY_SECONDS = int(
+    os.getenv("RL_SWEEP_INITIAL_DELAY_SECONDS", "120"),
+)
+
+# How often the sweeper may restart one document before giving up on it.
+# A file heavy enough to exhaust the instance's memory (a 4GiB OOM kill ended
+# the 23 July 2026 bulk run) would otherwise be retried forever, taking the
+# instance down with it every round and paying for the extraction each time.
+MAX_INGEST_ATTEMPTS = int(os.getenv("RL_MAX_INGEST_ATTEMPTS", "3"))
+
 # Bounded concurrency for per-page extraction calls within a single document.
 EXTRACT_CONCURRENCY = int(os.getenv("RL_EXTRACT_CONCURRENCY", "4"))
 

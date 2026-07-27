@@ -58,7 +58,7 @@
             </select>
           </td>
           <td class="dm-row-actions">
-            <mat-icon *ngIf="d.status !== 'processing' && d.status !== 'rejected'"
+            <mat-icon *ngIf="canReprocess(d)"
                       (click)="reprocess(d)" title="re-process">refresh</mat-icon>
             <mat-icon (click)="deleteDoc(d)" title="delete">delete</mat-icon>
           </td>

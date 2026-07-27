@@ -18,9 +18,14 @@ Upload flow mirrors ``brand_guidelines``: the client asks for a v4 signed
 GCS PUT URL, uploads directly to storage, then calls ``finalize_upload`` to
 register the document and queue the background ingest worker on the
 dedicated ``research_ingest_executor``.
+
+That queue is bounded (see ``ingest_queue``): a document this process has no
+room for stays PROCESSING and is picked up by ``stalled_sweeper``, which is
+also what recovers documents whose worker died with its instance.
 """
 
 import asyncio
+import datetime
 import hashlib
 import logging
 import os
@@ -39,6 +44,7 @@ from src.research_library.dto.research_library_dto import (
     GenerateUploadUrlResponseDto,
     UpdateDocumentDto,
 )
+from src.research_library.ingest import ingest_queue
 from src.research_library.ingest.ingest_worker import run_ingest
 from src.research_library.repository.research_claim_repository import (
     ResearchClaimRepository,
@@ -82,6 +88,22 @@ _MSG_EXTENSION = ".msg"
 def _extension_of(filename: str) -> str:
     """Returns the lowercased file extension, including the leading dot."""
     return os.path.splitext(filename)[1].lower()
+
+
+def _is_stalled(document: ResearchDocumentModel) -> bool:
+    """Whether a PROCESSING document has visibly lost its worker.
+
+    The worker beats ``updated_at`` after every page batch, so silence for
+    longer than ``config.STALE_AFTER_SECONDS`` means the instance running it
+    is gone — the normal outcome of a Cloud Run scale-down mid-ingest.
+    """
+    updated_at = document.updated_at
+    if updated_at is None:
+        return True
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=datetime.UTC)
+    age = datetime.datetime.now(datetime.UTC) - updated_at
+    return age.total_seconds() >= config.STALE_AFTER_SECONDS
 
 
 class ResearchLibraryService:
@@ -254,13 +276,38 @@ class ResearchLibraryService:
             ingest_run_id=str(uuid.uuid4()),
         )
         created = await self.repo.create(placeholder)
-
-        executor.submit(run_ingest, document_id=created.id)
-        logger.info(
-            "Research library ingest queued for document %s", created.id
-        )
-
+        self._submit_ingest(created.id, executor)
         return created
+
+    def _submit_ingest(
+        self,
+        document_id: int,
+        executor: ThreadPoolExecutor,
+    ) -> None:
+        """Queues an ingest run, if this process still has room for one.
+
+        When the queue is full the document simply stays PROCESSING and the
+        sweeper submits it once capacity frees up. Refusing here is what
+        keeps a 140-file bulk upload from parking its backlog in a
+        ThreadPoolExecutor queue that the next scale-down would discard.
+        """
+        if not ingest_queue.try_reserve(document_id):
+            logger.info(
+                "Ingest queue full; document %s stays queued in the database"
+                " for the stalled-ingest sweeper.",
+                document_id,
+            )
+            return
+
+        try:
+            executor.submit(run_ingest, document_id=document_id)
+        except Exception:
+            ingest_queue.release(document_id)
+            raise
+
+        logger.info(
+            "Research library ingest queued for document %s", document_id
+        )
 
     async def list_documents(
         self,
@@ -373,9 +420,11 @@ class ResearchLibraryService:
         """Resets a document to PROCESSING under a new ingest run and
         resubmits it to the worker pool.
 
-        Guarded against re-triggering a run that is already in flight; the
-        actual atomic swap of claims (new run written, old run deleted only
-        on success) is implemented by the Unit 2/3 pipeline body.
+        Guarded against re-triggering a run that is genuinely in flight —
+        but a document whose worker died with its instance is stuck in
+        PROCESSING with nobody to finish it, so those are retried rather
+        than refused. The atomic swap of claims (new run written, old run
+        deleted only on success) is implemented by the pipeline body.
         """
         document = await self.repo.find_active_by_id(document_id)
         if not document:
@@ -384,7 +433,9 @@ class ResearchLibraryService:
                 detail="Research document not found.",
             )
 
-        if document.status == ResearchDocStatus.PROCESSING:
+        if document.status == ResearchDocStatus.PROCESSING and not _is_stalled(
+            document,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Document is already processing.",
@@ -398,6 +449,9 @@ class ResearchLibraryService:
                 "ingest_run_id": new_run_id,
                 "error_message": None,
                 "failed_pages": [],
+                # A human deliberately retrying earns a fresh set of
+                # sweeper attempts, whatever exhausted the previous ones.
+                "ingest_attempts": 0,
             },
         )
         if not updated:
@@ -406,11 +460,11 @@ class ResearchLibraryService:
                 detail="Failed to reprocess research document.",
             )
 
-        executor.submit(run_ingest, document_id=document_id)
         logger.info(
             "Research library reprocess queued for document %s (run %s)",
             document_id,
             new_run_id,
         )
+        self._submit_ingest(document_id, executor)
 
         return updated

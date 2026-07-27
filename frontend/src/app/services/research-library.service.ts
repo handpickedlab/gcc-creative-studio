@@ -44,6 +44,23 @@ export interface ResearchDocument {
   pageCount: number | null;
   failedPages: number[];
   createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * A document is only really being worked on while its worker keeps beating
+ * `updatedAt`. Ingest runs inside the backend process, so a Cloud Run
+ * scale-down or an OOM kill can leave a document in `processing` with
+ * nobody finishing it — the backend sweeper retries those, and this lets
+ * the UI offer a manual retry instead of an eternal spinner.
+ */
+export const STALLED_AFTER_MS = 15 * 60 * 1000;
+
+export function isStalled(doc: ResearchDocument): boolean {
+  if (doc.status !== 'processing') return false;
+  const beat = Date.parse(doc.updatedAt ?? doc.createdAt ?? '');
+  if (Number.isNaN(beat)) return false;
+  return Date.now() - beat >= STALLED_AFTER_MS;
 }
 
 interface GenerateUploadUrlResponse {

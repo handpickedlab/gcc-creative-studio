@@ -47,7 +47,7 @@
       </select>
       <mat-icon
         class="lp-act"
-        *ngIf="d.status !== 'processing' && d.status !== 'rejected'"
+        *ngIf="canReprocess(d)"
         (click)="reprocess(d, $event)"
         title="re-process"
         >refresh</mat-icon

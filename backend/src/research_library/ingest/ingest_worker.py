@@ -34,6 +34,9 @@ Failure semantics:
   (tombstone) and against a newer reprocess run having superseded this one.
 - On success, claims from older ingest runs are deleted only AFTER the new
   run has fully written (the reprocess atomic swap).
+- The document row is touched after every page batch. Nothing else writes
+  to it mid-run, so that heartbeat is what tells ``stalled_sweeper`` this
+  document is alive rather than orphaned by a reaped instance.
 """
 
 import asyncio
@@ -53,6 +56,7 @@ from src.research_library.ingest import (
     conversion_service,
     embedding_service,
     extraction_service,
+    ingest_queue,
     rendering_service,
 )
 from src.research_library.repository.research_claim_repository import (
@@ -123,6 +127,9 @@ def run_ingest(document_id: int) -> None:
         )
     finally:
         loop.close()
+        # Frees this document's slot in the process-local ingest queue even
+        # when the run crashed, so the sweeper may pick it up again later.
+        ingest_queue.release(document_id)
 
 
 async def _run_ingest_pipeline(
@@ -206,6 +213,9 @@ async def _run_ingest_pipeline(
                     "page_count": summary["page_count"],
                     "doc_kind": summary["doc_kind"],
                     "language": summary["language"],
+                    # This run got there, so a future stall starts counting
+                    # its retries from zero again.
+                    "ingest_attempts": 0,
                 },
                 swap_claims=True,
             )
@@ -321,6 +331,10 @@ async def _ingest_document(
                 max_pages=config.MAX_PAGES,
             )
 
+        # Downloading and converting a large deck can take minutes; beat
+        # before the first page so the sweeper doesn't call this stalled.
+        await doc_repo.touch(document.id)
+
         page_count = min(total_pages, config.MAX_PAGES)
         if total_pages > config.MAX_PAGES:
             note = (
@@ -369,6 +383,8 @@ async def _ingest_document(
                     failed_pages.append(result.page_no)
                 elif result.extraction and result.extraction.language:
                     page_languages.append(result.extraction.language)
+
+            await doc_repo.touch(document.id)
 
     language = (
         max(set(page_languages), key=page_languages.count)

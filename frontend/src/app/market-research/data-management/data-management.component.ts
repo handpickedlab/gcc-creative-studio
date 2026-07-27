@@ -26,6 +26,7 @@ import {
   PriorityTier,
   ResearchDocument,
   ResearchLibraryService,
+  isStalled,
 } from '../../services/research-library.service';
 import {handleErrorSnackbar} from '../../utils/handleMessageSnackbar';
 
@@ -154,10 +155,18 @@ export class DataManagementComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Whether the retry action applies: finished, or stuck with no worker. */
+  canReprocess(d: ResearchDocument): boolean {
+    if (d.status === 'rejected') return false;
+    return d.status !== 'processing' || isStalled(d);
+  }
+
   docStatusDetail(d: ResearchDocument): string {
     switch (d.status) {
       case 'processing':
-        return 'processing…';
+        // The backend sweeper picks these up by itself; saying so beats a
+        // spinner that has silently meant nothing for four days.
+        return isStalled(d) ? 'stalled — waiting for retry' : 'processing…';
       case 'completed':
         return d.pageCount ? `${d.pageCount} p.` : 'ready';
       case 'completed_with_errors':
