@@ -23,8 +23,9 @@ logger = logging.getLogger(__name__)
 # Register SQLAlchemy event listeners
 from src.common import events  # noqa: F401
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from os import getenv
 
 from fastapi import FastAPI, Request, status
@@ -154,12 +155,26 @@ async def lifespan(app: FastAPI):
         max_workers=research_library_config.INGEST_WORKERS,
     )
 
+    logger.info("Starting research library stalled-ingest sweeper...")
+    # The executor queue dies with the instance, so documents left in
+    # PROCESSING are re-queued from the database instead of being lost.
+    from src.research_library.ingest.stalled_sweeper import run_sweeper_loop
+
+    app.state.research_sweeper_task = asyncio.create_task(
+        run_sweeper_loop(app.state.research_ingest_executor),
+    )
+
     yield
 
     logger.info("Application shutdown terminating")
 
     logger.info("Closing ThreadPoolExecutor...")
     app.state.executor.shutdown(wait=True)
+
+    logger.info("Stopping research library stalled-ingest sweeper...")
+    app.state.research_sweeper_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await app.state.research_sweeper_task
 
     logger.info("Closing research library ingest ThreadPoolExecutor...")
     app.state.research_ingest_executor.shutdown(wait=True)

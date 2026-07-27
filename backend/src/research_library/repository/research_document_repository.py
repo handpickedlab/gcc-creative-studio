@@ -20,16 +20,18 @@ scoped to a fixed list of models), so every query here filters
 ``deleted_at IS NULL`` explicitly rather than relying on it.
 """
 
+import datetime
 from typing import Any
 
 from fastapi import Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.base_repository import BaseRepository
 from src.common.dto.pagination_response_dto import PaginationResponseDto
 from src.database import get_db
 from src.research_library.schema.research_document_model import (
+    ResearchDocStatus,
     ResearchDocument,
     ResearchDocumentModel,
     ResearchDocumentPage,
@@ -113,6 +115,94 @@ class ResearchDocumentRepository(
             total_pages=total_pages,
             data=data,
         )
+
+    async def find_stalled(
+        self,
+        cutoff: datetime.datetime,
+        limit: int,
+    ) -> list[ResearchDocumentModel]:
+        """Documents stuck in PROCESSING with no progress since ``cutoff``.
+
+        Oldest upload first, so a recovered backlog drains in the order it
+        was uploaded.
+        """
+        result = await self.db.execute(
+            select(self.model)
+            .where(self.model.status == ResearchDocStatus.PROCESSING.value)
+            .where(self.model.deleted_at.is_(None))
+            .where(self.model.updated_at < cutoff)
+            .order_by(self.model.created_at.asc())
+            .limit(limit),
+        )
+        return [
+            self.schema.model_validate(d) for d in result.scalars().all()
+        ]
+
+    async def claim_stalled(
+        self,
+        document_id: int,
+        new_run_id: str,
+        cutoff: datetime.datetime,
+    ) -> bool:
+        """Atomically takes ownership of a stalled document for a new run.
+
+        The ``updated_at < cutoff`` predicate doubles as the lock: the first
+        writer bumps the timestamp, so a second instance sweeping the same
+        document updates no rows and moves on. Returns whether this caller
+        won the document.
+
+        Claiming deliberately does NOT touch ``ingest_attempts`` — see
+        ``begin_attempt``.
+        """
+        result = await self.db.execute(
+            update(self.model)
+            .where(self.model.id == document_id)
+            .where(self.model.status == ResearchDocStatus.PROCESSING.value)
+            .where(self.model.deleted_at.is_(None))
+            .where(self.model.updated_at < cutoff)
+            .values(
+                ingest_run_id=new_run_id,
+                error_message=None,
+                failed_pages=[],
+                updated_at=func.now(),
+            ),
+        )
+        await self.db.commit()
+        return result.rowcount == 1
+
+    async def begin_attempt(self, document_id: int) -> None:
+        """Records that a worker has actually started on this document.
+
+        The attempt counter is raised here rather than when the document is
+        claimed, because being claimed is not the same as being run: a
+        document can sit in an executor queue behind a slow one, beat no
+        heartbeat, and get re-claimed — which would burn its retries without
+        anything ever having gone wrong. Only a real start counts against
+        ``MAX_INGEST_ATTEMPTS``.
+        """
+        await self.db.execute(
+            update(self.model)
+            .where(self.model.id == document_id)
+            .values(
+                ingest_attempts=self.model.ingest_attempts + 1,
+                updated_at=func.now(),
+            ),
+        )
+        await self.db.commit()
+
+    async def touch(self, document_id: int) -> None:
+        """Heartbeat marking a document as still being worked on.
+
+        Nothing else in the ingest pipeline writes to the document row until
+        it finishes, so without this a long-running document would look
+        stalled to the sweeper and be re-queued underneath its own worker.
+        """
+        await self.db.execute(
+            update(self.model)
+            .where(self.model.id == document_id)
+            .values(updated_at=func.now()),
+        )
+        await self.db.commit()
 
     async def upsert_page(
         self,

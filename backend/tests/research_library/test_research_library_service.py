@@ -14,12 +14,14 @@
 
 """Tests for ResearchLibraryService."""
 
+import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from src.research_library import config
+from src.research_library.ingest import ingest_queue
 from src.research_library.dto.research_library_dto import (
     FinalizeUploadDto,
     GenerateUploadUrlDto,
@@ -222,6 +224,41 @@ class TestFinalizeUpload:
         _, submit_kwargs = executor.submit.call_args
         assert submit_kwargs["document_id"] == 42
 
+    @pytest.mark.anyio
+    async def test_leaves_overflow_to_the_sweeper_instead_of_queueing_it(
+        self, service, mock_repo, mock_gcs_service
+    ):
+        """A bulk upload must not park its backlog in the executor queue.
+
+        That queue lives in the process, so a Cloud Run scale-down throws it
+        away; beyond MAX_QUEUED the document stays PROCESSING in the
+        database, where the stalled-ingest sweeper will find it.
+        """
+        for document_id in range(1000, 1000 + config.MAX_QUEUED):
+            assert ingest_queue.try_reserve(document_id)
+
+        mock_gcs_service.download_stream_from_gcs.return_value = iter(
+            [b"fresh-bytes"]
+        )
+        mock_repo.find_by_sha256.return_value = None
+
+        async def fake_create(model):
+            return model.model_copy(update={"id": 77})
+
+        mock_repo.create.side_effect = fake_create
+        executor = MagicMock()
+
+        request_dto = FinalizeUploadDto(
+            gcs_uri="gs://test-bucket/research-library/global/uuid3/deck.pdf",
+            filename="deck.pdf",
+            mime_type="application/pdf",
+        )
+
+        result = await service.finalize_upload(request_dto, executor)
+
+        assert result.status == ResearchDocStatus.PROCESSING
+        executor.submit.assert_not_called()
+
 
 class TestUpdateDocument:
     """Tests for ResearchLibraryService.update_document (tier PATCH)."""
@@ -332,6 +369,37 @@ class TestReprocessDocument:
         assert exc_info.value.status_code == 409
         mock_repo.update.assert_not_called()
         executor.submit.assert_not_called()
+
+    @pytest.mark.anyio
+    async def test_retries_a_processing_document_whose_worker_is_gone(
+        self, service, mock_repo
+    ):
+        """PROCESSING with no heartbeat means the instance running it died.
+
+        Refusing those (the old behaviour) left them unrecoverable from the
+        UI — the state 120 documents ended up in after the July 2026 bulk
+        upload.
+        """
+        stalled_since = datetime.datetime.now(datetime.UTC) - datetime.timedelta(
+            seconds=config.STALE_AFTER_SECONDS + 60,
+        )
+        existing = make_document(
+            id=3,
+            status=ResearchDocStatus.PROCESSING,
+            ingest_run_id="dead-run",
+            updated_at=stalled_since,
+        )
+        mock_repo.find_active_by_id.return_value = existing
+        mock_repo.update.return_value = existing.model_copy(
+            update={"ingest_run_id": "new-run"},
+        )
+        executor = MagicMock()
+
+        result = await service.reprocess_document(3, executor)
+
+        assert result.status == ResearchDocStatus.PROCESSING
+        assert mock_repo.update.call_args[0][1]["ingest_run_id"] != "dead-run"
+        executor.submit.assert_called_once()
 
     @pytest.mark.anyio
     async def test_not_found(self, service, mock_repo):

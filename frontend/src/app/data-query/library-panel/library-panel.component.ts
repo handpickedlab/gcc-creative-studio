@@ -21,6 +21,7 @@ import {
   PriorityTier,
   ResearchDocument,
   ResearchLibraryService,
+  isStalled,
 } from '../../services/research-library.service';
 import {handleErrorSnackbar} from '../../utils/handleMessageSnackbar';
 
@@ -145,6 +146,12 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
       .filter(d => this.isSearchable(d) && !this.off.has(d.id))
       .map(d => d.id);
     this.allowedDocumentsChange.emit(allowed);
+  }
+
+  /** Whether the retry action applies: finished, or stuck with no worker. */
+  canReprocess(doc: ResearchDocument): boolean {
+    if (doc.status === 'rejected') return false;
+    return doc.status !== 'processing' || isStalled(doc);
   }
 
   // ── presentation helpers ───────────────────────────────────────

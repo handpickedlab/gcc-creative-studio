@@ -140,6 +140,14 @@ class ResearchDocument(Base):
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failed_pages: Mapped[list] = mapped_column(_JsonListType, default=list)
     ingest_run_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # How often the stalled-ingest sweeper has restarted this document. Caps
+    # the retries of a file that kills its instance every time.
+    ingest_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
@@ -305,6 +313,7 @@ class ResearchDocumentModel(BaseDocument):
     page_count: int | None = None
     failed_pages: list[int] = Field(default_factory=list)
     ingest_run_id: str | None = None
+    ingest_attempts: int = 0
     deleted_at: datetime.datetime | None = None
 
 
