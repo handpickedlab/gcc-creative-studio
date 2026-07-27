@@ -149,8 +149,10 @@ class ResearchDocumentRepository(
         The ``updated_at < cutoff`` predicate doubles as the lock: the first
         writer bumps the timestamp, so a second instance sweeping the same
         document updates no rows and moves on. Returns whether this caller
-        won the document. The attempt counter rises with the claim, so a
-        document that keeps killing its worker eventually runs out of tries.
+        won the document.
+
+        Claiming deliberately does NOT touch ``ingest_attempts`` — see
+        ``begin_attempt``.
         """
         result = await self.db.execute(
             update(self.model)
@@ -162,12 +164,31 @@ class ResearchDocumentRepository(
                 ingest_run_id=new_run_id,
                 error_message=None,
                 failed_pages=[],
-                ingest_attempts=self.model.ingest_attempts + 1,
                 updated_at=func.now(),
             ),
         )
         await self.db.commit()
         return result.rowcount == 1
+
+    async def begin_attempt(self, document_id: int) -> None:
+        """Records that a worker has actually started on this document.
+
+        The attempt counter is raised here rather than when the document is
+        claimed, because being claimed is not the same as being run: a
+        document can sit in an executor queue behind a slow one, beat no
+        heartbeat, and get re-claimed — which would burn its retries without
+        anything ever having gone wrong. Only a real start counts against
+        ``MAX_INGEST_ATTEMPTS``.
+        """
+        await self.db.execute(
+            update(self.model)
+            .where(self.model.id == document_id)
+            .values(
+                ingest_attempts=self.model.ingest_attempts + 1,
+                updated_at=func.now(),
+            ),
+        )
+        await self.db.commit()
 
     async def touch(self, document_id: int) -> None:
         """Heartbeat marking a document as still being worked on.

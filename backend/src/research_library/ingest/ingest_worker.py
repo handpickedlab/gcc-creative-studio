@@ -152,6 +152,9 @@ async def _run_ingest_pipeline(
                 )
                 return
             run_id = document.ingest_run_id
+            # Counts as an attempt only now that work really begins, and
+            # doubles as the first heartbeat of this run.
+            await doc_repo.begin_attempt(document_id)
 
             gcs_service = GcsService()
             client = GeminiModelSetup.init()

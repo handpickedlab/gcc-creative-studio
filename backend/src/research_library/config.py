@@ -53,7 +53,14 @@ INGEST_WORKERS = int(os.getenv("RL_INGEST_WORKERS", "2"))
 # queue lives inside the API process, so a Cloud Run scale-down throws away
 # whatever is still in it (a July 2026 bulk upload lost 120 documents that
 # way). Keeping the queue shallow keeps the database the queue of record.
-MAX_QUEUED = int(os.getenv("RL_MAX_QUEUED", str(INGEST_WORKERS * 3)))
+#
+# Defaulting to exactly INGEST_WORKERS means a reserved document is a running
+# document. Allowing a document to WAIT in the executor queue costs more than
+# it looks: a waiting document beats no heartbeat, so after
+# STALE_AFTER_SECONDS another process claims it too and both end up
+# extracting it (the atomic swap keeps the result correct, but the duplicate
+# Gemini calls are paid for). Waiting in the database is free.
+MAX_QUEUED = int(os.getenv("RL_MAX_QUEUED", str(INGEST_WORKERS)))
 
 # How long a document may sit in PROCESSING without any progress before the
 # sweeper concludes its worker is gone and re-queues it. Must comfortably
@@ -64,7 +71,10 @@ STALE_AFTER_SECONDS = int(os.getenv("RL_STALE_AFTER_SECONDS", "900"))
 # How often the sweeper looks for stalled documents, and how long it waits
 # after boot before the first sweep (the app needs ~2 minutes to finish
 # warming up, and an instance that has just started owns no work yet).
-SWEEP_INTERVAL_SECONDS = int(os.getenv("RL_SWEEP_INTERVAL_SECONDS", "300"))
+# The interval doubles as the pickup latency for a document that had to wait
+# in the database because every worker was busy, so keep it short — the sweep
+# itself is one indexed query.
+SWEEP_INTERVAL_SECONDS = int(os.getenv("RL_SWEEP_INTERVAL_SECONDS", "120"))
 SWEEP_INITIAL_DELAY_SECONDS = int(
     os.getenv("RL_SWEEP_INITIAL_DELAY_SECONDS", "120"),
 )

@@ -89,6 +89,16 @@ class TestSweepOnce:
         assert ingest_queue.reserved_ids() == {11, 12}
 
     @pytest.mark.anyio
+    async def test_a_reserved_document_is_a_running_document(self):
+        """The queue holds no waiting documents by default.
+
+        A document waiting in the executor queue beats no heartbeat, so the
+        sweeper would read it as abandoned and let a second process claim and
+        extract it too — paying Gemini twice for one document.
+        """
+        assert config.MAX_QUEUED == config.INGEST_WORKERS
+
+    @pytest.mark.anyio
     async def test_skips_documents_another_instance_claimed_first(self):
         repo = AsyncMock()
         repo.find_stalled.return_value = [_document(11)]

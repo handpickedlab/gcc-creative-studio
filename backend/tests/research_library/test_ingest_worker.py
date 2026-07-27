@@ -188,6 +188,27 @@ class TestIngestPipeline:
         )
         # Page rows were written for both pages.
         assert doc_repo.upsert_page.await_count == 2
+        # This run counted as one attempt, and beat a heartbeat per batch so
+        # the sweeper can tell a live document from an abandoned one.
+        doc_repo.begin_attempt.assert_awaited_once_with(7)
+        assert doc_repo.touch.await_count >= 1
+        # Finishing clears the attempt count for any future stall.
+        assert update_kwargs["ingest_attempts"] == 0
+
+    def test_attempt_is_counted_only_once_work_starts(
+        self, doc_repo, claim_repo, gcs
+    ):
+        """A document that never starts must keep its retries.
+
+        Being claimed is not being run: without this split, a document
+        waiting behind a slow one would burn an attempt every sweep and
+        eventually be failed with nothing wrong with it.
+        """
+        doc_repo.find_active_by_id.return_value = None
+
+        _run(doc_repo, claim_repo, gcs, pages=[], extractions=[])
+
+        doc_repo.begin_attempt.assert_not_awaited()
 
     def test_failed_page_is_recorded_and_rest_kept(
         self, doc_repo, claim_repo, gcs
