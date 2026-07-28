@@ -22,9 +22,11 @@ its thread. One ask typically triggers 1-3 searches, so the per-call engine
 setup is acceptable for the PoC.
 
 Ranking: candidates come back from pgvector ordered by cosine similarity
-(hard filters applied in SQL first), then the document's priority tier is
-applied as a score multiplier in Python — a "background" document needs a
-meaningfully better semantic match to outrank a "primary" one.
+(hard filters applied in SQL first), then two multipliers are applied in
+Python — the document's priority tier (a "background" document needs a
+meaningfully better semantic match to outrank a "primary" one) and the age of
+the claim's CONTENT, taken from its normalized period, never from the upload
+timestamp.
 """
 
 import asyncio
@@ -58,13 +60,14 @@ SELECT
     c.segment,
     c.geography,
     c.period,
+    c.period_key,
     c.claim_type,
     c.source_citation,
     c.sample,
     d.filename,
     d.priority_tier,
     d.period AS document_period,
-    d.created_at AS document_created_at,
+    d.vintage_key AS document_vintage_key,
     1 - (c.embedding <=> CAST(:query_embedding AS vector)) AS similarity
 FROM research_claims c
 JOIN research_documents d ON d.id = c.document_id
@@ -305,30 +308,47 @@ async def _fetch_candidates(
             return [dict(row) for row in result.mappings().all()]
 
 
+def _month_ordinal(key: str | None) -> int | None:
+    """A ``YYYY-MM`` period key as a comparable month count."""
+    if not key:
+        return None
+    try:
+        year, month = key.split("-")
+        return int(year) * 12 + int(month)
+    except (ValueError, AttributeError):
+        return None
+
+
 def _recency_factors(rows: list[dict[str, Any]]) -> dict[int, float]:
     """Map each row index -> a recency multiplier in [1, 1 + RECENCY_WEIGHT].
 
-    Newer documents (by ``document_created_at``) score higher; the newest in
-    the pool gets the full boost, the oldest gets none. Rows without a
-    timestamp (or a pool where all share one) get a neutral 1.0, so callers /
-    tests that don't supply timestamps are unaffected.
+    Recency means the age of the CONTENT, not of the upload: a claim is dated
+    by its own period, falling back to its document's edition date. Weighting
+    on the upload timestamp (as this once did) ranked a 2023 figure above a
+    2026 one whenever its file happened to be added later — which is how "the
+    most recent NPS" came back as 2023.
+
+    Rows with no resolvable date, and pools where every row shares one date,
+    get a neutral 1.0.
     """
-    stamps = {
-        i: r.get("document_created_at")
-        for i, r in enumerate(rows)
-        if r.get("document_created_at") is not None
-    }
+    stamps = {}
+    for i, r in enumerate(rows):
+        ordinal = _month_ordinal(r.get("period_key")) or _month_ordinal(
+            r.get("document_vintage_key")
+        )
+        if ordinal is not None:
+            stamps[i] = ordinal
     if len(stamps) < 2:
         return {i: 1.0 for i in range(len(rows))}
     oldest, newest = min(stamps.values()), max(stamps.values())
-    span = (newest - oldest).total_seconds()
+    span = newest - oldest
     factors: dict[int, float] = {}
     for i in range(len(rows)):
-        ts = stamps.get(i)
-        if ts is None or span <= 0:
+        ordinal = stamps.get(i)
+        if ordinal is None or span <= 0:
             factors[i] = 1.0
         else:
-            norm = (ts - oldest).total_seconds() / span  # 0 oldest → 1 newest
+            norm = (ordinal - oldest) / span  # 0 oldest → 1 newest
             factors[i] = 1.0 + config.RECENCY_WEIGHT * norm
     return factors
 
@@ -367,12 +387,17 @@ def _format_result(row: dict[str, Any]) -> dict[str, Any]:
         "segment": row.get("segment"),
         "geography": row.get("geography"),
         "period": row.get("period"),
+        # Sortable form of the period, so the agent can tell which of two
+        # near-identical claims is the newer one. NULL when the source's
+        # phrasing names no point in time ("past 12 months").
+        "period_key": row.get("period_key"),
         "claim_type": row.get("claim_type"),
         "source_citation": row.get("source_citation"),
         "sample": row.get("sample"),
         "document_id": row["document_id"],
         "document": row["filename"],
         "document_period": row.get("document_period"),
+        "document_vintage_key": row.get("document_vintage_key"),
         "page": row["page_no"],
         "tier": row.get("priority_tier"),
         "score": round(row["score"], 4),
