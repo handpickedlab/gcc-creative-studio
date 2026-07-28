@@ -55,7 +55,7 @@ def _page(page_no: int, landscape=True) -> RenderedPage:
     )
 
 
-def _extraction(statement: str) -> PageExtraction:
+def _extraction(statement: str, period: str | None = None) -> PageExtraction:
     return PageExtraction(
         takeaway=statement,
         language="nl",
@@ -63,6 +63,7 @@ def _extraction(statement: str) -> PageExtraction:
             ExtractedClaim(
                 statement=statement,
                 tags=["e-commerce"],
+                period=period,
             ),
         ],
     )
@@ -194,6 +195,53 @@ class TestIngestPipeline:
         assert doc_repo.touch.await_count >= 1
         # Finishing clears the attempt count for any future stall.
         assert update_kwargs["ingest_attempts"] == 0
+
+    def test_dates_the_document_and_its_claims(self, doc_repo, claim_repo, gcs):
+        """The edition date comes from the filename, and dates bare periods.
+
+        A satisfaction slide writes just "P10" because the whole deck is the
+        2024 edition; without the document's year those claims cannot be
+        ordered against any other period.
+        """
+        doc_repo.find_active_by_id.return_value = _document(
+            filename="Customer Satisfaction Survey - P10 2024.pdf",
+        )
+
+        _run(
+            doc_repo,
+            claim_repo,
+            gcs,
+            pages=[_page(1)],
+            extractions=[_extraction("NPS was 54", period="P10")],
+        )
+
+        update_kwargs = doc_repo.update.call_args.args[1]
+        assert update_kwargs["vintage_key"] == "2024-10"
+        assert update_kwargs["period"] == "October 2024"
+        written = claim_repo.bulk_insert_claims.call_args.args[0]
+        assert written[0].period == "P10"
+        assert written[0].period_key == "2024-10"
+
+    def test_falls_back_to_the_latest_period_in_the_content(
+        self, doc_repo, claim_repo, gcs
+    ):
+        """An undated filename still gets an edition date from its claims."""
+        doc_repo.find_active_by_id.return_value = _document(
+            filename="Womenswear_in_Germany.pdf",
+        )
+
+        _run(
+            doc_repo,
+            claim_repo,
+            gcs,
+            pages=[_page(1), _page(2)],
+            extractions=[
+                _extraction("older figure", period="Q1 2023"),
+                _extraction("newer figure", period="Q3 2025"),
+            ],
+        )
+
+        assert doc_repo.update.call_args.args[1]["vintage_key"] == "2025-07"
 
     def test_attempt_is_counted_only_once_work_starts(
         self, doc_repo, claim_repo, gcs

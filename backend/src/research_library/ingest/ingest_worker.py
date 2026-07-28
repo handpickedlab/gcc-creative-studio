@@ -51,7 +51,11 @@ from google.cloud.logging.handlers import CloudLoggingHandler
 
 from src.common.storage_service import GcsService
 from src.multimodal.schema.gemini_model_setup import GeminiModelSetup
-from src.research_library import canonicalization_service, config
+from src.research_library import (
+    canonicalization_service,
+    config,
+    period_service,
+)
 from src.research_library.ingest import (
     conversion_service,
     embedding_service,
@@ -216,6 +220,8 @@ async def _run_ingest_pipeline(
                     "page_count": summary["page_count"],
                     "doc_kind": summary["doc_kind"],
                     "language": summary["language"],
+                    "vintage_key": summary["vintage_key"],
+                    "period": summary["period"],
                     # This run got there, so a future stall starts counting
                     # its retries from zero again.
                     "ingest_attempts": 0,
@@ -284,9 +290,15 @@ async def _ingest_document(
     extension = os.path.splitext(document.filename)[1].lower()
     gcs_prefix = _blob_prefix(document.gcs_uri, gcs_service.bucket_name)
 
+    # The document's own edition date, from its filename. Known before any
+    # page is read, so it can date claims whose period omits the year.
+    vintage_key = period_service.parse_filename_vintage(document.filename)
+    vintage_year = int(vintage_key.split("-")[0]) if vintage_key else None
+
     claim_count = 0
     failed_pages: list[int] = []
     page_languages: list[str] = []
+    claim_period_keys: list[str] = []
     doc_kind: str | None = None
     note: str | None = None
 
@@ -380,12 +392,28 @@ async def _ingest_document(
 
             for result in results:
                 claim_count += await _persist_page(
-                    result, document, doc_repo, claim_repo, alias_map
+                    result,
+                    document,
+                    doc_repo,
+                    claim_repo,
+                    alias_map,
+                    vintage_year,
                 )
                 if result.error:
                     failed_pages.append(result.page_no)
-                elif result.extraction and result.extraction.language:
+                    continue
+                if result.extraction and result.extraction.language:
                     page_languages.append(result.extraction.language)
+                if result.extraction:
+                    claim_period_keys.extend(
+                        key
+                        for claim in result.extraction.claims
+                        if (
+                            key := period_service.normalize_period(
+                                claim.period, vintage_year
+                            )
+                        )
+                    )
 
             await doc_repo.touch(document.id)
 
@@ -394,12 +422,18 @@ async def _ingest_document(
         if page_languages
         else None
     )
+    # Filenames carry a date for ~4 in 5 documents; for the rest the latest
+    # period the content itself mentions is the best available edition date.
+    if not vintage_key and claim_period_keys:
+        vintage_key = max(claim_period_keys)
     return {
         "page_count": page_count,
         "claim_count": claim_count,
         "failed_pages": failed_pages,
         "doc_kind": doc_kind or DocKindEnum.OTHER.value,
         "language": language,
+        "vintage_key": vintage_key,
+        "period": period_service.label_for_key(vintage_key),
         "note": note,
     }
 
@@ -467,6 +501,7 @@ async def _persist_page(
     doc_repo: ResearchDocumentRepository,
     claim_repo: ResearchClaimRepository,
     alias_map: dict[str, str] | None = None,
+    vintage_year: int | None = None,
 ) -> int:
     """The sequential database half of one page. Returns claims written."""
     await doc_repo.upsert_page(
@@ -495,6 +530,11 @@ async def _persist_page(
             segment=claim.segment,
             geography=claim.geography,
             period=claim.period,
+            # A slide often writes just "P10", the year being implicit in the
+            # edition, so the document's vintage year dates those.
+            period_key=period_service.normalize_period(
+                claim.period, vintage_year
+            ),
             claim_type=claim.claim_type,
             source_citation=claim.source_citation,
             sample=claim.sample,

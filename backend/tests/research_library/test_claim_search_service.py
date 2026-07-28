@@ -70,6 +70,96 @@ class TestRankCandidates:
         assert ranked[0]["claim_id"] == 1
 
 
+class TestRecencyRanking:
+    """Recency must follow the content's date, never the upload's."""
+
+    def test_the_newer_period_wins_between_equal_matches(self):
+        rows = [
+            _row(1, 0.80, "primary", period_key="2023-03"),
+            _row(2, 0.80, "primary", period_key="2026-01"),
+        ]
+
+        ranked = rank_candidates(rows, _WEIGHTS)
+
+        assert [r["claim_id"] for r in ranked] == [2, 1]
+
+    def test_upload_time_no_longer_influences_the_score(self):
+        """The 2023-vs-2026 bug: a late upload used to win on 'recency'.
+
+        document_created_at is deliberately ignored now, so an old claim in a
+        recently uploaded file cannot outrank a genuinely newer one.
+        """
+        import datetime
+
+        recent_upload = datetime.datetime(2026, 7, 23, tzinfo=datetime.UTC)
+        old_upload = datetime.datetime(2026, 7, 6, tzinfo=datetime.UTC)
+        rows = [
+            _row(
+                1,
+                0.80,
+                "primary",
+                period_key="2023-03",
+                document_created_at=recent_upload,
+            ),
+            _row(
+                2,
+                0.80,
+                "primary",
+                period_key="2026-01",
+                document_created_at=old_upload,
+            ),
+        ]
+
+        ranked = rank_candidates(rows, _WEIGHTS)
+
+        assert ranked[0]["claim_id"] == 2
+
+    def test_falls_back_to_the_document_edition_date(self):
+        rows = [
+            _row(1, 0.80, "primary", document_vintage_key="2022-00"),
+            _row(2, 0.80, "primary", document_vintage_key="2025-00"),
+        ]
+
+        ranked = rank_candidates(rows, _WEIGHTS)
+
+        assert ranked[0]["claim_id"] == 2
+
+    def test_a_claim_period_outweighs_its_document_edition(self):
+        """A 2019 figure quoted in a 2025 deck is still a 2019 figure."""
+        rows = [
+            _row(
+                1,
+                0.80,
+                "primary",
+                period_key="2019-00",
+                document_vintage_key="2025-00",
+            ),
+            _row(
+                2,
+                0.80,
+                "primary",
+                period_key="2024-00",
+                document_vintage_key="2024-00",
+            ),
+        ]
+
+        ranked = rank_candidates(rows, _WEIGHTS)
+
+        assert ranked[0]["claim_id"] == 2
+
+    def test_undated_claims_are_scored_neutrally(self):
+        """"past 12 months" must neither win nor be buried."""
+        rows = [
+            _row(1, 0.90, "primary", period_key=None),
+            _row(2, 0.80, "primary", period_key="2026-01"),
+        ]
+
+        ranked = rank_candidates(rows, _WEIGHTS)
+
+        assert ranked[0]["claim_id"] == 1
+        assert ranked[0]["score"] == 0.90
+
+
 class TestSearchClaimsSync:
     @patch(
         "src.research_library.search.claim_search_service._fetch_candidates"

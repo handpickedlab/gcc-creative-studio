@@ -126,6 +126,10 @@ class ResearchDocument(Base):
     doc_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     language: Mapped[str | None] = mapped_column(String, nullable=True)
     period: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The document's own edition date as a sortable "YYYY-MM" (see
+    # period_service). Never derived from created_at, which only records when
+    # the file was uploaded.
+    vintage_key: Mapped[str | None] = mapped_column(String, nullable=True)
     priority_tier: Mapped[str] = mapped_column(
         String,
         nullable=False,
@@ -239,6 +243,9 @@ class ResearchClaim(Base):
     geography: Mapped[str | None] = mapped_column(String, nullable=True)
     period: Mapped[str | None] = mapped_column(String, nullable=True)
     claim_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    # ``period`` normalized to a sortable "YYYY-MM" (see period_service).
+    # NULL when the phrasing names no resolvable point in time.
+    period_key: Mapped[str | None] = mapped_column(String, nullable=True)
     source_citation: Mapped[str | None] = mapped_column(String, nullable=True)
     sample: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_tags: Mapped[list] = mapped_column(_JsonListType, default=list)
@@ -307,6 +314,10 @@ class ResearchDocumentModel(BaseDocument):
         default=None,
         description="Edition/vintage of the document, e.g. 'Q1 2025'.",
     )
+    vintage_key: str | None = Field(
+        default=None,
+        description="Sortable edition date, 'YYYY-MM' ('MM'='00' = year only).",
+    )
     priority_tier: PriorityTierEnum = PriorityTierEnum.PRIMARY
     status: ResearchDocStatus = ResearchDocStatus.PROCESSING
     error_message: str | None = None
@@ -352,6 +363,10 @@ class ResearchClaimModel(BaseDocument):
     segment: str | None = None
     geography: str | None = None
     period: str | None = None
+    period_key: str | None = Field(
+        default=None,
+        description="Sortable form of `period`, 'YYYY-MM' ('MM'='00' = year).",
+    )
     claim_type: ClaimTypeEnum | None = None
     source_citation: str | None = None
     sample: str | None = None
