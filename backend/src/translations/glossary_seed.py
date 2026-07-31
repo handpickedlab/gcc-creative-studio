@@ -25,14 +25,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.system_settings.schema.system_setting_model import SystemSetting
 from src.translations import briefing_parser as parser
+from src.translations import markets
+from src.translations.documents import financial_glossary
 from src.translations.repository.glossary_repository import GlossaryRepository
 
 logger = logging.getLogger(__name__)
 
 _SEED_FLAG = "default_glossary_v1_seeded"
+_FINANCIAL_SEED_FLAG = "financial_glossary_v1_seeded"
 _SEED_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "seed", "glossary_of_terms.xlsx"
 )
+
+
+async def seed_financial_glossary(db: AsyncSession) -> None:
+    """Seeds the financial-domain glossary used by annual-report translation.
+
+    Separate from the marketing dictionary: the same source term can carry a
+    different fixed translation in a financial statement.
+    """
+    try:
+        existing = await db.execute(
+            select(SystemSetting).where(SystemSetting.id == _FINANCIAL_SEED_FLAG)
+        )
+        if existing.scalar_one_or_none():
+            return  # already seeded
+
+        rows = [
+            entry
+            for market in markets.TARGET_MARKETS
+            for entry in financial_glossary.seed_entries(market)
+        ]
+        inserted = await GlossaryRepository(db).bulk_upsert(rows)
+
+        db.add(
+            SystemSetting(
+                id=_FINANCIAL_SEED_FLAG,
+                value="true",
+                description="Financial-domain glossary has been seeded.",
+            )
+        )
+        await db.commit()
+        logger.info(
+            "Seeded financial glossary: %s terms inserted (%s offered).",
+            inserted,
+            len(rows),
+        )
+    except Exception as e:
+        logger.error("Financial glossary seeding failed: %s", e)
+        await db.rollback()
 
 
 async def seed_default_glossary(db: AsyncSession) -> None:

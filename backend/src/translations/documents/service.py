@@ -35,7 +35,7 @@ from src.common.storage_service import GcsService
 from src.config.config_service import config_service
 from src.database import async_session_local
 from src.translations import markets
-from src.translations.documents import qa
+from src.translations.documents import financial_glossary, qa
 from src.translations.documents.docx_engine import DocxTranslationEngine
 from src.translations.documents.dto.document_translation_dto import (
     FinalizeUploadDto,
@@ -73,16 +73,6 @@ _GCS_PREFIX = "document-translations"
 
 # Generous cap: the branded FY25-26 annual report alone is 55MB.
 MAX_UPLOAD_BYTES = 150 * 1024 * 1024
-
-# Protected names for annual reports; becomes glossary-domain data later.
-DO_NOT_TRANSLATE = [
-    "Hunkemöller",
-    "Shero Holdco B.V.",
-    "Together Tomorrow",
-    "For Every Woman In You",
-    "EBITDA",
-    "IFRS",
-]
 
 # Keeps background tasks alive (see data_query: the loop only holds weak refs).
 _JOB_TASKS: set[asyncio.Task] = set()
@@ -404,29 +394,35 @@ class DocumentTranslationService:
         # Late import: pulls in google.genai + Vertex credential wiring.
         from src.multimodal.schema.gemini_model_setup import GeminiModelSetup
 
-        glossary = await self._load_glossary(target_market)
+        glossary, protected = await self._load_glossary(target_market)
         return GeminiSegmentTranslator(
             client=GeminiModelSetup.get_client(),
             model_id=model_id,
             target_language=markets.language_for_market(target_market),
             glossary=glossary,
-            do_not_translate=DO_NOT_TRANSLATE,
+            do_not_translate=protected,
             instruction=instruction,
         )
 
-    async def _load_glossary(self, market: str) -> list[GlossaryEntry]:
-        """Reuses the briefing glossary for the market's dictionary.
+    async def _load_glossary(
+        self, market: str
+    ) -> tuple[list[GlossaryEntry], list[str]]:
+        """The market's financial dictionary, split into terms and names.
 
-        A dedicated financial domain is a follow-up; until then the shared
-        dictionary at least keeps brand terms consistent.
+        Annual reports use the financial domain: "impairment" must land on
+        its IFRS equivalent, not on whatever reads well in campaign copy.
         """
         async with async_session_local() as db:
-            terms = await GlossaryRepository(db).find_all(limit=1000)
-        return [
+            terms = await GlossaryRepository(db).find_by_domain(
+                financial_glossary.DOMAIN, language=market
+            )
+        glossary = [
             GlossaryEntry(source=t.source, target=t.target)
             for t in terms
-            if t.language == market
+            if not t.do_not_translate
         ]
+        protected = [t.source for t in terms if t.do_not_translate]
+        return glossary, protected or list(financial_glossary.DO_NOT_TRANSLATE)
 
     async def _run_translation(
         self, job_id: str, translator: SegmentTranslator
@@ -484,10 +480,11 @@ class DocumentTranslationService:
                             }
                         },
                     )
+            # Check against the very terms the model was instructed to use.
             findings = qa.run_all(
                 pending,
                 glossary=getattr(translator, "glossary", None),
-                do_not_translate=DO_NOT_TRANSLATE,
+                do_not_translate=getattr(translator, "do_not_translate", None),
             )
             payloads = [_finding_payload(f) for f in findings]
             async with async_session_local() as db:

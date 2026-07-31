@@ -59,10 +59,12 @@ async def translate_endpoint(
 @router.get(
     "/glossary",
     response_model=list[GlossaryTermModel],
-    summary="List all glossary terms",
+    summary="List glossary terms, optionally for one domain",
 )
-async def list_glossary(service: TranslationService = Depends()):
-    return await service.list_terms()
+async def list_glossary(
+    domain: str | None = None, service: TranslationService = Depends()
+):
+    return await service.list_terms(domain)
 
 
 @router.post(

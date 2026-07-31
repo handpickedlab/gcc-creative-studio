@@ -31,12 +31,13 @@ class GlossaryRepository(BaseRepository[GlossaryTerm, GlossaryTermModel]):
         super().__init__(model=GlossaryTerm, schema=GlossaryTermModel, db=db)
 
     async def get_by_language_and_source(
-        self, language: str, source: str
+        self, language: str, source: str, domain: str = "marketing"
     ) -> GlossaryTermModel | None:
-        """Finds a glossary term by its unique (language, source) pair."""
+        """Finds a term by its unique (language, source, domain) triple."""
         query = select(self.model).where(
             self.model.language == language,
             self.model.source == source,
+            self.model.domain == domain,
         )
         result = await self.db.execute(query)
         item = result.scalar_one_or_none()
@@ -45,23 +46,34 @@ class GlossaryRepository(BaseRepository[GlossaryTerm, GlossaryTermModel]):
         return self.schema.model_validate(item)
 
     async def get_by_languages(
-        self, languages: list[str]
+        self, languages: list[str], domain: str | None = None
     ) -> list[GlossaryTermModel]:
         """Returns all glossary terms for the given language/market codes."""
         if not languages:
             return []
         query = select(self.model).where(self.model.language.in_(languages))
+        if domain:
+            query = query.where(self.model.domain == domain)
+        result = await self.db.execute(query)
+        return [self.schema.model_validate(i) for i in result.scalars().all()]
+
+    async def find_by_domain(
+        self, domain: str, language: str | None = None
+    ) -> list[GlossaryTermModel]:
+        query = select(self.model).where(self.model.domain == domain)
+        if language:
+            query = query.where(self.model.language == language)
         result = await self.db.execute(query)
         return [self.schema.model_validate(i) for i in result.scalars().all()]
 
     async def bulk_upsert(self, entries: list[dict]) -> int:
-        """Bulk-inserts {language, source, target} rows, ignoring duplicates
-        on the (language, source) unique constraint. Returns rows inserted."""
+        """Bulk-inserts {language, source, target, domain} rows, ignoring
+        duplicates on the unique triple. Returns rows inserted."""
         if not entries:
             return 0
         stmt = pg_insert(self.model).values(entries)
         stmt = stmt.on_conflict_do_nothing(
-            constraint="uq_glossary_terms_lang_source"
+            constraint="uq_glossary_terms_lang_source_domain"
         )
         result = await self.db.execute(stmt)
         await self.db.commit()

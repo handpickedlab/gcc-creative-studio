@@ -34,18 +34,32 @@ class GlossaryTerm(Base):
     `source` appears in the text to translate into that language, the model
     is instructed to render it as `target`. Each language has its own
     dictionary, so the same source term may map to different targets per
-    language. The pair (language, source) is unique.
+    language.
+
+    Terms also belong to a `domain`, because the same word carries different
+    fixed translations in different material: "collection" is a product line
+    in campaign copy and debt recovery in a financial statement. The triple
+    (language, source, domain) is unique.
     """
 
     __tablename__ = "glossary_terms"
     __table_args__ = (
-        UniqueConstraint("language", "source", name="uq_glossary_terms_lang_source"),
+        UniqueConstraint(
+            "language",
+            "source",
+            "domain",
+            name="uq_glossary_terms_lang_source_domain",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     language: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     target: Mapped[str] = mapped_column(String, nullable=False)
+    # marketing (campaign briefings) | financial (annual reports)
+    domain: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="marketing", default="marketing"
+    )
     # When true, `source` is a do-not-translate brand/product/collection name:
     # it must be reproduced verbatim in the target instead of translated.
     do_not_translate: Mapped[bool] = mapped_column(
@@ -75,6 +89,13 @@ class GlossaryTermModel(BaseDocument):
     source: str = Field(description="The source word/term to match in the text.")
     target: str = Field(
         description="The fixed translation to always use for the source term."
+    )
+    domain: str = Field(
+        default="marketing",
+        description=(
+            "Which material this entry applies to: 'marketing' for campaign "
+            "briefings, 'financial' for annual reports."
+        ),
     )
     do_not_translate: bool = Field(
         default=False,
