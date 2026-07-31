@@ -53,6 +53,9 @@ from src.research_library import config as research_library_config
 from src.research_library.research_library_controller import (
     router as research_library_router,
 )
+from src.translations.documents.controller import (
+    router as document_translations_router,
+)
 from src.source_assets.source_asset_controller import (
     router as source_asset_router,
 )
@@ -243,3 +246,4 @@ app.include_router(feedback_router)
 app.include_router(public_feedback_router)
 app.include_router(data_query_router)
 app.include_router(research_library_router)
+app.include_router(document_translations_router)

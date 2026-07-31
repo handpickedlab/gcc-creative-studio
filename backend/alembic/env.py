@@ -39,6 +39,10 @@ from src.tags.schema.tags_model import (
 from src.translations.schema.language_config_model import (
     TranslationLanguageConfig,
 )  # Import to ensure registered with Base.metadata
+from src.translations.documents.schema.document_translation_model import (
+    DocumentTranslationJob,
+    DocumentTranslationSegment,
+)  # Import to ensure registered with Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
