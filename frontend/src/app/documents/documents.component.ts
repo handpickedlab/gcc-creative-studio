@@ -1,28 +1,27 @@
 /**
  * Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
- * Hunkemöller "Documents" page — annual-report (docx) translation experience.
+ * Hunkemöller "Documents" page — translating a Word document with its layout
+ * left intact.
  *
  * Flow: library → intake (upload) → preflight → translation run → review
- * workspace (tree + segments + QA findings) → QA report → export.
- * The backend job/API layer lands in a later slice; runs and re-translations
- * are simulated on the demo corpus so the whole flow is clickable.
+ * workspace (outline + segments + QA findings) → QA report → export. Every
+ * step talks to `/api/document-translations`; the run happens server-side and
+ * this polls the job for its progress.
  */
 
 import {
   Component,
+  ElementRef,
   HostListener,
   OnDestroy,
+  OnInit,
   ViewChild,
-  ElementRef,
+  inject,
 } from '@angular/core';
 import {
-  ALL_SECTIONS,
-  buildInitialSegs,
+  Chapter,
   DNT_LIST,
-  DOC_LIBRARY,
   DOC_TARGETS,
-  DOC_TOTALS,
-  DocItem,
   DocStatus,
   GLOSSARY_FIN,
   GLOSSARY_MKT,
@@ -36,12 +35,22 @@ import {
   ReviewFilter,
   RunState,
   SectionMeta,
-  sectionById,
   Segment,
   STATUS_META,
   StatusMeta,
-  TREE,
+  marketLabel,
 } from './documents.data';
+import {
+  ApiJob,
+  ApiSegment,
+  DocumentTranslationsService,
+} from './document-translations.service';
+import {
+  allSectionsOf,
+  chaptersFrom,
+  segIndexOf,
+  segmentsBySection,
+} from './documents.adapter';
 
 type View =
   | 'library'
@@ -52,7 +61,6 @@ type View =
   | 'qa'
   | 'export'
   | 'glossary';
-type SegAction = 'approve' | 'edit' | 'dismiss' | 'retrans' | 'approveSection';
 
 interface SegGroup {
   type: 'seg' | 'table';
@@ -76,6 +84,7 @@ interface DocRollup {
   findings: number;
   critical: number;
   approved: number;
+  total: number;
   pct: number;
 }
 
@@ -90,22 +99,28 @@ interface QaGroup {
   list: Finding[];
 }
 
-interface RunInfo {
-  states: Record<string, RunState>;
-  pct: number;
-  done: number;
-  failed: string[];
-  complete: boolean;
-}
-
 interface TermInfo {
   sec: string;
   segId: string;
   expected: string;
   found: string;
+  /** segments whose translation still carries the wrong term */
+  hits: Array<{sec: string; seg: Segment}>;
   count: number;
   sections: number;
   approvedHit: number;
+}
+
+/** One row in the library table. */
+interface JobRow {
+  job: ApiJob;
+  name: string;
+  status: DocStatus;
+  targets: string[];
+  progress: number;
+  pages: number;
+  words: number;
+  activity: string;
 }
 
 const FILTERS: Array<{v: ReviewFilter; label: string}> = [
@@ -120,24 +135,32 @@ const FILTERS: Array<{v: ReviewFilter; label: string}> = [
   templateUrl: './documents.component.html',
   styleUrls: ['./documents.component.scss'],
 })
-export class DocumentsComponent implements OnDestroy {
-  readonly tree = TREE;
-  readonly totals = DOC_TOTALS;
-  readonly sectionCount = ALL_SECTIONS.length;
+export class DocumentsComponent implements OnInit, OnDestroy {
+  private readonly api = inject(DocumentTranslationsService);
+
   readonly filters = FILTERS;
-  readonly library: DocItem[] = DOC_LIBRARY;
   readonly targets = DOC_TARGETS;
   readonly dntList = DNT_LIST;
   readonly statusMeta = STATUS_META;
   readonly qaMeta = QA_META;
 
   view: View = 'library';
-  doc: DocItem | null = null;
 
+  /* library */
+  jobs: JobRow[] = [];
+  loadingJobs = false;
+  /** Set when the list could not be fetched — an empty library is not the same
+   *  thing as an unreachable one. */
+  loadError = '';
+
+  /* active document */
+  job: ApiJob | null = null;
+  tree: Chapter[] = [];
+  sections: SectionMeta[] = [];
   segs: Record<string, Segment[]> = {};
-  more: Record<string, number> = {};
+  loadingDoc = false;
 
-  activeSec = '1.1';
+  activeSec = '';
   filter: ReviewFilter = 'attention';
   q = '';
   scope: 'section' | 'doc' = 'section';
@@ -151,22 +174,23 @@ export class DocumentsComponent implements OnDestroy {
 
   toast = '';
   exported = false;
-  run: RunInfo | null = null;
 
   /* intake */
-  intake: 'idle' | 'parsing' | 'pdf' | 'corrupt' = 'idle';
+  intake: 'idle' | 'parsing' | 'error' = 'idle';
+  intakeError = '';
   drag = false;
 
-  /* preflight config */
-  pfTargets: string[] = ['NL', 'DE'];
-  pfDomain: 'financial' | 'marketing' = 'financial';
-  pfLocalise = false;
-  pfDisclaimer = true;
+  /* preflight — the API translates into one market per job */
+  pfTarget = 'NL';
+  reusePct: number | null = null;
+  reuseTotal = 0;
+  reuseCount = 0;
+  loadingReuse = false;
 
   /* glossary */
   glossDomain: 'financial' | 'marketing' = 'financial';
 
-  /* cached view state — rebuilt by refreshView() after every mutation */
+  /* cached view state, rebuilt by refreshView() after every mutation */
   dr: DocRollup = {
     open: 0,
     att: 0,
@@ -175,6 +199,7 @@ export class DocumentsComponent implements OnDestroy {
     findings: 0,
     critical: 0,
     approved: 0,
+    total: 0,
     pct: 0,
   };
   groups: SegGroup[] = [];
@@ -188,16 +213,15 @@ export class DocumentsComponent implements OnDestroy {
   @ViewChild('scroller') scroller?: ElementRef<HTMLElement>;
 
   private timers: ReturnType<typeof setTimeout>[] = [];
+  private poller: ReturnType<typeof setInterval> | null = null;
 
-  constructor() {
-    const built = buildInitialSegs();
-    this.segs = built.segs;
-    this.more = built.more;
-    this.refreshView();
+  ngOnInit() {
+    this.loadJobs();
   }
 
   ngOnDestroy() {
     this.timers.forEach(clearTimeout);
+    this.stopPolling();
   }
 
   private later(fn: () => void, ms: number) {
@@ -206,92 +230,136 @@ export class DocumentsComponent implements OnDestroy {
 
   flash(msg: string) {
     this.toast = msg;
-    this.later(() => (this.toast = ''), 2400);
+    this.later(() => (this.toast = ''), 2800);
   }
 
-  /* ── header helpers ─────────────────────────────────────────── */
-
-  get inDoc(): boolean {
-    return !!this.doc && ['review', 'qa', 'export'].includes(this.view);
+  private failed(action: string) {
+    return (err: unknown) => {
+      const detail =
+        (err as {error?: {detail?: string}})?.error?.detail ||
+        (err as {message?: string})?.message ||
+        '';
+      this.flash(`${action} failed${detail ? ` — ${detail}` : ''}`);
+    };
   }
 
-  get trail(): string | null {
-    if (this.inDoc || this.view === 'run' || this.view === 'preflight') {
-      return this.doc?.name || 'Annual Report FY2025-26.docx';
+  /* ── library ────────────────────────────────────────────────── */
+
+  loadJobs() {
+    this.loadingJobs = true;
+    this.loadError = '';
+    this.api.listJobs().subscribe({
+      next: jobs => {
+        this.jobs = jobs.map(j => this.toRow(j));
+        this.loadingJobs = false;
+      },
+      error: (err: {status?: number; error?: {detail?: string}}) => {
+        this.loadingJobs = false;
+        this.loadError =
+          err?.status === 0
+            ? 'Could not reach the translation service.'
+            : err?.error?.detail ||
+              `The translation service returned an error (${err?.status ?? '?'}).`;
+      },
+    });
+  }
+
+  private toRow(job: ApiJob): JobRow {
+    const stats = job.stats || {};
+    const prog = job.progress;
+    const pct = prog?.total
+      ? Math.round((100 * prog.translated) / prog.total)
+      : job.status === 'completed'
+        ? 100
+        : 0;
+    return {
+      job,
+      name: job.filename,
+      status: job.status,
+      targets: job.targetMarket ? [job.targetMarket] : [],
+      progress: pct,
+      pages: stats.pages || 0,
+      words: stats.words || 0,
+      activity: this.when(job.updatedAt || job.createdAt),
+    };
+  }
+
+  private when(iso?: string): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const sameDay = new Date().toDateString() === d.toDateString();
+    return sameDay
+      ? `today, ${d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}`
+      : d.toLocaleDateString(undefined, {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        });
+  }
+
+  /* ── opening a document ─────────────────────────────────────── */
+
+  openJob(row: JobRow) {
+    this.job = row.job;
+    this.exported = row.job.status === 'completed';
+    this.tree = chaptersFrom(row.job);
+    this.sections = allSectionsOf(this.tree);
+    this.activeSec = this.sections[0]?.id || '';
+    this.filter = 'attention';
+    this.scope = 'section';
+    this.q = '';
+    this.segs = {};
+
+    if (row.job.status === 'uploaded') {
+      this.setView('preflight');
+      this.loadReuse();
+      return;
     }
-    return this.view === 'glossary' ? 'Glossary' : null;
-  }
-
-  get docStatus(): DocStatus | null {
-    if (!this.trail || this.view === 'glossary') return null;
-    if (this.view === 'run') return 'translating';
-    return this.doc?.status || null;
-  }
-
-  get allClear(): boolean {
-    return this.doc ? !!this.doc.clear || this.doc.id === 'd2' : false;
-  }
-
-  /** QA / export nav badges honour the all-clear demo documents. */
-  get navFindings(): number {
-    return this.allClear ? 0 : this.dr.findings;
-  }
-
-  get navCritical(): number {
-    return this.allClear ? 0 : this.dr.critical;
-  }
-
-  statusOf(status: DocStatus): StatusMeta {
-    return STATUS_META[status];
-  }
-
-  provOf(seg: Segment): ProvMeta {
-    const key = seg.approved
-      ? 'approved'
-      : seg.finding
-        ? 'attention'
-        : seg.prov;
-    return PROV_META[key];
-  }
-
-  isApproved(seg: Segment): boolean {
-    return seg.approved;
-  }
-
-  sectionMeta(id: string): SectionMeta | undefined {
-    return sectionById(id);
-  }
-
-  qaOf(f: QaFinding): QaMeta {
-    return QA_META[f.type];
-  }
-
-  /* ── view navigation ────────────────────────────────────────── */
-
-  openDoc(d: DocItem) {
-    this.doc = d;
-    this.exported = d.status === 'exported';
-    if (d.status === 'review') {
-      this.activeSec = '1.1';
-      this.filter = 'attention';
-      this.scope = 'section';
-      this.q = '';
-      this.setView('review');
-    } else {
-      this.setView('export');
+    if (row.job.status === 'translating') {
+      this.setView('run');
+      this.startPolling();
+      return;
     }
+    this.loadSegments(() => this.setView('review'));
+  }
+
+  private loadSegments(done?: () => void) {
+    const job = this.job;
+    if (!job) return;
+    this.loadingDoc = true;
+    this.api.listSegments(job.id).subscribe({
+      next: (api: ApiSegment[]) => {
+        this.segs = segmentsBySection(api, this.sections);
+        this.loadingDoc = false;
+        this.refreshView();
+        if (done) done();
+      },
+      error: err => {
+        this.loadingDoc = false;
+        this.failed('Loading segments')(err);
+      },
+    });
   }
 
   backToLibrary() {
-    this.doc = null;
+    this.stopPolling();
+    this.job = null;
+    this.segs = {};
+    this.tree = [];
+    this.sections = [];
     this.setView('library');
+    this.loadJobs();
   }
 
   setView(v: View) {
     this.view = v;
     this.editingId = null;
     this.retransId = null;
-    if (v === 'intake') this.intake = 'idle';
+    if (v === 'intake') {
+      this.intake = 'idle';
+      this.intakeError = '';
+    }
     this.refreshView();
   }
 
@@ -333,6 +401,64 @@ export class DocumentsComponent implements OnDestroy {
     this.refreshView();
   }
 
+  /* ── header helpers ─────────────────────────────────────────── */
+
+  get inDoc(): boolean {
+    return !!this.job && ['review', 'qa', 'export'].includes(this.view);
+  }
+
+  get docStatus(): DocStatus | null {
+    return this.job?.status ?? null;
+  }
+
+  statusOf(status: DocStatus): StatusMeta {
+    return STATUS_META[status] || STATUS_META.uploaded;
+  }
+
+  provOf(seg: Segment): ProvMeta {
+    const key = seg.approved
+      ? 'approved'
+      : seg.finding
+        ? 'attention'
+        : seg.prov;
+    return PROV_META[key];
+  }
+
+  qaOf(f: QaFinding): QaMeta {
+    return QA_META[f.type];
+  }
+
+  /** The checks decide what blocks an export, not the finding's kind. */
+  blocksExport(f: QaFinding): boolean {
+    return f.severity
+      ? f.severity === 'error'
+      : QA_META[f.type].level === 'critical';
+  }
+
+  sectionMeta(id: string): SectionMeta | undefined {
+    return this.sections.find(s => s.id === id);
+  }
+
+  get navFindings(): number {
+    return this.dr.findings;
+  }
+
+  get navCritical(): number {
+    return this.dr.critical;
+  }
+
+  get docName(): string {
+    return this.job?.filename || '';
+  }
+
+  get targetLabel(): string {
+    return marketLabel(this.job?.targetMarket);
+  }
+
+  marketOf(code: string): string {
+    return marketLabel(code);
+  }
+
   /* ── review view model ──────────────────────────────────────── */
 
   private matches(seg: Segment): boolean {
@@ -341,8 +467,9 @@ export class DocumentsComponent implements OnDestroy {
       if (
         !seg.src.toLowerCase().includes(s) &&
         !seg.tgt.toLowerCase().includes(s)
-      )
+      ) {
         return false;
+      }
     }
     if (this.filter === 'all') return true;
     if (this.filter === 'attention') return !!seg.finding && !seg.approved;
@@ -372,26 +499,27 @@ export class DocumentsComponent implements OnDestroy {
   }
 
   refreshView() {
-    /* document rollup */
-    let open = 0,
-      att = 0,
-      aiOpen = 0,
-      edited = 0,
-      critical = 0;
+    let open = 0;
+    let att = 0;
+    let aiOpen = 0;
+    let edited = 0;
+    let critical = 0;
+    let total = 0;
     Object.values(this.segs).forEach(segs =>
       segs.forEach(s => {
+        total++;
         if (!s.approved) {
           open++;
           if (s.finding) {
             att++;
-            if (QA_META[s.finding.type].level === 'critical') critical++;
+            if (this.blocksExport(s.finding)) critical++;
           }
           if (s.prov === 'ai') aiOpen++;
         }
         if (s.prov === 'edited') edited++;
       }),
     );
-    const approved = DOC_TOTALS.segments - open;
+    const approved = total - open;
     this.dr = {
       open,
       att,
@@ -400,27 +528,29 @@ export class DocumentsComponent implements OnDestroy {
       findings: att,
       critical,
       approved,
-      pct: Math.round((100 * approved) / DOC_TOTALS.segments),
+      total,
+      pct: total ? Math.round((100 * approved) / total) : 0,
     };
 
-    /* section scope */
     const segs = this.segs[this.activeSec] || [];
     const visible = segs.filter(s => this.matches(s));
     this.visibleCount = visible.length;
     this.sectionRemaining = segs.filter(s => !s.approved).length;
     this.groups = this.mkGroups(visible, this.activeSec);
 
-    /* doc scope */
     if (this.scope === 'doc') {
-      this.docBlocks = ALL_SECTIONS.map(meta => {
-        const list = (this.segs[meta.id] || []).filter(s => this.matches(s));
-        return {
-          meta,
-          groups: this.mkGroups(list, meta.id),
-          count: list.length,
-          remaining: (this.segs[meta.id] || []).filter(s => !s.approved).length,
-        };
-      }).filter(b => b.count > 0);
+      this.docBlocks = this.sections
+        .map(meta => {
+          const list = (this.segs[meta.id] || []).filter(s => this.matches(s));
+          return {
+            meta,
+            groups: this.mkGroups(list, meta.id),
+            count: list.length,
+            remaining: (this.segs[meta.id] || []).filter(s => !s.approved)
+              .length,
+          };
+        })
+        .filter(b => b.count > 0);
       this.flatVisible = this.docBlocks.flatMap(b =>
         b.groups
           .flatMap(g => (g.type === 'table' ? g.rows! : [g.seg!]))
@@ -431,7 +561,6 @@ export class DocumentsComponent implements OnDestroy {
       this.flatVisible = visible.map(seg => ({sec: this.activeSec, seg}));
     }
 
-    /* QA + export */
     const found: Finding[] = [];
     Object.entries(this.segs).forEach(([sec, list]) =>
       list.forEach(seg => {
@@ -440,8 +569,8 @@ export class DocumentsComponent implements OnDestroy {
     );
     const order: Record<QaType, number> = {
       number: 0,
-      glossary: 1,
-      dnt: 2,
+      dnt: 1,
+      glossary: 2,
       length: 3,
     };
     found.sort(
@@ -458,20 +587,14 @@ export class DocumentsComponent implements OnDestroy {
       meta: QA_META[type],
       list,
     }));
-    this.criticals = found.filter(
-      f => QA_META[f.seg.finding!.type].level === 'critical',
-    );
-  }
-
-  get qaFindingsTotal(): number {
-    return this.qaGroups.reduce((a, g) => a + g.list.length, 0);
+    this.criticals = found.filter(f => this.blocksExport(f.seg.finding!));
   }
 
   filterCount(f: ReviewFilter): number {
     if (f === 'attention') return this.dr.att;
     if (f === 'ai') return this.dr.aiOpen;
     if (f === 'edited') return this.dr.edited;
-    return DOC_TOTALS.segments;
+    return this.dr.total;
   }
 
   trackGroup(_i: number, g: SegGroup) {
@@ -486,74 +609,76 @@ export class DocumentsComponent implements OnDestroy {
     return b.meta.id;
   }
 
+  trackJob(_i: number, r: JobRow) {
+    return r.job.id;
+  }
+
   /* ── segment mutations ──────────────────────────────────────── */
 
-  act(sec: string, segId: string | null, type: SegAction, payload?: string) {
-    const segs = this.segs[sec];
-    if (!segs) return;
-
-    if (type === 'retrans') {
-      if (!segId) return;
-      this.busyIds.add(segId);
-      this.later(() => {
-        this.busyIds.delete(segId);
-        const s = segs.find(x => x.id === segId);
-        if (!s) return;
-        if (s.finding?.type === 'number')
-          s.tgt = s.tgt.replace('€ 85 miljoen', '€ 8,5 miljoen');
-        if (s.finding?.found && s.finding?.expected)
-          s.tgt = s.tgt.split(s.finding.found).join(s.finding.expected);
-        s.prov = 'ai';
-        s.approved = false;
-        s.finding = undefined;
-        this.flash(
-          payload
-            ? `Re-translated with instruction “${payload}”`
-            : 'Segment re-translated',
-        );
-        this.refreshView();
-      }, 950);
-      return;
-    }
-
-    if (type === 'approveSection') {
-      let skipped = 0;
-      segs.forEach(s => {
-        if (s.approved) return;
-        if (s.finding && QA_META[s.finding.type].level === 'critical') {
-          skipped++;
-          return;
-        }
-        s.approved = true;
-        s.finding = undefined;
-      });
-      this.flash(
-        skipped
-          ? `Section approved — ${skipped} critical finding left open`
-          : 'Section approved',
-      );
-      this.refreshView();
-      return;
-    }
-
-    const s = segs.find(x => x.id === segId);
-    if (!s) return;
-    if (type === 'edit') {
-      s.tgt = payload ?? s.tgt;
-      s.prov = 'edited';
-      s.approved = false;
-      s.finding = undefined;
-    } else if (type === 'dismiss') {
-      s.finding = undefined;
-    } else if (type === 'approve') {
-      if (s.finding && QA_META[s.finding.type].level === 'critical') {
-        this.flash('Resolve the number mismatch before approving');
-        return;
-      }
-      s.approved = true;
-      s.finding = undefined;
-    }
+  /** Replaces one segment in place from the API's answer. */
+  private absorb(sec: string, api: ApiSegment) {
+    const list = this.segs[sec];
+    if (!list) return;
+    const idx = list.findIndex(s => s.id === String(api.segIndex));
+    if (idx < 0) return;
+    const before = list[idx];
+    list[idx] = {
+      ...before,
+      prov: api.provenance ?? before.prov,
+      approved: api.status === 'approved',
+      tgt: api.translation ?? '',
+      finding: api.finding
+        ? {
+            type: before.finding?.type ?? 'glossary',
+            msg: api.finding.msg,
+            severity: api.finding.severity,
+            term: api.finding.term ?? undefined,
+            expected: api.finding.expected ?? undefined,
+            found: api.finding.found ?? undefined,
+          }
+        : undefined,
+    };
     this.refreshView();
+  }
+
+  approve(sec: string, seg: Segment) {
+    if (seg.finding && this.blocksExport(seg.finding)) {
+      this.flash('Resolve the blocking finding before approving');
+      return;
+    }
+    const job = this.job;
+    if (!job) return;
+    this.busyIds.add(seg.id);
+    this.api
+      .updateSegment(job.id, segIndexOf(seg.id), {status: 'approved'})
+      .subscribe({
+        next: api => {
+          this.busyIds.delete(seg.id);
+          this.absorb(sec, api);
+        },
+        error: err => {
+          this.busyIds.delete(seg.id);
+          this.failed('Approving')(err);
+        },
+      });
+  }
+
+  approveTitle(seg: Segment): string {
+    return seg.finding && this.blocksExport(seg.finding)
+      ? 'Resolve the blocking finding first'
+      : 'Approve (A)';
+  }
+
+  approveSection(sec: string) {
+    const job = this.job;
+    if (!job) return;
+    this.api.approveSection(job.id, sec).subscribe({
+      next: res => {
+        this.flash(`Section approved — ${res.approved} segments`);
+        this.loadSegments();
+      },
+      error: this.failed('Approving the section'),
+    });
   }
 
   startEdit(seg: Segment) {
@@ -562,14 +687,28 @@ export class DocumentsComponent implements OnDestroy {
     this.retransId = null;
   }
 
-  saveEdit(sec: string) {
-    if (!this.editingId) return;
-    this.act(sec, this.editingId, 'edit', this.editDraft);
+  cancelEdit() {
     this.editingId = null;
   }
 
-  cancelEdit() {
+  saveEdit(sec: string) {
+    const job = this.job;
+    const id = this.editingId;
+    if (!job || !id) return;
     this.editingId = null;
+    this.busyIds.add(id);
+    this.api
+      .updateSegment(job.id, segIndexOf(id), {translation: this.editDraft})
+      .subscribe({
+        next: api => {
+          this.busyIds.delete(id);
+          this.absorb(sec, api);
+        },
+        error: err => {
+          this.busyIds.delete(id);
+          this.failed('Saving')(err);
+        },
+      });
   }
 
   toggleRetrans(seg: Segment) {
@@ -578,51 +717,104 @@ export class DocumentsComponent implements OnDestroy {
   }
 
   goRetrans(sec: string) {
-    if (!this.retransId) return;
+    const job = this.job;
     const id = this.retransId;
+    if (!job || !id) return;
     this.retransId = null;
-    this.act(sec, id, 'retrans', this.retransDraft.trim() || undefined);
+    const instruction = this.retransDraft.trim();
+    this.busyIds.add(id);
+    this.api
+      .retranslateSegment(job.id, segIndexOf(id), instruction || undefined)
+      .subscribe({
+        next: api => {
+          this.busyIds.delete(id);
+          this.absorb(sec, api);
+          this.flash(
+            instruction
+              ? `Re-translated with instruction “${instruction}”`
+              : 'Segment re-translated',
+          );
+        },
+        error: err => {
+          this.busyIds.delete(id);
+          this.failed('Re-translating')(err);
+        },
+      });
   }
 
-  approveTitle(seg: Segment): string {
-    return seg.finding && QA_META[seg.finding.type].level === 'critical'
-      ? 'Resolve the critical finding first'
-      : 'Approve (A)';
+  /**
+   * Dismissing is local: the finding stays on the server, but the reviewer has
+   * seen it and does not want it in the way. A reload brings it back.
+   */
+  dismiss(sec: string, seg: Segment) {
+    const list = this.segs[sec];
+    const idx = list?.findIndex(s => s.id === seg.id) ?? -1;
+    if (idx < 0) return;
+    list[idx] = {...list[idx], finding: undefined};
+    this.refreshView();
   }
 
-  /* term fix at scale */
+  /* ── applying a glossary term across the document ───────────── */
+
   openTermModal(sec: string, seg: Segment) {
     const f = seg.finding;
     if (!f?.found || !f?.expected) return;
+    const found = f.found;
+    const hits: Array<{sec: string; seg: Segment}> = [];
+    Object.entries(this.segs).forEach(([s, list]) =>
+      list.forEach(candidate => {
+        if (candidate.tgt.includes(found)) hits.push({sec: s, seg: candidate});
+      }),
+    );
     this.termInfo = {
       sec,
       segId: seg.id,
       expected: f.expected,
-      found: f.found,
-      count: 7,
-      sections: 3,
-      approvedHit: 4,
+      found,
+      hits,
+      count: hits.length,
+      sections: new Set(hits.map(h => h.sec)).size,
+      approvedHit: hits.filter(h => h.seg.approved).length,
     };
   }
 
   applyTerm() {
     const info = this.termInfo;
-    if (!info) return;
-    const seg = (this.segs[info.sec] || []).find(s => s.id === info.segId);
-    if (seg)
-      this.act(
-        info.sec,
-        info.segId,
-        'edit',
-        seg.tgt.split(info.found).join(info.expected),
-      );
+    const job = this.job;
+    if (!info || !job) return;
     this.termInfo = null;
+    let done = 0;
+    let failedCount = 0;
+    const total = info.hits.length;
+    if (!total) return;
+    info.hits.forEach(hit => {
+      const next = hit.seg.tgt.split(info.found).join(info.expected);
+      this.api
+        .updateSegment(job.id, segIndexOf(hit.seg.id), {translation: next})
+        .subscribe({
+          next: api => {
+            this.absorb(hit.sec, api);
+            if (++done + failedCount === total)
+              this.termApplied(info, done, failedCount);
+          },
+          error: () => {
+            failedCount++;
+            if (done + failedCount === total)
+              this.termApplied(info, done, failedCount);
+          },
+        });
+    });
+  }
+
+  private termApplied(info: TermInfo, done: number, failedCount: number) {
     this.flash(
-      `“${info.expected}” applied to ${info.count} segments across ${info.sections} sections`,
+      failedCount
+        ? `“${info.expected}” applied to ${done} segments — ${failedCount} failed`
+        : `“${info.expected}” applied to ${done} segments across ${info.sections} sections`,
     );
   }
 
-  /* ── keyboard: j/k move · a approve · esc clear ─────────────── */
+  /* ── keyboard: j/k move · a approve · e edit · esc clear ─────── */
 
   @HostListener('window:keydown', ['$event'])
   onKey(e: KeyboardEvent) {
@@ -653,7 +845,7 @@ export class DocumentsComponent implements OnDestroy {
       }
     } else if (e.key === 'a' && idx >= 0) {
       const cur = this.flatVisible[idx];
-      this.act(cur.sec, cur.seg.id, 'approve');
+      this.approve(cur.sec, cur.seg);
     } else if (e.key === 'e' && idx >= 0) {
       e.preventDefault();
       this.startEdit(this.flatVisible[idx].seg);
@@ -672,19 +864,18 @@ export class DocumentsComponent implements OnDestroy {
 
   /* ── intake ─────────────────────────────────────────────────── */
 
-  simulate(kind: 'ok' | 'pdf' | 'corrupt') {
-    if (kind === 'ok') {
-      this.intake = 'parsing';
-      this.later(() => this.setView('preflight'), 1600);
-    } else {
-      this.intake = kind;
-    }
+  onFileChosen(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) this.upload(file);
   }
 
   onDrop(e: DragEvent) {
     e.preventDefault();
     this.drag = false;
-    this.simulate('ok');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this.upload(file);
   }
 
   onDragOver(e: DragEvent) {
@@ -692,103 +883,209 @@ export class DocumentsComponent implements OnDestroy {
     this.drag = true;
   }
 
+  private upload(file: File) {
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      this.intake = 'error';
+      this.intakeError = `${file.name} is not a .docx — Word is the only format whose layout we can keep intact. If you only have a PDF, ask Finance for the Word source.`;
+      return;
+    }
+    this.intake = 'parsing';
+    this.intakeError = '';
+    this.api.createJob(file).subscribe({
+      next: job => {
+        this.job = job;
+        this.tree = chaptersFrom(job);
+        this.sections = allSectionsOf(this.tree);
+        this.activeSec = this.sections[0]?.id || '';
+        this.intake = 'idle';
+        this.setView('preflight');
+        this.loadReuse();
+      },
+      error: err => {
+        this.intake = 'error';
+        const detail = (err as {error?: {detail?: string}})?.error?.detail;
+        this.intakeError =
+          detail ||
+          `${file.name} could not be parsed. Open it in Word, save a fresh copy (File → Save As) and upload that.`;
+      },
+    });
+  }
+
   /* ── preflight ──────────────────────────────────────────────── */
 
-  togglePfTarget(code: string) {
-    this.pfTargets = this.pfTargets.includes(code)
-      ? this.pfTargets.filter(c => c !== code)
-      : [...this.pfTargets, code];
+  get stats() {
+    return this.job?.stats || {};
   }
 
-  /* ── translation run (simulated) ────────────────────────────── */
+  get sectionCount(): number {
+    return this.sections.length;
+  }
+
+  get tableCount(): number {
+    return this.sections.reduce((a, s) => a + (s.t || 0), 0);
+  }
+
+  get translatableCount(): number {
+    return this.stats.translatable || 0;
+  }
+
+  pickTarget(code: string) {
+    if (this.pfTarget === code) return;
+    this.pfTarget = code;
+    this.loadReuse();
+  }
+
+  loadReuse() {
+    const job = this.job;
+    if (!job) return;
+    this.loadingReuse = true;
+    this.reusePct = null;
+    this.api.reuseEstimate(job.id, this.pfTarget).subscribe({
+      next: est => {
+        this.reusePct = est.pct;
+        this.reuseTotal = est.total;
+        this.reuseCount = est.reusable;
+        this.loadingReuse = false;
+      },
+      error: err => {
+        this.loadingReuse = false;
+        this.failed('Estimating reuse')(err);
+      },
+    });
+  }
+
+  /* ── the run ────────────────────────────────────────────────── */
 
   startRun() {
-    const states: Record<string, RunState> = {};
-    ALL_SECTIONS.forEach(s => (states[s.id] = 'queued'));
-    this.run = {states, pct: 0, done: 0, failed: [], complete: false};
-    this.setView('run');
-    let i = 0;
-    let doneSegs = 0;
-    const step = () => {
-      const run = this.run;
-      if (!run || this.view !== 'run') return;
-      if (i >= ALL_SECTIONS.length) {
-        run.complete = true;
-        return;
-      }
-      const s = ALL_SECTIONS[i];
-      run.states[s.id] = 'run';
-      this.later(
-        () => {
-          if (!this.run) return;
-          const fail = s.id === '2.31';
-          doneSegs += fail ? 0 : s.n;
-          this.run.states[s.id] = fail ? 'fail' : 'done';
-          if (fail) this.run.failed.push(s.id);
-          this.run.pct = Math.min(
-            99,
-            Math.round((100 * doneSegs) / DOC_TOTALS.segments),
-          );
-          this.run.done = doneSegs;
-          i++;
-          step();
-        },
-        i < 3 ? 700 : 90 + Math.random() * 120,
-      );
-    };
-    step();
+    const job = this.job;
+    if (!job) return;
+    this.api.startTranslation(job.id, this.pfTarget).subscribe({
+      next: updated => {
+        this.job = updated;
+        this.setView('run');
+        this.startPolling();
+      },
+      error: this.failed('Starting the translation'),
+    });
   }
 
-  retrySection(id: string) {
-    const run = this.run;
-    if (!run) return;
-    run.states[id] = 'run';
-    run.failed = run.failed.filter(f => f !== id);
-    run.complete = false;
-    this.later(() => {
-      if (!this.run) return;
-      this.run.states[id] = 'done';
-      this.run.pct = 100;
-      this.run.done = DOC_TOTALS.segments;
-      this.run.complete = true;
-    }, 1600);
+  private startPolling() {
+    this.stopPolling();
+    this.poller = setInterval(() => this.pollJob(), 2500);
+    this.pollJob();
   }
 
-  cancelRun() {
-    this.run = null;
-    this.flash('Run cancelled — completed sections kept');
-    this.setView('library');
+  private stopPolling() {
+    if (this.poller) clearInterval(this.poller);
+    this.poller = null;
   }
 
-  finishRun() {
-    if (this.run?.complete && !this.run.failed.length) {
-      this.doc = this.library[0];
+  private pollJob() {
+    const job = this.job;
+    if (!job) return;
+    this.api.getJob(job.id).subscribe({
+      next: updated => {
+        this.job = updated;
+        if (updated.status !== 'translating') {
+          this.stopPolling();
+          if (updated.status === 'review' || updated.status === 'completed') {
+            this.tree = chaptersFrom(updated);
+            this.sections = allSectionsOf(this.tree);
+            if (!this.activeSec) this.activeSec = this.sections[0]?.id || '';
+            this.loadSegments();
+          }
+        }
+      },
+      error: () => this.stopPolling(),
+    });
+  }
+
+  get runProgress() {
+    return this.job?.progress || null;
+  }
+
+  get runPct(): number {
+    const p = this.runProgress;
+    if (!p?.total) return this.job?.status === 'review' ? 100 : 0;
+    return Math.round((100 * p.translated) / p.total);
+  }
+
+  get runComplete(): boolean {
+    return this.job?.status === 'review' || this.job?.status === 'completed';
+  }
+
+  get runFailed(): boolean {
+    return this.job?.status === 'failed';
+  }
+
+  /** Section run states for the outline while a job is translating. */
+  get runStates(): Record<string, RunState> {
+    const sections = this.runProgress?.sections || {};
+    const out: Record<string, RunState> = {};
+    for (const meta of this.sections) {
+      const raw = sections[meta.id];
+      out[meta.id] =
+        raw === 'done' ? 'done' : raw === 'fail' ? 'fail' : 'queued';
+    }
+    return out;
+  }
+
+  openReview() {
+    if (this.runComplete) {
       this.filter = 'attention';
       this.scope = 'section';
-      this.activeSec = '1.1';
       this.setView('review');
     } else {
-      this.setView('library');
+      this.backToLibrary();
     }
   }
 
-  runFailedTitle(id: string): string {
-    return `${id} ${sectionById(id)?.title || ''} failed`;
+  retryRun() {
+    const job = this.job;
+    if (!job) return;
+    this.api
+      .startTranslation(job.id, job.targetMarket || this.pfTarget)
+      .subscribe({
+        next: updated => {
+          this.job = updated;
+          this.startPolling();
+        },
+        error: this.failed('Retrying'),
+      });
   }
 
   /* ── export ─────────────────────────────────────────────────── */
 
   get exportBlocked(): boolean {
-    return !this.allClear && this.criticals.length > 0;
+    return this.criticals.length > 0;
   }
 
   doExport() {
-    this.exported = true;
-    this.flash('Annual Report FY2025-26 — NL.docx downloaded');
-  }
-
-  get exportDocName(): string {
-    return this.doc?.name || 'Annual Report FY2025-26.docx';
+    const job = this.job;
+    if (!job) return;
+    this.api.exportDocx(job.id).subscribe({
+      next: res => {
+        const blob = res.body;
+        if (!blob) {
+          this.flash('Export returned no file');
+          return;
+        }
+        const disposition = res.headers.get('content-disposition') || '';
+        const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+        const name = match
+          ? decodeURIComponent(match[1])
+          : job.filename.replace('.docx', ' — translated.docx');
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.exported = true;
+        this.flash(`${name} downloaded`);
+      },
+      error: this.failed('Exporting'),
+    });
   }
 
   /* ── glossary ───────────────────────────────────────────────── */

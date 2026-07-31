@@ -7,7 +7,7 @@
  */
 
 import {Component, EventEmitter, Input, Output} from '@angular/core';
-import {Chapter, RunState, SectionMeta, Segment, TREE} from '../documents.data';
+import {Chapter, RunState, SectionMeta, Segment} from '../documents.data';
 
 export interface SectionRollup {
   total: number;
@@ -21,7 +21,8 @@ export interface SectionRollup {
   styleUrls: ['./doc-tree.component.scss'],
 })
 export class DocTreeComponent {
-  readonly tree: Chapter[] = TREE;
+  /** The active document's outline; empty until a job is loaded. */
+  @Input() tree: Chapter[] = [];
 
   @Input() segs: Record<string, Segment[]> = {};
   @Input() active: string | null = null;
@@ -45,7 +46,11 @@ export class DocTreeComponent {
     const open = segs.filter(s => !s.approved).length;
     const att = segs.filter(s => s.finding && !s.approved).length;
     const meta = this.tree.flatMap(c => c.sections).find(s => s.id === id);
-    return {total: meta ? meta.n : segs.length, open, att};
+    return {
+      total: meta ? Math.max(meta.n, segs.length) : segs.length,
+      open,
+      att,
+    };
   }
 
   pct(id: string): number {
