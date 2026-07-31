@@ -1,23 +1,8 @@
 <!-- Copyright 2026 Google LLC — Apache-2.0. Hunkemöller "Documents": annual-report translation. -->
 <div class="page">
-  <!-- Header -->
-  <div class="hdr">
-    <div class="brand">
-      <span class="logo">HKM</span>
-      <span class="kicker">AI TOOLBOX</span>
-      <span class="sep">/</span><span class="crumb">Documents</span>
-      <ng-container *ngIf="trail as t">
-        <span class="sep">/</span><span class="crumb cur">{{ t }}</span>
-        <span class="status-badge sm" *ngIf="docStatus as st">
-          <span class="dot" [style.background]="statusOf(st).dot"></span>{{ statusOf(st).label }}
-        </span>
-      </ng-container>
-    </div>
-    <span class="crumb cur">Documents</span>
-  </div>
-
-  <!-- Doc-level sub-nav (review · qa · export) -->
-  <div class="docnav" *ngIf="inDoc">
+  <!-- Contextual bar. The studio rail already carries app identity and which
+       tool is open, so this only says where you are inside the document. -->
+  <div class="ctxbar" *ngIf="inDoc">
     <button class="back" (click)="backToLibrary()">← Library</button>
     <span class="vline"></span>
     <button class="tab" [class.on]="view === 'review'" (click)="setView('review')">Review</button>
@@ -27,13 +12,28 @@
     <button class="tab" [class.on]="view === 'export'" (click)="setView('export')">
       Export <span class="dot-crit" *ngIf="navCritical > 0" title="Blocked by critical QA finding">●</span>
     </button>
+    <span class="vline"></span>
+    <!-- Kept left of centre: snackbars occupy the top-right corner. -->
+    <span class="docname">{{ doc?.name }}</span>
+    <span class="status-badge sm" *ngIf="docStatus as st">
+      <span class="dot" [style.background]="statusOf(st).dot"></span>{{ statusOf(st).label }}
+    </span>
+    <span class="grow"></span>
+  </div>
+
+  <!-- A run has no tabs, but the file it is working on is worth keeping in view. -->
+  <div class="ctxbar" *ngIf="view === 'run'">
+    <span class="docname plain">{{ doc?.name || 'Annual Report FY2025-26.docx' }}</span>
+    <span class="status-badge sm" *ngIf="docStatus as st">
+      <span class="dot" [style.background]="statusOf(st).dot"></span>{{ statusOf(st).label }}
+    </span>
   </div>
 
   <!-- Library / glossary toolbars -->
-  <div class="toolbar" *ngIf="view === 'library'">
+  <div class="ctxbar" *ngIf="view === 'library'">
     <button class="btn ghost sm" (click)="setView('glossary')">Glossary — Financial</button>
   </div>
-  <div class="toolbar" *ngIf="view === 'glossary'">
+  <div class="ctxbar" *ngIf="view === 'glossary'">
     <button class="btn ghost sm" (click)="setView('library')">← Back to documents</button>
   </div>
 
