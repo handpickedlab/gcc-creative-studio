@@ -18,6 +18,23 @@ from pydantic import Field
 from src.common.base_dto import BaseDto
 
 
+class GenerateUploadUrlDto(BaseDto):
+    filename: str = Field(description="Name of the .docx to be uploaded.")
+    size_bytes: int = Field(gt=0, description="File size in bytes.")
+
+
+class GenerateUploadUrlResponseDto(BaseDto):
+    upload_url: str = Field(description="Signed URL to PUT the file to.")
+    gcs_uri: str = Field(description="Where the file will land.")
+
+
+class FinalizeUploadDto(BaseDto):
+    gcs_uri: str = Field(
+        description="The gcs_uri returned when the upload URL was minted."
+    )
+    filename: str = Field(description="Original filename, shown in the UI.")
+
+
 class StartTranslationDto(BaseDto):
     target_market: str = Field(
         description="Target market code from the translations markets list, "
