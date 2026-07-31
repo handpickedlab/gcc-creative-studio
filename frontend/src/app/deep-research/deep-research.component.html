@@ -4,19 +4,6 @@
 -->
 
 <div class="page">
-  <header class="hdr">
-    <div class="brand">
-      <span class="logo">Hunkemöller</span>
-      <span class="kicker">CONSUMER SENTIMENT SCAN</span>
-    </div>
-    <div class="crumbs">
-      <span class="sep">/</span>
-      <span class="crumb cur">
-        {{ view === 'wizard' ? 'New research' : (activeReport?.topic || 'Research') }}
-      </span>
-    </div>
-  </header>
-
   <!-- loading / error -->
   <div *ngIf="loadingSchema" class="center-load">
     <div class="spinner"></div>

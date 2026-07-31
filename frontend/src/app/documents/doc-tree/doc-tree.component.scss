@@ -1,0 +1,62 @@
+/**
+ * Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ * Hunkemöller "Documents" — outline tree styles. Design tokens are inherited
+ * from the documents page host via CSS custom properties.
+ */
+
+:host { display: block; }
+
+.mono { font-family: 'DM Mono', ui-monospace, monospace; }
+
+.chapter { margin-bottom: 2px; }
+
+.ch-head {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 10px 12px 5px; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; text-align: left;
+}
+.caret { font-size: 8px; color: var(--text-s); transition: transform .15s; display: inline-block; }
+.caret.open { transform: rotate(90deg); }
+.ch-title {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-m); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ch-att { font-size: 9px; color: var(--bad); font-weight: 600; }
+.ch-open { font-size: 9px; color: var(--text-s); }
+.ch-done { font-size: 9.5px; color: var(--ok); }
+
+.sec {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px 8px 12px; border: none; text-align: left;
+  border-left: 2px solid transparent; background: transparent;
+  cursor: pointer; font-family: inherit; transition: background .1s;
+}
+.sec:hover:not(.static) { background: var(--surface); }
+.sec.active { border-left-color: var(--accent); background: var(--accent-lt); }
+.sec.static { cursor: default; }
+
+.sid { font-size: 9.5px; color: var(--text-s); width: 30px; flex-shrink: 0; }
+.sec.active .sid { color: var(--accent-h); }
+.stitle {
+  font-size: 11.5px; color: var(--text-m); flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sec.active .stitle { color: var(--text); font-weight: 500; }
+
+.roll { font-size: 9.5px; flex-shrink: 0; white-space: nowrap; }
+.roll-att { color: var(--bad); font-weight: 600; }
+.roll-open { color: var(--text-m); }
+.roll-done { font-size: 9.5px; color: var(--ok); flex-shrink: 0; }
+
+.run-done { color: var(--ok); font-size: 11px; }
+.run-fail { color: var(--bad); font-size: 9.5px; font-weight: 600; letter-spacing: .04em; }
+.run-queued { color: var(--text-s); font-size: 9.5px; }
+
+.spinner {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--border-lt); border-top-color: var(--accent);
+  animation: dspin .7s linear infinite;
+}
+.spinner.sm { width: 12px; height: 12px; }
+
+@keyframes dspin { to { transform: rotate(360deg); } }
