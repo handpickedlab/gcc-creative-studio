@@ -66,6 +66,8 @@ class DocumentTranslationSegmentRepository:
         job_id: str,
         status: str | None = None,
         translatable_only: bool = False,
+        section_id: str | None = None,
+        review_filter: str | None = None,
     ) -> list[DocumentTranslationSegmentModel]:
         query = (
             select(DocumentTranslationSegment)
@@ -80,6 +82,25 @@ class DocumentTranslationSegmentRepository:
                     ["heading", "prose", "table_label"]
                 )
             )
+        if section_id:
+            query = query.where(
+                DocumentTranslationSegment.section_id == section_id
+            )
+        # Mirrors the review workspace's exception filters.
+        if review_filter == "attention":
+            query = query.where(
+                DocumentTranslationSegment.finding.isnot(None),
+                DocumentTranslationSegment.status != "approved",
+            )
+        elif review_filter == "ai":
+            query = query.where(
+                DocumentTranslationSegment.provenance == "ai",
+                DocumentTranslationSegment.status != "approved",
+            )
+        elif review_filter == "edited":
+            query = query.where(
+                DocumentTranslationSegment.provenance == "edited"
+            )
         result = await self.db.execute(query)
         return [
             DocumentTranslationSegmentModel.model_validate(row)
@@ -87,7 +108,11 @@ class DocumentTranslationSegmentRepository:
         ]
 
     async def set_translations(
-        self, job_id: str, translations: dict[int, str], status: str
+        self,
+        job_id: str,
+        translations: dict[int, str],
+        status: str,
+        provenance: str = "ai",
     ) -> None:
         """Writes a batch of model results keyed by seg_index."""
         for seg_index, text in translations.items():
@@ -97,7 +122,36 @@ class DocumentTranslationSegmentRepository:
                     DocumentTranslationSegment.job_id == job_id,
                     DocumentTranslationSegment.seg_index == seg_index,
                 )
-                .values(translation=text, status=status)
+                .values(
+                    translation=text, status=status, provenance=provenance
+                )
+            )
+        await self.db.commit()
+
+    async def set_findings(
+        self, job_id: str, findings: dict[int, dict]
+    ) -> None:
+        """Replaces the per-segment findings for a job.
+
+        Clears every stale finding first so a re-run of QA can only ever
+        shrink the set — a resolved finding must not linger.
+        """
+        await self.db.execute(
+            update(DocumentTranslationSegment)
+            .where(
+                DocumentTranslationSegment.job_id == job_id,
+                DocumentTranslationSegment.finding.isnot(None),
+            )
+            .values(finding=None)
+        )
+        for seg_index, finding in findings.items():
+            await self.db.execute(
+                update(DocumentTranslationSegment)
+                .where(
+                    DocumentTranslationSegment.job_id == job_id,
+                    DocumentTranslationSegment.seg_index == seg_index,
+                )
+                .values(finding=finding)
             )
         await self.db.commit()
 

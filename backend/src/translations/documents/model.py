@@ -54,6 +54,30 @@ def classify_text(text: str, *, in_table: bool, is_heading: bool) -> SegmentKind
     return SegmentKind.TABLE_LABEL if in_table else SegmentKind.PROSE
 
 
+_NUMBER_PREFIX = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")
+
+
+def make_section_id(
+    title: str, positional: str, taken: set[str]
+) -> str:
+    """A readable id for a heading: its section number.
+
+    Reviewers cite annual-report sections by number ("2.19"), so an explicit
+    number in the heading text wins. Word usually renders that number from
+    automatic list numbering instead, leaving it out of the text — then the
+    heading's position in the outline supplies the same shape.
+    """
+    match = _NUMBER_PREFIX.match(title.strip())
+    base = match.group(1) if match else positional
+    candidate = base
+    suffix = 2
+    while candidate in taken:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    taken.add(candidate)
+    return candidate
+
+
 @dataclass
 class Segment:
     """One translatable unit: a body paragraph or a table-cell paragraph.
@@ -67,13 +91,25 @@ class Segment:
     kind: SegmentKind
     paragraph: Any
     section_path: tuple[str, ...]
+    # Review sections are the outline's top two levels; every segment belongs
+    # to exactly one, so the UI can key its tree on this.
+    section_id: str = ""
     translation: str | None = None
+    # Table-cell segments carry their table/row position so the UI can
+    # regroup cells into rendered rows; None for body paragraphs.
+    table_index: int | None = None
+    row_index: int | None = None
+    # Outline depth for headings (1 = chapter, 2+ = section); None otherwise.
+    heading_level: int | None = None
+    # Fully bold paragraphs mark totals rows and table headers.
+    bold: bool = False
 
 
 @dataclass
 class Section:
     """A node in the document outline (from heading styles)."""
 
+    id: str
     title: str
     level: int
     segments: list[Segment] = field(default_factory=list)
@@ -104,3 +140,41 @@ class DocumentTree:
         counts["total"] = len(self.segments)
         counts["translatable"] = len(self.translatable)
         return counts
+
+    def outline(self) -> list[dict]:
+        """The review tree: chapters (level 1) with their sections (level 2).
+
+        Deeper headings fold into their level-2 parent — the review workspace
+        navigates two levels, not the document's full nesting. Counts are per
+        section, including everything folded into it.
+        """
+        by_section: dict[str, list[Segment]] = {}
+        for seg in self.segments:
+            by_section.setdefault(seg.section_id, []).append(seg)
+
+        def summarise(node: Section) -> dict:
+            segs = by_section.get(node.id, [])
+            tables = {
+                s.table_index for s in segs if s.table_index is not None
+            }
+            return {
+                "id": node.id,
+                "title": node.title,
+                "segments": len(segs),
+                "translatable": len(
+                    [s for s in segs if s.kind.translatable]
+                ),
+                "tables": len(tables),
+            }
+
+        chapters = []
+        for chapter in self.root.children:
+            sections = [summarise(child) for child in chapter.children]
+            own = summarise(chapter)
+            chapters.append(
+                {
+                    **own,
+                    "sections": sections,
+                }
+            )
+        return chapters

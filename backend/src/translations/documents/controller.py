@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from src.auth.auth_guard import RoleChecker, get_current_user
 from src.translations.documents.dto.document_translation_dto import (
+    RetranslateSegmentDto,
     StartTranslationDto,
     UpdateSegmentDto,
 )
@@ -104,14 +105,33 @@ async def start_translation(
 @router.get(
     "/{job_id}/segments",
     response_model=list[DocumentTranslationSegmentModel],
-    summary="List a job's segments for review (optionally by status)",
+    summary="List a job's segments for review, by section and/or filter",
 )
 async def list_segments(
     job_id: str,
+    section_id: str | None = None,
+    review_filter: str | None = None,
     status_filter: str | None = None,
     service: DocumentTranslationService = Depends(),
 ):
-    return await service.list_segments(job_id, status_filter)
+    return await service.list_segments(
+        job_id,
+        status_filter=status_filter,
+        section_id=section_id,
+        review_filter=review_filter,
+    )
+
+
+@router.post(
+    "/{job_id}/sections/{section_id}/approve",
+    summary="Approve every open segment left in a section",
+)
+async def approve_section(
+    job_id: str,
+    section_id: str,
+    service: DocumentTranslationService = Depends(),
+):
+    return await service.approve_section(job_id, section_id)
 
 
 @router.patch(
@@ -126,6 +146,20 @@ async def update_segment(
     service: DocumentTranslationService = Depends(),
 ):
     return await service.update_segment(job_id, seg_index, dto)
+
+
+@router.post(
+    "/{job_id}/segments/{seg_index}/retranslate",
+    response_model=DocumentTranslationSegmentModel,
+    summary="Re-translate one segment, optionally with a reviewer instruction",
+)
+async def retranslate_segment(
+    job_id: str,
+    seg_index: int,
+    dto: RetranslateSegmentDto,
+    service: DocumentTranslationService = Depends(),
+):
+    return await service.retranslate_segment(job_id, seg_index, dto.instruction)
 
 
 @router.post(

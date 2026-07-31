@@ -40,6 +40,11 @@ class Finding:
     check: str
     severity: Severity
     detail: str
+    # Structured context so the UI can show a term-level diff instead of
+    # parsing prose out of `detail`.
+    term: str | None = None
+    expected: str | None = None
+    found: str | None = None
 
 
 # Number tokens: digit groups incl. thousands/decimal separators ("319,915",
@@ -74,9 +79,11 @@ def check_numbers(segments: list[Segment]) -> list[Finding]:
             findings.append(
                 Finding(
                     segment_id=seg.id,
-                    check="numbers",
+                    check="number",
                     severity=Severity.ERROR,
                     detail="; ".join(parts),
+                    expected=", ".join(sorted(missing)) or None,
+                    found=", ".join(sorted(added)) or None,
                 )
             )
     return findings
@@ -94,9 +101,11 @@ def check_do_not_translate(
                 findings.append(
                     Finding(
                         segment_id=seg.id,
-                        check="do_not_translate",
+                        check="dnt",
                         severity=Severity.ERROR,
                         detail=f'"{term}" not reproduced verbatim',
+                        term=term,
+                        expected=term,
                     )
                 )
     return findings
@@ -127,6 +136,8 @@ def check_glossary(
                             f'"{entry.source}" translated without '
                             f'"{entry.target}"'
                         ),
+                        term=entry.source,
+                        expected=entry.target,
                     )
                 )
     return findings

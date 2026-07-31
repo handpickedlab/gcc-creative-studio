@@ -24,7 +24,9 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import re
 import uuid
+import zipfile
 
 from fastapi import Depends, HTTPException, status
 
@@ -77,6 +79,21 @@ DO_NOT_TRANSLATE = [
 _JOB_TASKS: set[asyncio.Task] = set()
 
 
+def _doc_properties(content: bytes) -> dict[str, int]:
+    """Pages/words from docProps/app.xml (Word's own extended properties)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            xml = zf.read("docProps/app.xml").decode("utf-8", "ignore")
+        props = {}
+        for key in ("Pages", "Words"):
+            match = re.search(rf"<{key}>(\d+)</{key}>", xml)
+            if match:
+                props[key.lower()] = int(match.group(1))
+        return props
+    except Exception:  # missing part, corrupt zip: cosmetic, never fatal
+        return {}
+
+
 def _row_to_segment(row: DocumentTranslationSegmentModel) -> Segment:
     return Segment(
         id=row.seg_index,
@@ -84,7 +101,21 @@ def _row_to_segment(row: DocumentTranslationSegmentModel) -> Segment:
         kind=SegmentKind(row.kind),
         paragraph=None,
         section_path=tuple(row.section_path or ()),
+        section_id=row.section_id or "",
+        translation=row.translation,
     )
+
+
+def _finding_payload(finding) -> dict:
+    return {
+        "segmentIndex": finding.segment_id,
+        "type": finding.check,
+        "severity": finding.severity.value,
+        "msg": finding.detail,
+        "term": finding.term,
+        "expected": finding.expected,
+        "found": finding.found,
+    }
 
 
 class DocumentTranslationService:
@@ -125,22 +156,18 @@ class DocumentTranslationService:
             self.gcs.upload_bytes_to_gcs, content, source_uri, _DOCX_MIME
         )
 
-        sections = [
-            {
-                "title": node.title,
-                "level": node.level,
-                "segments": len(node.segments),
-            }
-            for node in engine.tree.root.walk()
-            if node.level > 0
-        ]
         job = await self.jobs.create(
             DocumentTranslationJobModel(
                 id=job_id,
                 filename=filename,
                 status="uploaded",
                 source_gcs_uri=f"gs://{self.gcs.bucket_name}/{source_uri}",
-                stats={**engine.tree.stats(), "sections": sections},
+                stats={
+                    **engine.tree.stats(),
+                    **_doc_properties(content),
+                    "tracked_changes": engine.tracked_changes(),
+                    "chapters": engine.tree.outline(),
+                },
                 created_by=user_email,
             )
         )
@@ -149,6 +176,11 @@ class DocumentTranslationService:
                 job_id=job_id,
                 seg_index=seg.id,
                 kind=seg.kind.value,
+                section_id=seg.section_id,
+                table_index=seg.table_index,
+                row_index=seg.row_index,
+                heading_level=seg.heading_level,
+                bold=seg.bold,
                 section_path=list(seg.section_path),
                 source_text=seg.text,
                 status="pending" if seg.kind.translatable else "locked",
@@ -205,7 +237,10 @@ class DocumentTranslationService:
         return job
 
     async def _build_translator(
-        self, target_market: str, model_id: str
+        self,
+        target_market: str,
+        model_id: str,
+        instruction: str | None = None,
     ) -> SegmentTranslator:
         # Late import: pulls in google.genai + Vertex credential wiring.
         from src.multimodal.schema.gemini_model_setup import GeminiModelSetup
@@ -217,6 +252,7 @@ class DocumentTranslationService:
             target_language=markets.language_for_market(target_market),
             glossary=glossary,
             do_not_translate=DO_NOT_TRANSLATE,
+            instruction=instruction,
         )
 
     async def _load_glossary(self, market: str) -> list[GlossaryEntry]:
@@ -245,10 +281,17 @@ class DocumentTranslationService:
             pending = [
                 _row_to_segment(r) for r in rows if r.status != "approved"
             ]
+            for seg in pending:
+                seg.translation = None  # re-running replaces prior output
             total = len(pending)
             done = 0
             failed_all: list[int] = []
+            # Section states drive the tree during a run: queued -> run ->
+            # done/fail. Batches never span sections (iter_batches).
+            sections = {s.section_id: "queued" for s in pending}
             for batch in iter_batches(pending):
+                key = batch[0].section_id
+                sections[key] = "run"
                 results = await asyncio.to_thread(
                     translator.translate_batch, batch
                 )
@@ -258,6 +301,13 @@ class DocumentTranslationService:
                         seg.translation = results[seg.id]
                 failed_all.extend(missing)
                 done += len(batch)
+                remaining = any(
+                    s.translation is None and s.id not in failed_all
+                    for s in pending
+                    if s.section_id == key
+                )
+                if not remaining:
+                    sections[key] = "fail" if missing else "done"
                 async with async_session_local() as db:
                     seg_repo = DocumentTranslationSegmentRepository(db)
                     await seg_repo.set_translations(
@@ -271,27 +321,28 @@ class DocumentTranslationService:
                                 "translated": done - len(failed_all),
                                 "failed": len(failed_all),
                                 "total": total,
+                                "sections": dict(sections),
                             }
                         },
                     )
             findings = qa.run_all(
-                pending, do_not_translate=DO_NOT_TRANSLATE
+                pending,
+                glossary=getattr(translator, "glossary", None),
+                do_not_translate=DO_NOT_TRANSLATE,
             )
+            payloads = [_finding_payload(f) for f in findings]
             async with async_session_local() as db:
+                # One finding per segment in the review workspace; the job's
+                # list keeps them all for the QA report. run_all orders
+                # errors first, and reversing makes that first entry the one
+                # that survives the dict collapse.
+                await DocumentTranslationSegmentRepository(db).set_findings(
+                    job_id,
+                    {f["segmentIndex"]: f for f in reversed(payloads)},
+                )
                 await DocumentTranslationJobRepository(db).update(
                     job_id,
-                    {
-                        "status": "review",
-                        "qa_findings": [
-                            {
-                                "segment_index": f.segment_id,
-                                "check": f.check,
-                                "severity": f.severity.value,
-                                "detail": f.detail,
-                            }
-                            for f in findings
-                        ],
-                    },
+                    {"status": "review", "qa_findings": payloads},
                 )
         except Exception as e:
             logger.exception("Translation job %s failed", job_id)
@@ -303,10 +354,48 @@ class DocumentTranslationService:
     # --- review -----------------------------------------------------------
 
     async def list_segments(
-        self, job_id: str, status_filter: str | None = None
+        self,
+        job_id: str,
+        status_filter: str | None = None,
+        section_id: str | None = None,
+        review_filter: str | None = None,
     ) -> list[DocumentTranslationSegmentModel]:
         await self.get_job(job_id)
-        return await self.segments.find_by_job(job_id, status=status_filter)
+        if review_filter and review_filter not in (
+            "attention",
+            "ai",
+            "edited",
+            "all",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown review filter '{review_filter}'.",
+            )
+        return await self.segments.find_by_job(
+            job_id,
+            status=status_filter,
+            section_id=section_id,
+            review_filter=None if review_filter == "all" else review_filter,
+        )
+
+    async def approve_section(
+        self, job_id: str, section_id: str
+    ) -> dict[str, int]:
+        """Approves every translated segment left open in a section."""
+        await self.get_job(job_id)
+        rows = await self.segments.find_by_job(
+            job_id, section_id=section_id, translatable_only=True
+        )
+        open_rows = [
+            r
+            for r in rows
+            if r.status not in ("approved", "pending") and r.translation
+        ]
+        for row in open_rows:
+            await self.segments.update_segment(
+                job_id, row.seg_index, {"status": "approved"}
+            )
+        return {"approved": len(open_rows)}
 
     async def update_segment(
         self, job_id: str, seg_index: int, dto: UpdateSegmentDto
@@ -315,9 +404,11 @@ class DocumentTranslationService:
         values: dict = {}
         if dto.translation is not None:
             values["translation"] = dto.translation
-            values["status"] = "edited"
+            # A human touched it: provenance changes, review state doesn't.
+            values["provenance"] = "edited"
+            values["status"] = "translated"
         if dto.status is not None:
-            if dto.status not in ("translated", "edited", "approved"):
+            if dto.status not in ("translated", "approved"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid segment status '{dto.status}'.",
@@ -336,6 +427,49 @@ class DocumentTranslationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Segment not found.",
             )
+        return updated
+
+    async def retranslate_segment(
+        self, job_id: str, seg_index: int, instruction: str | None
+    ) -> DocumentTranslationSegmentModel:
+        """One synchronous Gemini call, optionally steered by the reviewer."""
+        job = await self.get_job(job_id)
+        if not job.target_market:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Job has not been translated yet.",
+            )
+        rows = await self.segments.find_by_job(job_id)
+        row = next((r for r in rows if r.seg_index == seg_index), None)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Segment not found.",
+            )
+        translator = await self._build_translator(
+            job.target_market,
+            job.model_id or config_service.GEMINI_MODEL_ID,
+            instruction=instruction,
+        )
+        segment = _row_to_segment(row)
+        results = await asyncio.to_thread(
+            translator.translate_batch, [segment]
+        )
+        if seg_index not in results:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="The model returned no translation; try again.",
+            )
+        updated = await self.segments.update_segment(
+            job_id,
+            seg_index,
+            {
+                "translation": results[seg_index],
+                "status": "translated",
+                "provenance": "ai",
+                "finding": None,
+            },
+        )
         return updated
 
     # --- export -----------------------------------------------------------
@@ -371,7 +505,7 @@ class DocumentTranslationService:
         translations = {
             r.seg_index: r.translation
             for r in rows
-            if r.translation and r.status in ("translated", "edited", "approved")
+            if r.translation and r.status in ("translated", "approved")
         }
         engine = await asyncio.to_thread(
             DocxTranslationEngine, io.BytesIO(content)

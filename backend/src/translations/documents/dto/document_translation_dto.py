@@ -29,6 +29,14 @@ class StartTranslationDto(BaseDto):
     )
 
 
+class RetranslateSegmentDto(BaseDto):
+    instruction: str | None = Field(
+        default=None,
+        description="Optional reviewer steering, e.g. \"more formal\" or "
+        "\"use 'reële waarde'\".",
+    )
+
+
 class UpdateSegmentDto(BaseDto):
     translation: str | None = Field(
         default=None, description="Edited translation text."

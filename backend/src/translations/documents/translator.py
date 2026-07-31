@@ -102,6 +102,7 @@ class GeminiSegmentTranslator:
         glossary: list[GlossaryEntry] | None = None,
         do_not_translate: list[str] | None = None,
         attempts: int = 3,
+        instruction: str | None = None,
     ):
         self.client = client
         self.model_id = model_id
@@ -109,6 +110,9 @@ class GeminiSegmentTranslator:
         self.glossary = glossary or []
         self.do_not_translate = do_not_translate or []
         self.attempts = attempts
+        # Reviewer steering for single-segment re-translation
+        # (e.g. "more formal", "use 'reële waarde'").
+        self.instruction = instruction
 
     def _build_prompt(self, segments: list[Segment]) -> str:
         path = " > ".join(segments[0].section_path) or "(front matter)"
@@ -139,6 +143,11 @@ class GeminiSegmentTranslator:
             )
             lines.extend(
                 f'    "{e.source}" -> "{e.target}"' for e in self.glossary
+            )
+        if self.instruction:
+            lines.append(
+                f"- Reviewer instruction for this translation: "
+                f"{self.instruction}"
             )
         lines.append("")
         lines.append("Segments (JSON):")

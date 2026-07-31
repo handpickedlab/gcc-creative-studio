@@ -79,11 +79,47 @@ async def test_create_job_parses_stores_and_persists_segments():
 
     assert job.status == "uploaded"
     assert job.stats["translatable"] == 2  # heading + prose
-    assert job.stats["sections"][0]["title"] == "2.19 Right-of-use assets"
+    chapter = job.stats["chapters"][0]
+    assert chapter["title"] == "2.19 Right-of-use assets"
+    assert chapter["id"] == "2.19"
     service.gcs.upload_bytes_to_gcs.assert_called_once()
     rows = service.segments.bulk_create.call_args.args[0]
     assert {r.status for r in rows} == {"pending"}
     assert rows[0].job_id == job.id
+
+
+@pytest.mark.anyio
+async def test_retranslate_segment_applies_instruction():
+    service = _service()
+    service.jobs.get_by_id.return_value = _job_model()
+    service.segments.find_by_job.return_value = [
+        DocumentTranslationSegmentModel(
+            id=1,
+            job_id="job-1",
+            seg_index=1,
+            kind="prose",
+            source_text="The Group recognised an impairment.",
+            translation="oud",
+            status="translated",
+        )
+    ]
+    fake_translator = MagicMock()
+    fake_translator.translate_batch.return_value = {1: "nieuw"}
+    service._build_translator = AsyncMock(return_value=fake_translator)
+
+    await service.retranslate_segment("job-1", 1, "more formal")
+
+    service._build_translator.assert_awaited_once()
+    assert service._build_translator.await_args.kwargs.get("instruction") == (
+        "more formal"
+    ) or "more formal" in service._build_translator.await_args.args
+    values = service.segments.update_segment.call_args.args[2]
+    assert values == {
+        "translation": "nieuw",
+        "status": "translated",
+        "provenance": "ai",
+        "finding": None,
+    }
 
 
 @pytest.mark.anyio
@@ -116,7 +152,11 @@ async def test_update_segment_edit_marks_edited():
         "job-1", 3, UpdateSegmentDto(translation="y")
     )
     values = service.segments.update_segment.call_args.args[2]
-    assert values == {"translation": "y", "status": "edited"}
+    assert values == {
+        "translation": "y",
+        "provenance": "edited",
+        "status": "translated",
+    }
 
 
 @pytest.mark.anyio

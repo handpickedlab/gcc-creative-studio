@@ -16,6 +16,7 @@
 import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -79,13 +80,25 @@ class DocumentTranslationSegment(Base):
     # The engine's deterministic parse-order id; reinjection key at export.
     seg_index: Mapped[int] = mapped_column(Integer, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
+    section_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    table_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    heading_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     section_path: Mapped[list | None] = mapped_column(_JsonType, nullable=True)
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
     translation: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # pending -> translated -> edited/approved; failed when the model gave up
+    # Review state: pending -> translated -> approved; failed when the model
+    # gave up, locked for numeric cells that are never translated.
     status: Mapped[str] = mapped_column(
         String, nullable=False, default="pending"
     )
+    # Where the text came from — orthogonal to review state.
+    # ai (model) | tm (reused from memory) | edited (human)
+    provenance: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The QA finding attached to this segment, if any, so the review
+    # workspace needs one call.
+    finding: Mapped[dict | None] = mapped_column(_JsonType, nullable=True)
 
     __table_args__ = (
         Index(
@@ -115,7 +128,14 @@ class DocumentTranslationSegmentModel(BaseDocument):
     job_id: str
     seg_index: int
     kind: str
+    section_id: str | None = None
+    table_index: int | None = None
+    row_index: int | None = None
+    heading_level: int | None = None
+    bold: bool = False
     section_path: list | None = None
     source_text: str
     translation: str | None = None
     status: str = "pending"
+    provenance: str | None = None
+    finding: dict | None = None
