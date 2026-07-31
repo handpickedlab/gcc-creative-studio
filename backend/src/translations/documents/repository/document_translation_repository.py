@@ -22,6 +22,7 @@ from src.database import get_db
 from src.translations.documents.schema.document_translation_model import (
     DocumentTranslationJob,
     DocumentTranslationJobModel,
+    DocumentTranslationMemory,
     DocumentTranslationSegment,
     DocumentTranslationSegmentModel,
 )
@@ -49,6 +50,71 @@ class DocumentTranslationJobRepository(
             DocumentTranslationJobModel.model_validate(row)
             for row in result.scalars().all()
         ]
+
+
+class TranslationMemoryRepository:
+    """Approved translations, reusable across documents and years."""
+
+    def __init__(self, db: AsyncSession = Depends(get_db)):
+        self.db = db
+
+    async def find_matches(
+        self, hashes: list[str], target_market: str
+    ) -> dict[str, DocumentTranslationMemory]:
+        if not hashes:
+            return {}
+        matches: dict[str, DocumentTranslationMemory] = {}
+        # Chunked: a report can carry thousands of segments, and drivers cap
+        # how many bind parameters one statement may hold.
+        for start in range(0, len(hashes), 500):
+            chunk = hashes[start : start + 500]
+            result = await self.db.execute(
+                select(DocumentTranslationMemory).where(
+                    DocumentTranslationMemory.target_market == target_market,
+                    DocumentTranslationMemory.source_hash.in_(chunk),
+                )
+            )
+            for row in result.scalars().all():
+                matches[row.source_hash] = row
+        return matches
+
+    async def upsert(
+        self,
+        source_hash: str,
+        target_market: str,
+        source_text: str,
+        translation: str,
+        origin_job_id: str | None = None,
+        origin_filename: str | None = None,
+    ) -> None:
+        """Records an approved translation, replacing any earlier one.
+
+        The newest approval wins: a reviewer correcting last year's wording
+        must not be overruled by the entry they just fixed.
+        """
+        result = await self.db.execute(
+            select(DocumentTranslationMemory).where(
+                DocumentTranslationMemory.source_hash == source_hash,
+                DocumentTranslationMemory.target_market == target_market,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.translation = translation
+            existing.origin_job_id = origin_job_id
+            existing.origin_filename = origin_filename
+        else:
+            self.db.add(
+                DocumentTranslationMemory(
+                    source_hash=source_hash,
+                    target_market=target_market,
+                    source_text=source_text,
+                    translation=translation,
+                    origin_job_id=origin_job_id,
+                    origin_filename=origin_filename,
+                )
+            )
+        await self.db.commit()
 
 
 class DocumentTranslationSegmentRepository:

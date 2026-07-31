@@ -41,9 +41,11 @@ from src.translations.documents.dto.document_translation_dto import (
     UpdateSegmentDto,
 )
 from src.translations.documents.model import Segment, SegmentKind
+from src.translations.documents import memory as tm
 from src.translations.documents.repository.document_translation_repository import (
     DocumentTranslationJobRepository,
     DocumentTranslationSegmentRepository,
+    TranslationMemoryRepository,
 )
 from src.translations.documents.schema.document_translation_model import (
     DocumentTranslationJobModel,
@@ -123,10 +125,12 @@ class DocumentTranslationService:
         self,
         jobs: DocumentTranslationJobRepository = Depends(),
         segments: DocumentTranslationSegmentRepository = Depends(),
+        memory: TranslationMemoryRepository = Depends(),
         gcs: GcsService = Depends(),
     ):
         self.jobs = jobs
         self.segments = segments
+        self.memory = memory
         self.gcs = gcs
 
     # --- intake -----------------------------------------------------------
@@ -204,6 +208,30 @@ class DocumentTranslationService:
             )
         return job
 
+    async def estimate_reuse(
+        self, job_id: str, target_market: str
+    ) -> dict[str, int]:
+        """How much of this document a previous approval already covers."""
+        await self.get_job(job_id)
+        if not markets.is_valid_market(target_market):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown target market '{target_market}'.",
+            )
+        rows = await self.segments.find_by_job(job_id, translatable_only=True)
+        matches = await self.memory.find_matches(
+            [tm.source_hash(r.source_text) for r in rows], target_market
+        )
+        reusable = len(
+            [r for r in rows if tm.source_hash(r.source_text) in matches]
+        )
+        total = len(rows)
+        return {
+            "total": total,
+            "reusable": reusable,
+            "pct": round(100 * reusable / total) if total else 0,
+        }
+
     async def start_translation(
         self, job_id: str, dto: StartTranslationDto
     ) -> DocumentTranslationJobModel:
@@ -219,6 +247,7 @@ class DocumentTranslationService:
                 detail=f"Unknown target market '{dto.target_market}'.",
             )
         model_id = dto.model_id or config_service.GEMINI_MODEL_ID
+        reused = await self._prefill_from_memory(job_id, dto.target_market)
         job = await self.jobs.update(
             job_id,
             {
@@ -226,6 +255,7 @@ class DocumentTranslationService:
                 "target_market": dto.target_market,
                 "model_id": model_id,
                 "error_message": None,
+                "progress": {"reused": reused},
             },
         )
         translator = await self._build_translator(dto.target_market, model_id)
@@ -235,6 +265,51 @@ class DocumentTranslationService:
         _JOB_TASKS.add(task)
         task.add_done_callback(_JOB_TASKS.discard)
         return job
+
+    async def _prefill_from_memory(
+        self, job_id: str, target_market: str
+    ) -> int:
+        """Fills segments an approved translation already covers.
+
+        Reused segments arrive approved — they were reviewed once already —
+        so the run only spends money on what is genuinely new, and the
+        reviewer only sees what needs judgement.
+        """
+        rows = await self.segments.find_by_job(job_id, translatable_only=True)
+        open_rows = [r for r in rows if r.status != "approved"]
+        matches = await self.memory.find_matches(
+            [tm.source_hash(r.source_text) for r in open_rows], target_market
+        )
+        hits = {
+            r.seg_index: matches[tm.source_hash(r.source_text)].translation
+            for r in open_rows
+            if tm.source_hash(r.source_text) in matches
+        }
+        if hits:
+            await self.segments.set_translations(
+                job_id, hits, status="approved", provenance="tm"
+            )
+        return len(hits)
+
+    async def _remember(
+        self,
+        job: DocumentTranslationJobModel,
+        rows: list[DocumentTranslationSegmentModel],
+    ) -> None:
+        """Records approved segments so later documents can reuse them."""
+        if not job.target_market:
+            return
+        for row in rows:
+            if not row.translation:
+                continue
+            await self.memory.upsert(
+                source_hash=tm.source_hash(row.source_text),
+                target_market=job.target_market,
+                source_text=row.source_text,
+                translation=row.translation,
+                origin_job_id=job.id,
+                origin_filename=job.filename,
+            )
 
     async def _build_translator(
         self,
@@ -382,7 +457,7 @@ class DocumentTranslationService:
         self, job_id: str, section_id: str
     ) -> dict[str, int]:
         """Approves every translated segment left open in a section."""
-        await self.get_job(job_id)
+        job = await self.get_job(job_id)
         rows = await self.segments.find_by_job(
             job_id, section_id=section_id, translatable_only=True
         )
@@ -395,12 +470,13 @@ class DocumentTranslationService:
             await self.segments.update_segment(
                 job_id, row.seg_index, {"status": "approved"}
             )
+        await self._remember(job, open_rows)
         return {"approved": len(open_rows)}
 
     async def update_segment(
         self, job_id: str, seg_index: int, dto: UpdateSegmentDto
     ) -> DocumentTranslationSegmentModel:
-        await self.get_job(job_id)
+        job = await self.get_job(job_id)
         values: dict = {}
         if dto.translation is not None:
             values["translation"] = dto.translation
@@ -427,6 +503,8 @@ class DocumentTranslationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Segment not found.",
             )
+        if updated.status == "approved":
+            await self._remember(job, [updated])
         return updated
 
     async def retranslate_segment(

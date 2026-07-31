@@ -110,6 +110,52 @@ class DocumentTranslationSegment(Base):
     )
 
 
+class DocumentTranslationMemory(Base):
+    """Approved translations, keyed by normalised source text per market."""
+
+    __tablename__ = "document_translation_memory"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    source_hash: Mapped[str] = mapped_column(String, nullable=False)
+    target_market: Mapped[str] = mapped_column(String, nullable=False)
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    translation: Mapped[str] = mapped_column(Text, nullable=False)
+    # Where this translation was approved, for provenance in the UI.
+    origin_job_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    origin_filename: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        insert_default=func.now(),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        insert_default=func.now(),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_document_translation_memory_key",
+            "source_hash",
+            "target_market",
+            unique=True,
+        ),
+    )
+
+
+class DocumentTranslationMemoryModel(BaseDocument):
+    source_hash: str
+    target_market: str
+    source_text: str
+    translation: str
+    origin_job_id: str | None = None
+    origin_filename: str | None = None
+
+
 class DocumentTranslationJobModel(BaseStringDocument):
     filename: str
     status: str = "uploaded"

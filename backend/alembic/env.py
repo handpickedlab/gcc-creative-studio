@@ -41,6 +41,7 @@ from src.translations.schema.language_config_model import (
 )  # Import to ensure registered with Base.metadata
 from src.translations.documents.schema.document_translation_model import (
     DocumentTranslationJob,
+    DocumentTranslationMemory,
     DocumentTranslationSegment,
 )  # Import to ensure registered with Base.metadata
 

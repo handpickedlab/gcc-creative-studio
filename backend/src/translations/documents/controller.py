@@ -88,6 +88,18 @@ async def get_job(
     return await service.get_job(job_id)
 
 
+@router.get(
+    "/{job_id}/reuse-estimate",
+    summary="How much of this document translation memory already covers",
+)
+async def reuse_estimate(
+    job_id: str,
+    target_market: str,
+    service: DocumentTranslationService = Depends(),
+):
+    return await service.estimate_reuse(job_id, target_market)
+
+
 @router.post(
     "/{job_id}/translate",
     response_model=DocumentTranslationJobModel,
