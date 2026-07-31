@@ -265,6 +265,22 @@
 
 
         <div
+          routerLink="/documents"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
+        >
+          <div
+            *ngIf="router.isActive('/documents', true)"
+            class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
+          ></div>
+
+          <div class="relative flex items-center px-4 w-full z-10">
+            <mat-icon class="text-neutral-300 mr-3">description</mat-icon>
+            <span class="text-neutral-300 font-medium text-sm whitespace-nowrap">Documents</span>
+          </div>
+        </div>
+
+
+        <div
           routerLink="/deep-research"
           class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >

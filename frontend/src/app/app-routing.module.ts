@@ -30,6 +30,7 @@ import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.compo
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {TranslationsComponent} from './translations/translations.component';
+import {DocumentsComponent} from './documents/documents.component';
 import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
@@ -56,6 +57,11 @@ const routes: Routes = [
   {
     path: 'translations',
     component: TranslationsComponent,
+    canActivate: [AuthGuardService],
+  },
+  {
+    path: 'documents',
+    component: DocumentsComponent,
     canActivate: [AuthGuardService],
   },
   {

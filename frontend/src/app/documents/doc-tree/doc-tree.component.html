@@ -1,0 +1,38 @@
+<!-- Copyright 2026 Google LLC — Apache-2.0. Hunkemöller "Documents" outline tree. -->
+<div *ngFor="let ch of tree" class="chapter">
+  <button class="ch-head" (click)="toggle(ch)">
+    <span class="caret" [class.open]="!collapsed[ch.id]">▶</span>
+    <span class="ch-title">{{ ch.title }}</span>
+    <ng-container *ngIf="collapsed[ch.id] && !run">
+      <span *ngIf="chapterAtt(ch) > 0" class="mono ch-att">{{ chapterAtt(ch) }} ⚑</span>
+      <span *ngIf="chapterAtt(ch) === 0 && chapterOpen(ch) > 0" class="mono ch-open">{{ chapterOpen(ch) }} open</span>
+      <span *ngIf="chapterAtt(ch) === 0 && chapterOpen(ch) === 0" class="ch-done">✓</span>
+    </ng-container>
+  </button>
+
+  <ng-container *ngIf="!collapsed[ch.id]">
+    <button *ngFor="let s of ch.sections" class="sec" [class.active]="active === s.id" [class.static]="!focusable" [disabled]="!focusable" (click)="select(s)">
+      <span class="mono sid">{{ s.id }}</span>
+      <span class="stitle">{{ s.title }}</span>
+
+      <!-- run mode: section run state -->
+      <ng-container *ngIf="run">
+        <span *ngIf="runState(s.id) === 'run'" class="spinner sm"></span>
+        <span *ngIf="runState(s.id) === 'done'" class="run-done">✓</span>
+        <span *ngIf="runState(s.id) === 'fail'" class="run-fail">FAILED</span>
+        <span *ngIf="runState(s.id) === 'queued'" class="run-queued">queued</span>
+      </ng-container>
+
+      <!-- review mode: rollup counts -->
+      <ng-container *ngIf="!run">
+        <ng-container *ngIf="rollup(s.id) as r">
+          <span *ngIf="r.open === 0 && r.att === 0" class="mono roll-done">✓ {{ r.total }}</span>
+          <span *ngIf="r.open > 0 || r.att > 0" class="mono roll">
+            <span *ngIf="r.att > 0" class="roll-att">{{ r.att }} ⚑ </span>
+            <span class="roll-open">{{ r.open }} open</span>
+          </span>
+        </ng-container>
+      </ng-container>
+    </button>
+  </ng-container>
+</div>

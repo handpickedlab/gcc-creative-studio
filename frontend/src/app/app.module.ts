@@ -100,6 +100,9 @@ import {LibraryPanelComponent} from './data-query/library-panel/library-panel.co
 import {SlideViewerComponent} from './data-query/slide-viewer/slide-viewer.component';
 import {TranslationsComponent} from './translations/translations.component';
 import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
+import {DocumentsComponent} from './documents/documents.component';
+import {DocTreeComponent} from './documents/doc-tree/doc-tree.component';
+import {GlossHlPipe} from './documents/gloss-hl.pipe';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
 import {WorkbenchComponent} from './workbench/workbench.component';
@@ -158,6 +161,9 @@ import {UpscaleComponent} from './upscale/upscale.component';
     SlideViewerComponent,
     TranslationsComponent,
     TranslatorFeedbackComponent,
+    DocumentsComponent,
+    DocTreeComponent,
+    GlossHlPipe,
   ],
   imports: [
     BrowserModule,
