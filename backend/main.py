@@ -137,13 +137,17 @@ async def lifespan(app: FastAPI):
         # We might want to stop startup here if migrations fail
         raise e
 
-    # Seed the default glossary once (guarded by a flag inside the seeder).
+    # Seed the glossaries once (each guarded by a flag inside the seeder).
     try:
         from src.database import async_session_local
-        from src.translations.glossary_seed import seed_default_glossary
+        from src.translations.glossary_seed import (
+            seed_default_glossary,
+            seed_financial_glossary,
+        )
 
         async with async_session_local() as session:
             await seed_default_glossary(session)
+            await seed_financial_glossary(session)
     except Exception as e:
         logger.error(f"Failed to seed default glossary: {e}")
 

@@ -21,8 +21,11 @@ from docx import Document
 from fastapi import HTTPException
 
 from src.translations.documents.dto.document_translation_dto import (
+    FinalizeUploadDto,
+    GenerateUploadUrlDto,
     UpdateSegmentDto,
 )
+from src.translations.documents.service import MAX_UPLOAD_BYTES
 from src.translations.documents.schema.document_translation_model import (
     DocumentTranslationJobModel,
     DocumentTranslationSegmentModel,
@@ -42,9 +45,17 @@ def _fixture_docx_bytes() -> bytes:
 def _service() -> DocumentTranslationService:
     jobs = AsyncMock()
     segments = AsyncMock()
+    memory = AsyncMock()
     gcs = MagicMock()
     gcs.bucket_name = "test-bucket"
-    return DocumentTranslationService(jobs=jobs, segments=segments, gcs=gcs)
+    signer = MagicMock()
+    signer.generate_v4_upload_signed_url.return_value = (
+        "https://storage.example/signed",
+        "gs://test-bucket/document-translations/uploads/u1/report.docx",
+    )
+    return DocumentTranslationService(
+        jobs=jobs, segments=segments, memory=memory, gcs=gcs, signer=signer
+    )
 
 
 def _job_model(**overrides) -> DocumentTranslationJobModel:
@@ -66,6 +77,78 @@ async def test_create_job_rejects_non_docx():
         await service.create_job("report.pdf", b"%PDF-", "n@hp.com")
     assert exc.value.status_code == 400
     assert "Word source" in exc.value.detail
+
+
+@pytest.mark.anyio
+async def test_upload_url_rejects_non_docx_before_minting():
+    service = _service()
+    with pytest.raises(HTTPException) as exc:
+        await service.generate_upload_url(
+            GenerateUploadUrlDto(filename="report.pdf", size_bytes=1000)
+        )
+    assert exc.value.status_code == 400
+    service.signer.generate_v4_upload_signed_url.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_upload_url_rejects_oversized_file():
+    service = _service()
+    with pytest.raises(HTTPException) as exc:
+        await service.generate_upload_url(
+            GenerateUploadUrlDto(
+                filename="report.docx", size_bytes=MAX_UPLOAD_BYTES + 1
+            )
+        )
+    assert exc.value.status_code == 413
+
+
+@pytest.mark.anyio
+async def test_upload_url_is_minted_for_a_large_docx():
+    """The branded FY25-26 report is 55MB — past Cloud Run's body limit."""
+    service = _service()
+    response = await service.generate_upload_url(
+        GenerateUploadUrlDto(
+            filename="report.docx", size_bytes=55 * 1024 * 1024
+        )
+    )
+    assert response.upload_url == "https://storage.example/signed"
+    assert response.gcs_uri.endswith("report.docx")
+    args = service.signer.generate_v4_upload_signed_url.call_args.args
+    assert args[1] == (
+        "application/vnd.openxmlformats-officedocument"
+        ".wordprocessingml.document"
+    )
+    assert args[2] == "test-bucket"
+
+
+@pytest.mark.anyio
+async def test_finalize_registers_the_uploaded_file_without_reuploading():
+    service = _service()
+    service.jobs.create.side_effect = lambda model: model
+    service.gcs.download_bytes_from_gcs.return_value = _fixture_docx_bytes()
+    uri = "gs://test-bucket/document-translations/uploads/u1/report.docx"
+
+    job = await service.finalize_upload(
+        FinalizeUploadDto(gcs_uri=uri, filename="report.docx"), "n@hp.com"
+    )
+
+    assert job.source_gcs_uri == uri
+    assert job.stats["translatable"] == 2
+    service.gcs.upload_bytes_to_gcs.assert_not_called()
+    service.segments.bulk_create.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_finalize_reports_a_missing_upload():
+    service = _service()
+    service.gcs.download_bytes_from_gcs.return_value = None
+    with pytest.raises(HTTPException) as exc:
+        await service.finalize_upload(
+            FinalizeUploadDto(gcs_uri="gs://b/gone.docx", filename="a.docx"),
+            "n@hp.com",
+        )
+    assert exc.value.status_code == 400
+    assert "upload it again" in exc.value.detail
 
 
 @pytest.mark.anyio

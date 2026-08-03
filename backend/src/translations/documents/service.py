@@ -30,13 +30,17 @@ import zipfile
 
 from fastapi import Depends, HTTPException, status
 
+from src.auth.iam_signer_credentials_service import IamSignerCredentials
 from src.common.storage_service import GcsService
 from src.config.config_service import config_service
 from src.database import async_session_local
 from src.translations import markets
-from src.translations.documents import qa
+from src.translations.documents import financial_glossary, qa
 from src.translations.documents.docx_engine import DocxTranslationEngine
 from src.translations.documents.dto.document_translation_dto import (
+    FinalizeUploadDto,
+    GenerateUploadUrlDto,
+    GenerateUploadUrlResponseDto,
     StartTranslationDto,
     UpdateSegmentDto,
 )
@@ -67,15 +71,8 @@ _DOCX_MIME = (
 )
 _GCS_PREFIX = "document-translations"
 
-# Protected names for annual reports; becomes glossary-domain data later.
-DO_NOT_TRANSLATE = [
-    "Hunkemöller",
-    "Shero Holdco B.V.",
-    "Together Tomorrow",
-    "For Every Woman In You",
-    "EBITDA",
-    "IFRS",
-]
+# Generous cap: the branded FY25-26 annual report alone is 55MB.
+MAX_UPLOAD_BYTES = 150 * 1024 * 1024
 
 # Keeps background tasks alive (see data_query: the loop only holds weak refs).
 _JOB_TASKS: set[asyncio.Task] = set()
@@ -127,23 +124,105 @@ class DocumentTranslationService:
         segments: DocumentTranslationSegmentRepository = Depends(),
         memory: TranslationMemoryRepository = Depends(),
         gcs: GcsService = Depends(),
+        signer: IamSignerCredentials = Depends(),
     ):
         self.jobs = jobs
         self.segments = segments
         self.memory = memory
         self.gcs = gcs
+        self.signer = signer
 
     # --- intake -----------------------------------------------------------
 
-    async def create_job(
-        self, filename: str, content: bytes, user_email: str | None
-    ) -> DocumentTranslationJobModel:
+    def _require_docx(self, filename: str) -> None:
         if not filename.lower().endswith(".docx"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only .docx sources are supported; the PDF is a "
                 "signed artifact — upload the Word source instead.",
             )
+
+    async def generate_upload_url(
+        self, dto: GenerateUploadUrlDto
+    ) -> GenerateUploadUrlResponseDto:
+        """Mints a signed PUT URL so the browser uploads straight to GCS.
+
+        An annual report can run to tens of megabytes — the branded FY25-26
+        report is 55MB — well past what a Cloud Run request body may carry,
+        so the file must bypass the backend entirely.
+        """
+        self._require_docx(dto.filename)
+        if dto.size_bytes > MAX_UPLOAD_BYTES:
+            max_mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"File is too large. Maximum size is {max_mb}MB.",
+            )
+        blob_name = (
+            f"{_GCS_PREFIX}/uploads/{uuid.uuid4()}/{dto.filename}"
+        )
+        upload_url, gcs_uri = await asyncio.to_thread(
+            self.signer.generate_v4_upload_signed_url,
+            blob_name,
+            _DOCX_MIME,
+            self.gcs.bucket_name,
+        )
+        if not upload_url or not gcs_uri:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not create an upload URL.",
+            )
+        return GenerateUploadUrlResponseDto(
+            upload_url=upload_url, gcs_uri=gcs_uri
+        )
+
+    async def finalize_upload(
+        self, dto: FinalizeUploadDto, user_email: str | None
+    ) -> DocumentTranslationJobModel:
+        """Registers a file the client PUT to the signed URL."""
+        self._require_docx(dto.filename)
+        content = await asyncio.to_thread(
+            self.gcs.download_bytes_from_gcs, dto.gcs_uri
+        )
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded file not found; upload it again.",
+            )
+        return await self._register(
+            filename=dto.filename,
+            content=content,
+            source_gcs_uri=dto.gcs_uri,
+            user_email=user_email,
+        )
+
+    async def create_job(
+        self, filename: str, content: bytes, user_email: str | None
+    ) -> DocumentTranslationJobModel:
+        """Registers a file posted directly, for documents small enough."""
+        self._require_docx(filename)
+        job_id = str(uuid.uuid4())
+        source_uri = f"{_GCS_PREFIX}/{job_id}/source.docx"
+        await asyncio.to_thread(
+            self.gcs.upload_bytes_to_gcs, content, source_uri, _DOCX_MIME
+        )
+        return await self._register(
+            filename=filename,
+            content=content,
+            source_gcs_uri=f"gs://{self.gcs.bucket_name}/{source_uri}",
+            user_email=user_email,
+            job_id=job_id,
+        )
+
+    async def _register(
+        self,
+        filename: str,
+        content: bytes,
+        source_gcs_uri: str,
+        user_email: str | None,
+        job_id: str | None = None,
+    ) -> DocumentTranslationJobModel:
+        """Parses the document and persists the job with all its segments."""
         try:
             engine = await asyncio.to_thread(
                 DocxTranslationEngine, io.BytesIO(content)
@@ -154,18 +233,13 @@ class DocumentTranslationService:
                 detail=f"Could not parse document: {e}",
             )
 
-        job_id = str(uuid.uuid4())
-        source_uri = f"{_GCS_PREFIX}/{job_id}/source.docx"
-        await asyncio.to_thread(
-            self.gcs.upload_bytes_to_gcs, content, source_uri, _DOCX_MIME
-        )
-
+        job_id = job_id or str(uuid.uuid4())
         job = await self.jobs.create(
             DocumentTranslationJobModel(
                 id=job_id,
                 filename=filename,
                 status="uploaded",
-                source_gcs_uri=f"gs://{self.gcs.bucket_name}/{source_uri}",
+                source_gcs_uri=source_gcs_uri,
                 stats={
                     **engine.tree.stats(),
                     **_doc_properties(content),
@@ -320,29 +394,35 @@ class DocumentTranslationService:
         # Late import: pulls in google.genai + Vertex credential wiring.
         from src.multimodal.schema.gemini_model_setup import GeminiModelSetup
 
-        glossary = await self._load_glossary(target_market)
+        glossary, protected = await self._load_glossary(target_market)
         return GeminiSegmentTranslator(
             client=GeminiModelSetup.get_client(),
             model_id=model_id,
             target_language=markets.language_for_market(target_market),
             glossary=glossary,
-            do_not_translate=DO_NOT_TRANSLATE,
+            do_not_translate=protected,
             instruction=instruction,
         )
 
-    async def _load_glossary(self, market: str) -> list[GlossaryEntry]:
-        """Reuses the briefing glossary for the market's dictionary.
+    async def _load_glossary(
+        self, market: str
+    ) -> tuple[list[GlossaryEntry], list[str]]:
+        """The market's financial dictionary, split into terms and names.
 
-        A dedicated financial domain is a follow-up; until then the shared
-        dictionary at least keeps brand terms consistent.
+        Annual reports use the financial domain: "impairment" must land on
+        its IFRS equivalent, not on whatever reads well in campaign copy.
         """
         async with async_session_local() as db:
-            terms = await GlossaryRepository(db).find_all(limit=1000)
-        return [
+            terms = await GlossaryRepository(db).find_by_domain(
+                financial_glossary.DOMAIN, language=market
+            )
+        glossary = [
             GlossaryEntry(source=t.source, target=t.target)
             for t in terms
-            if t.language == market
+            if not t.do_not_translate
         ]
+        protected = [t.source for t in terms if t.do_not_translate]
+        return glossary, protected or list(financial_glossary.DO_NOT_TRANSLATE)
 
     async def _run_translation(
         self, job_id: str, translator: SegmentTranslator
@@ -400,10 +480,11 @@ class DocumentTranslationService:
                             }
                         },
                     )
+            # Check against the very terms the model was instructed to use.
             findings = qa.run_all(
                 pending,
                 glossary=getattr(translator, "glossary", None),
-                do_not_translate=DO_NOT_TRANSLATE,
+                do_not_translate=getattr(translator, "do_not_translate", None),
             )
             payloads = [_finding_payload(f) for f in findings]
             async with async_session_local() as db:

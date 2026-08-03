@@ -21,6 +21,9 @@ from fastapi.responses import StreamingResponse
 
 from src.auth.auth_guard import RoleChecker, get_current_user
 from src.translations.documents.dto.document_translation_dto import (
+    FinalizeUploadDto,
+    GenerateUploadUrlDto,
+    GenerateUploadUrlResponseDto,
     RetranslateSegmentDto,
     StartTranslationDto,
     UpdateSegmentDto,
@@ -50,10 +53,36 @@ _DOCX_MIME = (
 
 
 @router.post(
+    "/upload-url",
+    response_model=GenerateUploadUrlResponseDto,
+    summary="Get a signed URL to upload a .docx straight to storage",
+)
+async def generate_upload_url(
+    dto: GenerateUploadUrlDto,
+    service: DocumentTranslationService = Depends(),
+):
+    return await service.generate_upload_url(dto)
+
+
+@router.post(
+    "/finalize-upload",
+    response_model=DocumentTranslationJobModel,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register an uploaded .docx and create its job (preflight)",
+)
+async def finalize_upload(
+    dto: FinalizeUploadDto,
+    service: DocumentTranslationService = Depends(),
+    user: UserModel = Depends(get_current_user),
+):
+    return await service.finalize_upload(dto, user.email)
+
+
+@router.post(
     "",
     response_model=DocumentTranslationJobModel,
     status_code=status.HTTP_201_CREATED,
-    summary="Upload a .docx and create a translation job (preflight)",
+    summary="Post a small .docx directly and create its job (preflight)",
 )
 async def create_job(
     file: UploadFile = File(...),
