@@ -323,6 +323,39 @@ textarea:focus, input:focus { outline: none; border-color: var(--accent) !import
 }
 .run-actions { display: flex; gap: 8px; justify-content: center; margin-top: 22px; }
 .run-safe { font-size: 9.5px; color: var(--text-s); margin: 12px 0 0; }
+.run-hint { font-size: 10px; color: var(--text-s); margin-top: 16px; line-height: 1.6; }
+
+/* mid-run preview of a finished section: fills the pane instead of the card */
+.run-center.peeking { align-items: stretch; justify-content: stretch; padding: 0; }
+.peek { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.peek-head {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  padding: 11px 18px; border-bottom: 1px solid var(--border-lt);
+}
+.peek-head .grow { flex: 1; }
+.peek-head .vline { width: 1px; height: 15px; background: var(--border-lt); }
+.peek-back {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font-size: 11px; color: var(--text-m); font-family: inherit;
+}
+.peek-back:hover { color: var(--text); }
+.peek-id { font-size: 10px; color: var(--text-s); }
+.peek-title { font-size: 12.5px; font-weight: 500; color: var(--text); }
+.peek-status {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  padding: 8px 18px; border-bottom: 1px solid var(--border-lt); background: var(--bg-sub);
+}
+.peek-status .grow { flex: 1; }
+.peek-status .pst { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text-m); }
+.peek-status .pnote { font-size: 9.5px; color: var(--text-s); }
+.peek-body { flex: 1; overflow-y: auto; min-height: 0; }
+.peek-mid { padding: 40px 18px; text-align: center; font-size: 11.5px; color: var(--text-s); }
+.peek-mid.err { color: var(--bad); }
+.segtxt.pending, .txt.pending { color: var(--text-s); }
+
+@media (max-width: 900px) {
+  .peek-status .pnote { display: none; }
+}
 
 /* ---- review workspace ---- */
 .review { display: flex; height: 100%; overflow: hidden; }

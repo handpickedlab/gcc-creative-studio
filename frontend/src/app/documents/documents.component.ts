@@ -50,6 +50,7 @@ import {
   chaptersFrom,
   segIndexOf,
   segmentsBySection,
+  viewSegments,
 } from './documents.adapter';
 
 type View =
@@ -210,6 +211,17 @@ export class DocumentsComponent implements OnInit, OnDestroy {
   visibleCount = 0;
   sectionRemaining = 0;
 
+  /**
+   * Mid-run preview: the finished section the reviewer opened while the rest
+   * of the document is still translating, or null for the progress card.
+   * Read-only on purpose — QA findings only exist once the whole run ends,
+   * and the worker is still writing segments.
+   */
+  runPeek: string | null = null;
+  runPeekGroups: SegGroup[] = [];
+  runPeekLoading = false;
+  runPeekError = '';
+
   @ViewChild('scroller') scroller?: ElementRef<HTMLElement>;
 
   private timers: ReturnType<typeof setTimeout>[] = [];
@@ -356,6 +368,7 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     this.view = v;
     this.editingId = null;
     this.retransId = null;
+    if (v !== 'run') this.closePeek();
     if (v === 'intake') {
       this.intake = 'idle';
       this.intakeError = '';
@@ -1025,9 +1038,56 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     for (const meta of this.sections) {
       const raw = sections[meta.id];
       out[meta.id] =
-        raw === 'done' ? 'done' : raw === 'fail' ? 'fail' : 'queued';
+        raw === 'done'
+          ? 'done'
+          : raw === 'fail'
+            ? 'fail'
+            : raw === 'run'
+              ? 'run'
+              : 'queued';
     }
     return out;
+  }
+
+  /**
+   * Opens a finished section while the run continues, so the reviewer can see
+   * how the translation reads instead of waiting for the whole document.
+   * Only this section's segments are fetched — the rest are still in flight.
+   */
+  peekSection(id: string) {
+    const job = this.job;
+    if (!job) return;
+    this.runPeek = id;
+    this.runPeekError = '';
+    this.runPeekGroups = [];
+    this.runPeekLoading = true;
+    this.api.listSegments(job.id, {sectionId: id}).subscribe({
+      next: api => {
+        // A quick second pick must win: ignore a stale response.
+        if (this.runPeek !== id) return;
+        this.runPeekLoading = false;
+        this.runPeekGroups = this.mkGroups(viewSegments(api), id);
+      },
+      error: () => {
+        if (this.runPeek !== id) return;
+        this.runPeekLoading = false;
+        this.runPeekError =
+          'Could not load this section — it stays queued for review.';
+      },
+    });
+  }
+
+  closePeek() {
+    this.runPeek = null;
+    this.runPeekGroups = [];
+    this.runPeekError = '';
+    this.runPeekLoading = false;
+  }
+
+  /** Title of a section by id, for the preview header. */
+  sectionTitle(id: string | null): string {
+    if (!id) return '';
+    return this.sections.find(s => s.id === id)?.title || id;
   }
 
   openReview() {

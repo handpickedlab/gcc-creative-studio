@@ -212,10 +212,10 @@
     <!-- ═════════ TRANSLATION RUN ═════════ -->
     <div class="run-layout" *ngIf="view === 'run'">
       <div class="run-rail">
-        <app-doc-tree [tree]="tree" [segs]="segs" [run]="runStates" [focusable]="false"></app-doc-tree>
+        <app-doc-tree [tree]="tree" [segs]="segs" [run]="runStates" [active]="runPeek" (picked)="peekSection($event)"></app-doc-tree>
       </div>
-      <div class="run-center">
-        <div class="run-card">
+      <div class="run-center" [class.peeking]="runPeek">
+        <div class="run-card" *ngIf="!runPeek">
           <div class="check" *ngIf="runComplete">✓</div>
           <div class="spin-wrap" *ngIf="!runComplete && !runFailed"><span class="spinner xl"></span></div>
           <div class="check" *ngIf="runFailed" style="color:var(--bad)">✕</div>
@@ -246,6 +246,39 @@
               Open review<span *ngIf="dr.att"> — {{ dr.att }} need attention</span>
             </button>
             <button class="btn soft" *ngIf="!runComplete" (click)="backToLibrary()">Back to library</button>
+          </div>
+          <div class="run-hint" *ngIf="!runComplete && !runFailed">Open a finished section on the left to read it while the rest translates.</div>
+        </div>
+
+        <!-- a finished section, read while the rest of the document translates -->
+        <div class="peek" *ngIf="runPeek">
+          <div class="peek-head">
+            <button class="peek-back" (click)="closePeek()">← Progress</button>
+            <span class="vline"></span>
+            <span class="mono peek-id">{{ runPeek }}</span>
+            <span class="peek-title">{{ sectionTitle(runPeek) }}</span>
+            <div class="grow"></div>
+            <button class="btn sm" *ngIf="runComplete" (click)="openReview()">Open review</button>
+          </div>
+
+          <div class="peek-status" *ngIf="!runComplete && !runFailed">
+            <span class="spinner sm"></span>
+            <span class="pst" *ngIf="runProgress as p">
+              Still translating — {{ runPct }}% · {{ p.translated | number }} of {{ p.total | number }} segments
+            </span>
+            <div class="grow"></div>
+            <span class="pnote">Preview only — QA checks and approving open when the document finishes.</span>
+          </div>
+
+          <div class="peek-body">
+            <div class="peek-mid" *ngIf="runPeekLoading"><span class="spinner lg"></span></div>
+            <div class="peek-mid err" *ngIf="!runPeekLoading && runPeekError">{{ runPeekError }}</div>
+            <div class="peek-mid" *ngIf="!runPeekLoading && !runPeekError && runPeekGroups.length === 0">
+              This section has no translatable text.
+            </div>
+            <ng-container *ngIf="!runPeekLoading && !runPeekError">
+              <ng-container *ngTemplateOutlet="peekList; context: {groups: runPeekGroups}"></ng-container>
+            </ng-container>
           </div>
         </div>
       </div>
@@ -535,6 +568,59 @@
       <button class="btn ghost sm" *ngIf="!blocksExport(f)" (click)="dismiss(sec, seg)">Dismiss</button>
     </div>
   </div>
+</ng-template>
+
+<!--
+  Read-only variant of #groupList for the mid-run preview: same source/target
+  layout and glossary highlighting, without the edit/approve actions or the
+  finding bar — findings only exist once the whole run has finished.
+-->
+<ng-template #peekList let-gs="groups">
+  <ng-container *ngFor="let g of gs; trackBy: trackGroup">
+    <!-- prose / heading row -->
+    <div class="segrow" *ngIf="g.type === 'seg' && g.seg as seg">
+      <div class="cell src">
+        <span class="segtxt dim" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
+          <ng-container *ngTemplateOutlet="hlText; context: {text: seg.src}"></ng-container>
+        </span>
+      </div>
+      <div class="cell tgt">
+        <span class="segtxt" *ngIf="seg.tgt" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
+          <ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container>
+        </span>
+        <span class="segtxt pending" *ngIf="!seg.tgt">—</span>
+      </div>
+    </div>
+
+    <!-- table group -->
+    <div class="tblwrap" *ngIf="g.type === 'table' && g.rows as rows">
+      <div class="tblborder">
+        <table>
+          <thead *ngIf="rows[0].head as head">
+            <tr>
+              <th class="h-src">{{ head.src }}</th>
+              <th class="h-tgt">{{ head.tgt }} <span class="soft">(target)</span></th>
+              <th class="h-num" *ngFor="let c of head.cols">{{ c }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="datarow" *ngFor="let seg of rows; trackBy: trackSeg" [class.bold]="seg.bold">
+              <td class="tsrc">{{ seg.src }}<span class="note" *ngIf="seg.note">{{ seg.note }}</span></td>
+              <td class="ttgt">
+                <span class="txt" *ngIf="seg.tgt"><ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container></span>
+                <span class="txt pending" *ngIf="!seg.tgt">—</span>
+              </td>
+              <td class="lock" *ngFor="let v of seg.nums">
+                <span class="lockspan" title="Locked — figure cells are never edited and never sent to the model">
+                  {{ v }}<svg width="8" height="9" viewBox="0 0 8 9" fill="none"><rect x="1" y="4" width="6" height="4.2" rx="1" fill="currentColor"/><path d="M2.3 4V2.8a1.7 1.7 0 013.4 0V4" stroke="currentColor" stroke-width="1"/></svg>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </ng-container>
 </ng-template>
 
 <!-- Segment group list: prose rows + table groups -->

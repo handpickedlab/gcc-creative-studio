@@ -37,8 +37,18 @@ export class DocTreeComponent {
     this.collapsed[ch.id] = !this.collapsed[ch.id];
   }
 
+  /**
+   * During a run only the sections that already finished can be opened —
+   * a queued one has no translation to show yet, and the one in flight is
+   * still being written. Outside a run the whole outline follows `focusable`.
+   */
+  canPick(s: SectionMeta): boolean {
+    if (this.run) return this.runState(s.id) === 'done';
+    return this.focusable;
+  }
+
   select(s: SectionMeta) {
-    if (this.focusable) this.picked.emit(s.id);
+    if (this.canPick(s)) this.picked.emit(s.id);
   }
 
   rollup(id: string): SectionRollup {

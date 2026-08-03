@@ -11,7 +11,7 @@
   </button>
 
   <ng-container *ngIf="!collapsed[ch.id]">
-    <button *ngFor="let s of ch.sections" class="sec" [class.active]="active === s.id" [class.static]="!focusable" [disabled]="!focusable" (click)="select(s)">
+    <button *ngFor="let s of ch.sections" class="sec" [class.active]="active === s.id" [class.static]="!canPick(s)" [disabled]="!canPick(s)" (click)="select(s)">
       <span class="mono sid">{{ s.id }}</span>
       <span class="stitle">{{ s.title }}</span>
 
