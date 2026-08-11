@@ -27,7 +27,6 @@ import os
 import re
 import threading
 
-import pandas as pd
 
 DB_PATH = os.environ.get(
     "DATA_QUERY_DB_PATH",
@@ -110,6 +109,7 @@ def _is_ncount(v) -> bool:
 def _banner_melt(raw):
     """Unpivot an SPSS-style banner crosstab to tidy long format, or None if
     the frame doesn't look like a banner table."""
+    import pandas as pd  # deferred: heavy import
     nrows = len(raw)
     # A block starts on an ``N=`` base row: ≥3 cells like "N=1508".
     n_row_idxs = [
@@ -192,6 +192,7 @@ def _frame(raw):
 
     Banner/crosstab survey exports are unpivoted to a tidy long table; every
     other sheet uses simple header detection + type coercion."""
+    import pandas as pd  # deferred: heavy import
     raw = raw.dropna(axis=1, how="all").dropna(axis=0, how="all").reset_index(drop=True)
     if raw.empty:
         return None
@@ -222,6 +223,7 @@ def _ensure_catalog(con):
 
 def ingest_bytes(filename: str, data: bytes) -> list[dict]:
     """Load a .csv/.xlsx file into DuckDB. Returns a summary per created table."""
+    import pandas as pd  # deferred: heavy import
     ext = filename.lower().rsplit(".", 1)[-1]
     stem = _slug(os.path.splitext(os.path.basename(filename))[0])
     frames: dict[str, pd.DataFrame] = {}

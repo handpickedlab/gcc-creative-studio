@@ -111,7 +111,9 @@ class TestBackgroundWorkers:
 
     @patch("src.database.WorkerDatabase")
     @patch("src.audios.audio_service.MediaRepository")
-    @patch("src.audios.audio_service.aiplatform.gapic.PredictionServiceClient")
+    # audio_service imports these lazily inside the worker, so patch the
+    # library itself rather than a module attribute.
+    @patch("google.cloud.aiplatform.gapic.PredictionServiceClient")
     @patch("src.audios.audio_service.GcsService")
     def test_process_lyria_in_background_sync(
         self,
@@ -160,7 +162,7 @@ class TestBackgroundWorkers:
 
     @patch("src.database.WorkerDatabase")
     @patch("src.audios.audio_service.MediaRepository")
-    @patch("src.audios.audio_service.texttospeech.TextToSpeechClient")
+    @patch("google.cloud.texttospeech_v1beta1.TextToSpeechClient")
     @patch("src.audios.audio_service.GcsService")
     def test_process_tts_in_background_sync(
         self,

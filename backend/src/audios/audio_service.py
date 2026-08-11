@@ -25,14 +25,7 @@ from collections.abc import MutableSequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-import vertexai
 from fastapi import Depends
-from google.cloud import aiplatform
-from google.cloud import texttospeech_v1beta1 as texttospeech
-from google.cloud.logging import Client as LoggerClient
-from google.cloud.logging.handlers import CloudLoggingHandler
-from google.genai import types
-from google.protobuf import json_format, struct_pb2
 
 from src.audios.audio_constants import LanguageEnum, VoiceEnum
 from src.audios.dto.create_audio_dto import CreateAudioDto
@@ -63,6 +56,16 @@ def _process_audio_in_background(
     user_email: str,
     user_id: int,
 ):
+    # Deferred heavy imports: vertexai alone costs ~2s at import time and
+    # audio generation is the only consumer — keep them off the boot path.
+    import vertexai
+    from google.cloud import aiplatform
+    from google.cloud import texttospeech_v1beta1 as texttospeech
+    from google.cloud.logging import Client as LoggerClient
+    from google.cloud.logging.handlers import CloudLoggingHandler
+    from google.genai import types
+    from google.protobuf import json_format, struct_pb2
+
     from src.database import WorkerDatabase
 
     worker_logger = logging.getLogger(f"audio_worker.{media_item_id}")

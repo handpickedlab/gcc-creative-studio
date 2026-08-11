@@ -75,6 +75,7 @@ import {AppRoutingModule} from './app-routing.module';
 import {AppComponent} from './app.component';
 import {AudioComponent} from './audio/audio.component';
 import {AuthInterceptor} from './auth.interceptor';
+import {ColdStartInterceptor} from './cold-start.interceptor';
 import {DeepResearchComponent} from './deep-research/deep-research.component';
 
 import {FlowPromptBoxComponent} from './common/components/flow-prompt-box/flow-prompt-box.component';
@@ -229,6 +230,7 @@ import {UpscaleComponent} from './upscale/upscale.component';
       provide: UserTrackingService, // Automatically track user interactions
     },
     {provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true},
+    {provide: HTTP_INTERCEPTORS, useClass: ColdStartInterceptor, multi: true},
   ],
   bootstrap: [AppComponent],
 })
