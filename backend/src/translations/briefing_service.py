@@ -20,6 +20,7 @@ from fastapi import Depends, HTTPException, status
 
 from src.multimodal.gemini_service import GeminiService
 from src.translations import briefing_parser as parser
+from src.translations import localization
 from src.translations.briefing_export import build_briefing_xlsx
 from src.translations.dto.briefing_dto import (
     BriefingInputDto,
@@ -35,14 +36,18 @@ from src.translations.markets import (
 )
 from src.translations.repository.briefing_repository import BriefingRepository
 from src.translations.repository.glossary_repository import GlossaryRepository
+from src.translations.repository.language_config_repository import (
+    LanguageConfigRepository,
+)
 from src.translations.schema.briefing_model import (
     BriefingMeta,
     BriefingSegment,
 )
+from src.translations.schema.language_config_model import (
+    TranslationLanguageConfigModel,
+)
 
 logger = logging.getLogger(__name__)
-
-_MAX_GLOSSARY_HINTS = 60
 
 
 class BriefingService:
@@ -51,10 +56,29 @@ class BriefingService:
         repo: BriefingRepository = Depends(),
         glossary_repo: GlossaryRepository = Depends(),
         gemini_service: GeminiService = Depends(),
+        language_config_repo: LanguageConfigRepository = Depends(),
     ):
         self.repo = repo
         self.glossary_repo = glossary_repo
         self.gemini_service = gemini_service
+        self.language_config_repo = language_config_repo
+
+    # --- Per-language localization profiles ------------------------------
+
+    async def list_language_configs(
+        self,
+    ) -> list[TranslationLanguageConfigModel]:
+        return await self.language_config_repo.list_all()
+
+    async def upsert_language_config(
+        self, language: str, data: dict
+    ) -> TranslationLanguageConfigModel:
+        if not is_valid_market(language) or language == SOURCE_MARKET:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown target market: {language}",
+            )
+        return await self.language_config_repo.upsert(language, data)
 
     # --- Upload / parsing ------------------------------------------------
 
@@ -156,33 +180,52 @@ class BriefingService:
 
     def _relevant_glossary(
         self, segments: list[BriefingSegment], terms: list
-    ) -> list:
-        joined = " \n ".join(s.text for s in segments if s.text).lower()
-        hits = [t for t in terms if t.source and t.source.lower() in joined]
-        return hits[:_MAX_GLOSSARY_HINTS]
+    ) -> tuple[list, list]:
+        """Splits matching glossary terms into (normal, do-not-translate)."""
+        joined = " \n ".join(s.text for s in segments if s.text)
+        return localization.split_glossary_terms(terms, joined)
 
     def _build_market_prompt(
         self,
         segments: list[BriefingSegment],
         market: str,
         glossary: list,
-        tone: str | None = None,
+        do_not_translate: list | None = None,
+        profile: "TranslationLanguageConfigModel | None" = None,
+        notes: str | None = None,
     ) -> str:
         language = language_for_market(market)
         lines = [
-            f"You are a senior marketing copy translator. Translate the "
-            f"following email campaign copy from English into {language}.",
+            f"You are a senior marketing copy translator localizing for "
+            f"{language}. Localize (do not translate literally) the following "
+            f"email campaign copy from English.",
             "Rules:",
-            "- Keep it natural, on-brand and concise.",
+            "- Prioritize natural, on-brand, idiomatic phrasing over a literal "
+            "1-to-1 translation; adapt wording so it reads as if written by a "
+            "native marketer.",
             "- Preserve any HTML tags (e.g. <b>) and placeholders such as "
             "[Name] exactly as-is.",
+            "- Preserve the casing style of the source: if a value is written "
+            "in ALL CAPS (e.g. a CTA), keep the translation in ALL CAPS.",
             "- Respect the max character limit when one is given.",
             "- Do not translate the field names; only the text values.",
         ]
-        if tone:
+        formality_line = localization.formality_instruction(
+            profile.formality if profile else None
+        )
+        if formality_line:
+            lines.append(formality_line)
+        if profile and profile.guidance:
+            lines.append(f"- Tone & style guidance for {language}: {profile.guidance}")
+        if notes and notes.strip():
+            lines.append(f"- Campaign context / notes from the requester: {notes.strip()}")
+        if do_not_translate:
             lines.append(
-                f"- Use a {tone} tone of voice / form of address."
+                "- Never translate the following brand / product / collection "
+                "names; reproduce each exactly as written, including casing:"
             )
+            for t in do_not_translate:
+                lines.append(f'    "{t.source}"')
         if glossary:
             lines.append(
                 "- Use these established translations for specific terms:"
@@ -202,12 +245,25 @@ class BriefingService:
             lines.append(f'{i}. [{field}{limit}]: {s.text}')
         return "\n".join(lines)
 
+    def _apply_casing(
+        self,
+        source_segments: list[BriefingSegment],
+        out: list[BriefingSegment],
+        idx: list[int],
+    ) -> None:
+        """Force ALL-CAPS on translations whose source was all-caps (R3)."""
+        for seg_i in idx:
+            out[seg_i].text = localization.apply_caps(
+                source_segments[seg_i].text, out[seg_i].text
+            )
+
     def _translate_market(
         self,
         segments: list[BriefingSegment],
         market: str,
         terms: list,
-        tone: str | None = None,
+        profile: "TranslationLanguageConfigModel | None" = None,
+        notes: str | None = None,
     ) -> list[BriefingSegment]:
         # Indices that actually have source text.
         idx_with_text = [i for i, s in enumerate(segments) if s.text.strip()]
@@ -216,8 +272,10 @@ class BriefingService:
             return out
 
         translatable = [segments[i] for i in idx_with_text]
-        glossary = self._relevant_glossary(translatable, terms)
-        prompt = self._build_market_prompt(translatable, market, glossary, tone)
+        glossary, dnt = self._relevant_glossary(translatable, terms)
+        prompt = self._build_market_prompt(
+            translatable, market, glossary, dnt, profile, notes
+        )
 
         try:
             raw = self.gemini_service.generate_text(prompt)
@@ -251,13 +309,16 @@ class BriefingService:
                 except Exception as inner:
                     logger.error("Segment translation failed: %s", inner)
                     out[seg_i].text = s.text
+
+        # Deterministic casing guardrail (only when the profile allows it).
+        if profile is None or profile.preserve_casing:
+            self._apply_casing(segments, out, idx_with_text)
         return out
 
     async def translate_briefing(
         self,
         briefing: BriefingInputDto,
         markets: list[str],
-        tone: str | None = None,
     ) -> list[MarketTranslationDto]:
         invalid = [m for m in markets if not is_valid_market(m)]
         if invalid:
@@ -269,13 +330,19 @@ class BriefingService:
         by_market: dict[str, list] = {}
         for t in all_terms:
             by_market.setdefault(t.language, []).append(t)
+        profiles = await self.language_config_repo.get_by_languages(markets)
+        notes = briefing.meta.notes if briefing.meta else None
 
         results: list[MarketTranslationDto] = []
         for market in markets:
             if market == SOURCE_MARKET:
                 continue
             translated = self._translate_market(
-                briefing.segments, market, by_market.get(market, []), tone
+                briefing.segments,
+                market,
+                by_market.get(market, []),
+                profiles.get(market),
+                notes,
             )
             results.append(
                 MarketTranslationDto(market=market, segments=translated)
@@ -367,7 +434,13 @@ class BriefingService:
             ]
         return sorted(terms, key=lambda t: t.source.lower())[:500]
 
-    async def create_glossary_term(self, market: str, source: str, target: str):
+    async def create_glossary_term(
+        self,
+        market: str,
+        source: str,
+        target: str | None = None,
+        do_not_translate: bool = False,
+    ):
         existing = await self.glossary_repo.get_by_language_and_source(
             market, source
         )
@@ -376,8 +449,16 @@ class BriefingService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"'{source}' already exists in the {market} dictionary.",
             )
+        # A do-not-translate term is reproduced verbatim, so the target
+        # defaults to the source when the caller omits it.
+        resolved_target = target or source
         return await self.glossary_repo.create(
-            {"language": market, "source": source, "target": target}
+            {
+                "language": market,
+                "source": source,
+                "target": resolved_target,
+                "do_not_translate": do_not_translate,
+            }
         )
 
     async def update_glossary_term(self, term_id: int, data: dict):

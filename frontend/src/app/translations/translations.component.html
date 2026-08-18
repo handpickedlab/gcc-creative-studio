@@ -55,10 +55,14 @@
       </div>
 
       <div class="rail-divider"></div>
-      <div class="rail-sec" style="padding:10px 12px">
+      <div class="rail-sec" style="padding:10px 12px; display:flex; flex-direction:column; gap:7px">
         <button class="dict-link" [class.active]="view==='dict'" (click)="openDict()">
           <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7a1.5 1.5 0 011.5 1.5v9.5L8 12l-3.5 1.5V4A1.5 1.5 0 016 2.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></span>
           <div style="flex:1"><div class="t1">Dictionary</div><div class="t2">{{ glossaryTotal }} terms · {{ glossaryPerMarket.length }} markets</div></div>
+        </button>
+        <button class="dict-link" [class.active]="view==='lang'" (click)="openLangSettings()">
+          <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/></svg></span>
+          <div style="flex:1"><div class="t1">Language settings</div><div class="t2">Tone of voice per language</div></div>
         </button>
       </div>
     </div>
@@ -118,30 +122,67 @@
       <div *ngIf="view==='dict'" class="canvas-inner">
         <button class="btn ghost sm" (click)="view = briefing ? 'work' : 'empty'" style="margin-bottom:18px">← Back</button>
         <h2 class="serif" style="font-size:26px; font-weight:600; letter-spacing:-.02em; margin-bottom:4px">Dictionary</h2>
-        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">{{ glossaryTotal }} terms · translation memory per market. Edit freely — terms guide future translations.</p>
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">{{ glossaryTotal }} terms · translation memory per market. Edit freely — terms guide future translations. Mark <b>Keep as-is</b> for brand, product or collection names that must never be translated (e.g. cashmere).</p>
         <div style="display:flex; gap:14px; margin-bottom:16px; flex-wrap:wrap">
           <select class="sel" style="max-width:240px" [(ngModel)]="dictMarket" (change)="loadDictTerms()">
             <option *ngFor="let m of targets" [value]="m.code">{{ m.code }} — {{ m.label }}</option>
           </select>
           <input class="tinput" style="max-width:240px" [(ngModel)]="dictQuery" (keydown.enter)="loadDictTerms()" placeholder="Search term…" />
         </div>
-        <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px">
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap">
           <input class="tinput" [(ngModel)]="newSource" placeholder="Source (EN)" (keydown.enter)="addDictTerm()" />
           <span style="color:var(--text-s)">→</span>
-          <input class="tinput" [(ngModel)]="newTarget" placeholder="{{ dictMarket }} translation" (keydown.enter)="addDictTerm()" />
-          <button class="btn primary sm" [disabled]="!newSource.trim() || !newTarget.trim()" (click)="addDictTerm()">Add</button>
+          <input class="tinput" [(ngModel)]="newTarget" [disabled]="newDnt" placeholder="{{ newDnt ? 'kept as-is' : dictMarket + ' translation' }}" (keydown.enter)="addDictTerm()" />
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-m); white-space:nowrap; cursor:pointer">
+            <input type="checkbox" [(ngModel)]="newDnt" /> Keep as-is
+          </label>
+          <button class="btn primary sm" [disabled]="!newSource.trim() || (!newDnt && !newTarget.trim())" (click)="addDictTerm()">Add</button>
         </div>
         <table class="gloss-tbl" *ngIf="dictTerms.length">
-          <thead><tr><th>Source (EN)</th><th>{{ dictMarket }}</th><th></th></tr></thead>
+          <thead><tr><th>Source (EN)</th><th>{{ dictMarket }}</th><th style="width:90px; text-align:center">Keep as-is</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let t of dictTerms">
               <td><input [(ngModel)]="t.source" (blur)="saveDictTerm(t)" /></td>
-              <td><input [(ngModel)]="t.target" (blur)="saveDictTerm(t)" /></td>
+              <td><input [(ngModel)]="t.target" [disabled]="t.doNotTranslate" (blur)="saveDictTerm(t)" /></td>
+              <td style="text-align:center"><input type="checkbox" [ngModel]="t.doNotTranslate" (ngModelChange)="toggleDnt(t)" title="Never translate — keep verbatim" /></td>
               <td style="width:40px; text-align:right"><button class="iconbtn danger" (click)="deleteDictTerm(t)"><svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 4h8M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M4.5 4l.5 7a1 1 0 001 1h2a1 1 0 001-1l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>
             </tr>
           </tbody>
         </table>
         <p *ngIf="!dictTerms.length" style="color:var(--text-s); font-style:italic">No terms for {{ dictMarket }} yet.</p>
+      </div>
+
+      <!-- LANGUAGE SETTINGS -->
+      <div *ngIf="view==='lang'" class="canvas-inner">
+        <button class="btn ghost sm" (click)="view = briefing ? 'work' : 'empty'" style="margin-bottom:18px">← Back</button>
+        <h2 class="serif" style="font-size:26px; font-weight:600; letter-spacing:-.02em; margin-bottom:4px">Language settings</h2>
+        <p style="font-size:12px; color:var(--text-m); margin-bottom:20px">Set the tone of voice per language. These profiles are shared by everyone and steer every translation into that language — form of address, whether ALL-CAPS CTAs stay uppercase, and free-text guidance for the localizer.</p>
+        <div style="display:flex; flex-direction:column; gap:12px">
+          <div *ngFor="let m of targets" class="lang-card" style="border:1px solid var(--border); border-radius:12px; padding:14px 16px">
+            <ng-container *ngIf="configFor(m.code) as c">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
+                <span class="btag">{{ m.code }}</span>
+                <span style="font-weight:600; font-size:13px">{{ m.label }}</span>
+                <button class="btn primary sm" style="margin-left:auto" [disabled]="isLangSaving(m.code)" (click)="saveLangConfig(m.code)">{{ isLangSaving(m.code) ? 'Saving…' : 'Save' }}</button>
+              </div>
+              <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end">
+                <div style="min-width:220px">
+                  <div class="fld-label">Form of address</div>
+                  <select class="sel" [(ngModel)]="c.formality">
+                    <option *ngFor="let f of formalities" [value]="f.value">{{ f.label }}</option>
+                  </select>
+                </div>
+                <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-m); cursor:pointer; padding-bottom:8px">
+                  <input type="checkbox" [(ngModel)]="c.preserveCasing" /> Keep ALL-CAPS CTAs uppercase
+                </label>
+              </div>
+              <div style="margin-top:12px">
+                <div class="fld-label">Tone &amp; style guidance</div>
+                <textarea class="tinput" rows="2" [(ngModel)]="c.guidance" placeholder="e.g. Warm and premium; avoid literal translations; prefer short, punchy sentences."></textarea>
+              </div>
+            </ng-container>
+          </div>
+        </div>
       </div>
 
       <!-- WORK -->
@@ -198,7 +239,10 @@
                   <button class="addline" (click)="addField(block)">+ Add field to {{ block }}</button>
                 </div>
               </div>
-              <button class="addblock" (click)="addBlock()">+ Add block</button>
+              <div style="display:flex; gap:8px; flex-wrap:wrap">
+                <button class="addblock" (click)="addBlock()">+ Add block</button>
+                <button class="addblock" (click)="addPushCopy()" title="Add a push-copy line to translate">+ Add push copy</button>
+              </div>
             </div>
           </div>
 
@@ -221,11 +265,8 @@
             </div>
             <div class="divider"></div>
             <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:20px">
-              <div><div style="font-size:12px; font-weight:500">Tone of voice</div><div style="font-size:11px; color:var(--text-m); margin-top:2px">Form of address</div></div>
-              <div class="seg-toggle">
-                <button [class.on]="tone==='informeel'" (click)="tone='informeel'">Informal</button>
-                <button [class.on]="tone==='formeel'" (click)="tone='formeel'">Formal</button>
-              </div>
+              <div><div style="font-size:12px; font-weight:500">Tone of voice</div><div style="font-size:11px; color:var(--text-m); margin-top:2px">Formality, casing &amp; tone are set per language</div></div>
+              <button class="btn soft sm" (click)="openLangSettings()">Language settings</button>
             </div>
             <button class="btn primary lg full" [disabled]="!selected.length || isTranslating" (click)="translate()">
               {{ isTranslating ? 'Translating…' : (selected.length ? 'Translate to ' + selected.length + ' market(s)' : 'Choose at least one market') }}

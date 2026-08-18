@@ -26,10 +26,10 @@ from fastapi import (
 from src.auth.auth_guard import RoleChecker
 from src.translations.briefing_service import BriefingService
 from src.translations.dto.briefing_dto import (
-    BriefingInputDto,
     GlossarySummaryDto,
     GlossaryTermInputDto,
     GlossaryTermUpdateDto,
+    LanguageConfigInputDto,
     MarketInfo,
     ParseResultDto,
     RenameBriefingDto,
@@ -41,6 +41,9 @@ from src.translations.dto.briefing_dto import (
 from src.translations.markets import MARKETS
 from src.translations.schema.briefing_model import BriefingModel
 from src.translations.schema.glossary_term_model import GlossaryTermModel
+from src.translations.schema.language_config_model import (
+    TranslationLanguageConfigModel,
+)
 from src.users.user_model import UserRoleEnum
 
 router = APIRouter(
@@ -105,7 +108,9 @@ async def create_glossary_term(
     dto: GlossaryTermInputDto,
     service: BriefingService = Depends(),
 ):
-    return await service.create_glossary_term(dto.market, dto.source, dto.target)
+    return await service.create_glossary_term(
+        dto.market, dto.source, dto.target, dto.do_not_translate
+    )
 
 
 @router.put("/glossary/{term_id}", response_model=GlossaryTermModel)
@@ -127,13 +132,37 @@ async def delete_glossary_term(
     await service.delete_glossary_term(term_id)
 
 
+@router.get(
+    "/language-config",
+    response_model=list[TranslationLanguageConfigModel],
+)
+async def list_language_configs(service: BriefingService = Depends()):
+    """All per-language localization profiles (tone/formality/casing)."""
+    return await service.list_language_configs()
+
+
+@router.put(
+    "/language-config/{market}",
+    response_model=TranslationLanguageConfigModel,
+)
+async def upsert_language_config(
+    market: str,
+    dto: LanguageConfigInputDto,
+    service: BriefingService = Depends(),
+):
+    """Create or update the localization profile for one target language."""
+    return await service.upsert_language_config(
+        market, dto.model_dump(exclude_none=True)
+    )
+
+
 @router.post("/translate", response_model=TranslateBriefingResponseDto)
 async def translate_briefing(
     request: TranslateBriefingRequestDto,
     service: BriefingService = Depends(),
 ):
     translations = await service.translate_briefing(
-        request.briefing, request.markets, request.tone
+        request.briefing, request.markets
     )
     return TranslateBriefingResponseDto(translations=translations)
 

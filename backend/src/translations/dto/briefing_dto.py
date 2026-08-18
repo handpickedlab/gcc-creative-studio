@@ -86,11 +86,18 @@ class MarketTranslationDto(_CamelModel):
 class TranslateBriefingRequestDto(_CamelModel):
     briefing: BriefingInputDto
     markets: list[str] = Field(min_length=1)
-    tone: str | None = None
 
 
 class RenameBriefingDto(_CamelModel):
     name: str
+
+
+class LanguageConfigInputDto(_CamelModel):
+    """Upsert payload for a per-language localization profile."""
+
+    formality: str | None = None
+    preserve_casing: bool | None = None
+    guidance: str | None = None
 
 
 class TranslateBriefingResponseDto(_CamelModel):
@@ -110,10 +117,13 @@ class TmImportResultDto(_CamelModel):
 class GlossaryTermInputDto(_CamelModel):
     market: str
     source: str
-    target: str
+    # Optional for do-not-translate terms, where the target equals the source.
+    target: str | None = None
+    do_not_translate: bool = False
 
 
 class GlossaryTermUpdateDto(_CamelModel):
     market: str | None = None
     source: str | None = None
     target: str | None = None
+    do_not_translate: bool | None = None
