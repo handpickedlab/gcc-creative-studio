@@ -42,6 +42,19 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Update package lists and install ffmpeg
 RUN apt-get update && apt-get install -y ffmpeg
 
+# Headless LibreOffice converts DOCX/PPT/PPTX/ODP research-library uploads to
+# PDF. The crosextra fonts are metric-compatible Calibri/Cambria substitutes:
+# without them LibreOffice silently swaps fonts and slide layouts reflow.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-core \
+    libreoffice-writer \
+    libreoffice-impress \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
+    fonts-liberation \
+    fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
@@ -51,4 +64,6 @@ ENV FRONTEND_URL="http://localhost:4200"
 
 EXPOSE 8080
 
-CMD ["gunicorn", "main:app", "--workers=4", "--worker-class=uvicorn.workers.UvicornWorker", "--timeout=36000", "--bind=0.0.0.0:8080"]
+# 2 workers: enough for an internal tool (async workers, concurrency=160) and
+# it halves both cold-boot import contention and the memory footprint.
+CMD ["gunicorn", "main:app", "--workers=2", "--worker-class=uvicorn.workers.UvicornWorker", "--timeout=36000", "--bind=0.0.0.0:8080"]

@@ -1,0 +1,717 @@
+<!-- Copyright 2026 Google LLC — Apache-2.0. Hunkemöller "Documents": annual-report translation. -->
+<div class="page">
+  <!-- Contextual bar. The studio rail already carries app identity and which
+       tool is open, so this only says where you are inside the document. -->
+  <div class="ctxbar" *ngIf="inDoc">
+    <button class="back" (click)="backToLibrary()">← Library</button>
+    <span class="vline"></span>
+    <button class="tab" [class.on]="view === 'review'" (click)="setView('review')">Review</button>
+    <button class="tab" [class.on]="view === 'qa'" (click)="setView('qa')">
+      QA report <span class="cnt" *ngIf="navFindings > 0">{{ navFindings }}</span>
+    </button>
+    <button class="tab" [class.on]="view === 'export'" (click)="setView('export')">
+      Export <span class="dot-crit" *ngIf="navCritical > 0" title="Blocked by a QA finding">●</span>
+    </button>
+    <span class="vline"></span>
+    <!-- Kept left of centre: snackbars occupy the top-right corner. -->
+    <span class="docname">{{ docName }}</span>
+    <span class="status-badge sm" *ngIf="docStatus as st">
+      <span class="dot" [style.background]="statusOf(st).dot"></span>{{ statusOf(st).label }}
+    </span>
+    <span class="grow"></span>
+  </div>
+
+  <!-- A run has no tabs, but the file it is working on is worth keeping in view. -->
+  <div class="ctxbar" *ngIf="view === 'run'">
+    <button class="back" (click)="backToLibrary()">← Library</button>
+    <span class="vline"></span>
+    <span class="docname plain">{{ docName }}</span>
+    <span class="status-badge sm" *ngIf="docStatus as st">
+      <span class="dot" [style.background]="statusOf(st).dot"></span>{{ statusOf(st).label }}
+    </span>
+  </div>
+
+  <!-- Library / glossary toolbars -->
+  <div class="ctxbar" *ngIf="view === 'library'">
+    <button class="btn ghost sm" (click)="setView('glossary')">Glossary — Financial</button>
+  </div>
+  <div class="ctxbar" *ngIf="view === 'glossary'">
+    <button class="btn ghost sm" (click)="setView('library')">← Back to documents</button>
+  </div>
+
+  <div class="content">
+    <!-- ═════════ LIBRARY ═════════ -->
+    <div class="scrollview" *ngIf="view === 'library'">
+      <div class="lib-wrap">
+        <div class="lib-head">
+          <div>
+            <span class="eyebrow">Documents</span>
+            <h1>Document translations</h1>
+            <p>Annual reports and other long-form Word documents — translated with identical layout.</p>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn ghost sm" (click)="loadJobs()" [disabled]="loadingJobs">Refresh</button>
+          <button class="btn" (click)="setView('intake')">Upload .docx</button>
+        </div>
+
+        <div class="empty" *ngIf="loadingJobs && !jobs.length">
+          <span class="spinner lg" style="margin:0 auto 12px"></span>
+          <div class="t">Loading documents…</div>
+        </div>
+
+        <div class="lib-empty" *ngIf="!loadingJobs && !jobs.length && !loadError">
+          <div class="t">No documents yet</div>
+          <p>Upload this year's annual report as .docx. The layout stays untouched — only the text is translated, and every number is verified against the source.</p>
+          <button class="btn" (click)="setView('intake')">Upload .docx</button>
+        </div>
+
+        <div class="err-box bad" *ngIf="loadError">
+          <span class="x">✕</span>
+          <div class="body">
+            <div class="t">Could not load your documents</div>
+            <p>{{ loadError }} Your documents are not lost — this only failed to read them.</p>
+          </div>
+          <button class="btn ghost sm" (click)="loadJobs()">Retry</button>
+        </div>
+
+        <div class="lib-table" *ngIf="jobs.length">
+          <div class="lib-grid lib-cols">
+            <span>Document</span><span>Status</span><span>Target</span><span>Progress</span><span>Last activity</span>
+          </div>
+          <button class="doc-row lib-grid" *ngFor="let r of jobs; trackBy: trackJob" (click)="openJob(r)">
+            <span class="name-cell">
+              <svg class="file-ico" width="15" height="18" viewBox="0 0 15 18" fill="none"><path d="M1.5 2.5A1.5 1.5 0 013 1h6l4.5 4.5V15A1.5 1.5 0 0112 16.5H3A1.5 1.5 0 011.5 15V2.5z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4.5h4.5" stroke="currentColor" stroke-width="1.2"/></svg>
+              <span style="min-width:0">
+                <span class="nm">{{ r.name }}</span>
+                <span class="sub">{{ r.pages ? r.pages + ' pp · ' : '' }}{{ r.words | number }} words</span>
+              </span>
+            </span>
+            <span>
+              <span class="status-badge sm">
+                <span class="dot" [style.background]="statusOf(r.status).dot"></span>{{ statusOf(r.status).label }}
+              </span>
+            </span>
+            <span class="tgt-chips"><span class="chip" *ngFor="let t of r.targets">{{ t }}</span></span>
+            <span class="prog">
+              <span class="bar"><span class="fill" [class.done]="r.progress === 100" [style.width.%]="r.progress"></span></span>
+              <span class="bar-pct">{{ r.progress }}%</span>
+            </span>
+            <span class="activity">{{ r.activity }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ INTAKE ═════════ -->
+    <div class="intake-view" *ngIf="view === 'intake'">
+      <div class="intake-inner">
+        <span class="eyebrow">New document</span>
+        <h1>Upload the Word source</h1>
+        <p>We translate the text inside the .docx and never touch styling, tables or images. The output is the same document — in the target language.</p>
+
+        <input #fileInput type="file" accept=".docx" hidden (change)="onFileChosen($event)" />
+        <div class="drop" [class.drag]="drag" (dragover)="onDragOver($event)" (dragleave)="drag = false" (drop)="onDrop($event)">
+          <div class="parsing" *ngIf="intake === 'parsing'">
+            <span class="spinner lg"></span>
+            <div class="t">Parsing and reading the document…</div>
+            <div class="s">detecting outline · counting segments · matching translation memory</div>
+          </div>
+          <ng-container *ngIf="intake !== 'parsing'">
+            <svg class="up-ico" width="26" height="26" viewBox="0 0 22 23" fill="none"><path d="M11 15V4M7 8l4-4 4 4M4 16v1.5A2.5 2.5 0 006.5 20h9a2.5 2.5 0 002.5-2.5V16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="t">Drag your .docx here</div>
+            <div class="s">Word only — a PDF cannot be translated with its layout intact</div>
+            <button class="btn sm" (click)="fileInput.click()">Choose file</button>
+          </ng-container>
+        </div>
+
+        <div class="err-box bad" *ngIf="intake === 'error'">
+          <span class="x">✕</span>
+          <div class="body">
+            <div class="t">That file cannot be used</div>
+            <p>{{ intakeError }}</p>
+          </div>
+          <button class="btn ghost sm" (click)="intake = 'idle'">Try again</button>
+        </div>
+
+        <div class="demo-row">
+          <div style="flex:1"></div>
+          <button class="btn ghost sm" (click)="setView('library')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ PREFLIGHT ═════════ -->
+    <div class="scrollview" *ngIf="view === 'preflight'">
+      <div class="pf-wrap">
+        <span class="eyebrow">Preflight</span>
+        <div class="view-head">
+          <h1>{{ docName }}</h1>
+          <p>Parsed successfully — review what we found, pick the target market, and start.</p>
+        </div>
+        <div class="pf-grid">
+          <!-- outline -->
+          <div class="pf-outline">
+            <div class="pf-stats">
+              <div class="stat" *ngIf="stats.pages"><div class="v">{{ stats.pages }}</div><div class="l">pages</div></div>
+              <div class="stat" *ngIf="stats.words"><div class="v">{{ stats.words | number }}</div><div class="l">words</div></div>
+              <div class="stat"><div class="v">{{ sectionCount }}</div><div class="l">sections</div></div>
+              <div class="stat"><div class="v">{{ tableCount }}</div><div class="l">tables</div></div>
+              <div class="stat"><div class="v">{{ translatableCount | number }}</div><div class="l">segments</div></div>
+            </div>
+            <div class="pf-tree">
+              <div *ngFor="let ch of tree" style="margin-bottom:6px">
+                <div class="pf-ch">{{ ch.title }}</div>
+                <div class="pf-sec" *ngFor="let s of ch.sections">
+                  <span class="sid">{{ s.id }}</span>
+                  <span class="st">{{ s.title }}</span>
+                  <span class="sn">{{ s.n }} seg{{ s.t ? ' · ' + s.t + ' tbl' : '' }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="pf-lang">
+              <span class="okdot"></span>Source language:&nbsp;<b>English</b>
+              <span *ngIf="stats.trackedChanges || stats.tracked_changes" style="margin-left:12px; color:var(--warn)">
+                ⚠ This document still has tracked changes
+              </span>
+            </div>
+          </div>
+          <!-- config -->
+          <div class="pf-config">
+            <div class="tm-callout">
+              <div class="lbl">Translation memory</div>
+              <div class="big" *ngIf="reusePct !== null">~{{ reusePct }}% arrives already done</div>
+              <div class="big" *ngIf="reusePct === null && loadingReuse">Checking…</div>
+              <div class="big" *ngIf="reusePct === null && !loadingReuse">No estimate yet</div>
+              <p *ngIf="reusePct !== null">
+                {{ reuseCount | number }} of {{ reuseTotal | number }} segments match an earlier
+                <b>approved</b> translation for {{ marketOf(pfTarget) }}. Those are pre-filled and
+                pre-approved — you review only what is new.
+              </p>
+            </div>
+            <div class="pf-card">
+              <div>
+                <div class="cfg-label">Target market</div>
+                <div class="pill-row">
+                  <button class="pill tiny" *ngFor="let t of targets" [class.active]="pfTarget === t.code" (click)="pickTarget(t.code)">{{ t.label }}</button>
+                </div>
+                <div class="more-note">One market per run — start another run for a second language.</div>
+              </div>
+            </div>
+            <div class="pf-actions">
+              <button class="btn full" [disabled]="!pfTarget" (click)="startRun()">
+                Translate to {{ marketOf(pfTarget) }}
+              </button>
+              <button class="btn ghost" (click)="backToLibrary()">Cancel</button>
+            </div>
+            <p class="pf-note">Takes a few minutes for a document this size. You can leave — the run continues and the library shows its status.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ TRANSLATION RUN ═════════ -->
+    <div class="run-layout" *ngIf="view === 'run'">
+      <div class="run-rail">
+        <app-doc-tree [tree]="tree" [segs]="segs" [run]="runStates" [active]="runPeek" (picked)="peekSection($event)"></app-doc-tree>
+      </div>
+      <div class="run-center" [class.peeking]="runPeek">
+        <div class="run-card" *ngIf="!runPeek">
+          <div class="check" *ngIf="runComplete">✓</div>
+          <div class="spin-wrap" *ngIf="!runComplete && !runFailed"><span class="spinner xl"></span></div>
+          <div class="check" *ngIf="runFailed" style="color:var(--bad)">✕</div>
+          <h2>
+            {{ runFailed ? 'Translation failed' : runComplete ? 'Translation complete' : 'Translating section by section' }}
+          </h2>
+          <p>
+            {{ runFailed
+              ? 'Nothing was lost — the sections that finished are kept. Retry when ready.'
+              : runComplete
+                ? 'QA checks ran over every translated segment. Ready for review.'
+                : 'Leave anytime — progress is saved per section and the library shows the status.' }}
+          </p>
+          <div class="run-bar"><span class="fill" [class.done]="runComplete" [style.width.%]="runPct"></span></div>
+          <div class="run-count" *ngIf="runProgress as p">
+            {{ runPct }}% · {{ p.translated | number }} of {{ p.total | number }} segments<span *ngIf="p.failed"> · {{ p.failed }} failed</span>
+          </div>
+          <div class="fail-box" *ngIf="runFailed">
+            <span class="x">✕</span>
+            <div class="body">
+              <div class="t">{{ job?.errorMessage || 'The run stopped with an error.' }}</div>
+              <div class="d">Retrying picks up the segments that are still open.</div>
+            </div>
+            <button class="btn sm" (click)="retryRun()">Retry</button>
+          </div>
+          <div class="run-actions">
+            <button class="btn" *ngIf="runComplete" (click)="openReview()">
+              Open review<span *ngIf="dr.att"> — {{ dr.att }} need attention</span>
+            </button>
+            <button class="btn soft" *ngIf="!runComplete" (click)="backToLibrary()">Back to library</button>
+          </div>
+          <div class="run-hint" *ngIf="!runComplete && !runFailed">Open a finished section on the left to read it while the rest translates.</div>
+        </div>
+
+        <!-- a finished section, read while the rest of the document translates -->
+        <div class="peek" *ngIf="runPeek">
+          <div class="peek-head">
+            <button class="peek-back" (click)="closePeek()">← Progress</button>
+            <span class="vline"></span>
+            <span class="mono peek-id">{{ runPeek }}</span>
+            <span class="peek-title">{{ sectionTitle(runPeek) }}</span>
+            <div class="grow"></div>
+            <button class="btn sm" *ngIf="runComplete" (click)="openReview()">Open review</button>
+          </div>
+
+          <div class="peek-status" *ngIf="!runComplete && !runFailed">
+            <span class="spinner sm"></span>
+            <span class="pst" *ngIf="runProgress as p">
+              Still translating — {{ runPct }}% · {{ p.translated | number }} of {{ p.total | number }} segments
+            </span>
+            <div class="grow"></div>
+            <span class="pnote">Preview only — QA checks and approving open when the document finishes.</span>
+          </div>
+
+          <div class="peek-body">
+            <div class="peek-mid" *ngIf="runPeekLoading"><span class="spinner lg"></span></div>
+            <div class="peek-mid err" *ngIf="!runPeekLoading && runPeekError">{{ runPeekError }}</div>
+            <div class="peek-mid" *ngIf="!runPeekLoading && !runPeekError && runPeekGroups.length === 0">
+              This section has no translatable text.
+            </div>
+            <ng-container *ngIf="!runPeekLoading && !runPeekError">
+              <ng-container *ngTemplateOutlet="peekList; context: {groups: runPeekGroups}"></ng-container>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ REVIEW WORKSPACE ═════════ -->
+    <div class="review" *ngIf="view === 'review'">
+      <!-- outline rail -->
+      <div class="rail">
+        <div class="rail-head">
+          <div class="rail-title">Document outline</div>
+          <div class="rail-prog">
+            <span class="bar"><span class="fill" [class.done]="dr.pct === 100" [style.width.%]="dr.pct"></span></span>
+            <span class="pct">{{ dr.pct }}%</span>
+          </div>
+          <div class="rail-counts">
+            {{ dr.approved | number }} / {{ dr.total | number }} approved<span class="att" *ngIf="dr.att > 0"> · {{ dr.att }} ⚑</span>
+          </div>
+        </div>
+        <div class="rail-tree">
+          <app-doc-tree [tree]="tree" [segs]="segs" [active]="activeSec" (picked)="pickSection($event)"></app-doc-tree>
+        </div>
+      </div>
+
+      <!-- main panel -->
+      <div class="main">
+        <!-- filter bar -->
+        <div class="filterbar">
+          <button class="pill tiny" *ngFor="let f of filters" [class.active]="filter === f.v" (click)="setFilter(f.v)">
+            {{ f.label }} <span class="pcnt">{{ filterCount(f.v) | number }}</span>
+          </button>
+          <div class="grow"></div>
+          <div class="segtoggle tiny">
+            <button [class.on]="scope === 'section'" (click)="setScope('section')">Section</button>
+            <button [class.on]="scope === 'doc'" (click)="setScope('doc')">Full document</button>
+          </div>
+          <div class="search-wrap">
+            <input [(ngModel)]="q" (ngModelChange)="onSearch()" placeholder="Search source & target…" />
+            <svg class="ico" width="12" height="12" viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M8.5 8.5l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </div>
+          <button class="btn ghost sm" (click)="setView('qa')">QA report <span class="cnt" *ngIf="navFindings > 0">{{ navFindings }}</span></button>
+          <button class="btn sm" [class.ghost]="navCritical > 0" (click)="setView('export')">Export</button>
+        </div>
+
+        <!-- sticky section context -->
+        <div class="secbar" *ngIf="scope === 'section' && sectionMeta(activeSec) as meta">
+          <span class="sid">{{ meta.id }}</span>
+          <span class="st">{{ meta.title }}</span>
+          <span class="sn">{{ visibleCount }}{{ filter !== 'all' || q ? ' of ' + meta.n : '' }} segments{{ meta.t ? ' · ' + meta.t + ' tables' : '' }}</span>
+          <div class="grow"></div>
+          <span class="done" *ngIf="sectionRemaining === 0">✓ Section approved</span>
+          <button class="btn soft sm" *ngIf="sectionRemaining > 0" (click)="approveSection(activeSec)">Approve remaining {{ sectionRemaining }}</button>
+        </div>
+
+        <!-- segment list -->
+        <div class="scroller" #scroller>
+          <div class="empty" *ngIf="loadingDoc">
+            <span class="spinner lg" style="margin:0 auto 12px"></span>
+            <div class="t">Loading segments…</div>
+          </div>
+
+          <ng-container *ngIf="!loadingDoc">
+            <!-- doc scope -->
+            <ng-container *ngIf="scope === 'doc'">
+              <div class="empty" *ngIf="docBlocks.length === 0">
+                <div class="check">✓</div>
+                <div class="t">{{ q ? 'No segments match your search' : 'Nothing needs attention anywhere in the document' }}</div>
+                <p>{{ q ? 'Try a different query.' : 'Switch the filter to All to read the whole document.' }}</p>
+              </div>
+              <ng-container *ngIf="docBlocks.length > 0">
+                <div *ngFor="let b of docBlocks; trackBy: trackBlock" [id]="'secblock-' + b.meta.id">
+                  <div class="blockhead">
+                    <span class="sid">{{ b.meta.id }}</span>
+                    <span class="st">{{ b.meta.title }}</span>
+                    <span class="sn">{{ b.count }}{{ filter !== 'all' || q ? ' of ' + b.meta.n : '' }} segments</span>
+                    <div class="grow"></div>
+                    <span class="done" *ngIf="b.remaining === 0">✓ approved</span>
+                    <button class="btn soft sm" *ngIf="b.remaining > 0" (click)="approveSection(b.meta.id)">Approve remaining {{ b.remaining }}</button>
+                  </div>
+                  <ng-container *ngTemplateOutlet="groupList; context: {sec: b.meta.id, groups: b.groups}"></ng-container>
+                </div>
+                <div class="kbd-hint">reading order · j / k navigate · A approve · E edit</div>
+              </ng-container>
+            </ng-container>
+
+            <!-- section scope -->
+            <ng-container *ngIf="scope === 'section'">
+              <div class="empty" *ngIf="visibleCount === 0">
+                <div class="check">✓</div>
+                <div class="t">{{ q ? 'No segments match your search' : filter === 'attention' ? 'Nothing needs attention in this section' : 'Nothing to show here' }}</div>
+                <p>{{ q ? 'Try a different query.' : 'Pick another section in the outline, or switch the filter to All.' }}</p>
+              </div>
+              <ng-container *ngIf="visibleCount > 0">
+                <ng-container *ngTemplateOutlet="groupList; context: {sec: activeSec, groups: groups}"></ng-container>
+                <div class="kbd-hint">j / k navigate · A approve · E edit</div>
+              </ng-container>
+            </ng-container>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ QA REPORT ═════════ -->
+    <div class="scrollview" *ngIf="view === 'qa'">
+      <div class="qa-wrap">
+        <span class="eyebrow">QA report</span>
+        <div class="view-head">
+          <h1>{{ navFindings ? navFindings + ' findings across the document' : 'Quality checks' }}</h1>
+          <p>Every number, glossary term and protected name is checked after translation.</p>
+        </div>
+        <ng-container *ngIf="qaGroups.length === 0; else qaList">
+          <ng-container *ngTemplateOutlet="allClearBlock; context: {compact: false}"></ng-container>
+        </ng-container>
+        <ng-template #qaList>
+          <div class="qa-groups">
+            <div class="qa-group" *ngFor="let g of qaGroups" [class.critical]="g.meta.level === 'critical'">
+              <div class="qa-ghead">
+                <span class="gico" [style.color]="g.meta.color">{{ g.meta.icon }}</span>
+                <span class="gl">{{ g.meta.label }}</span>
+                <span class="gc" [style.color]="g.meta.color">{{ g.list.length }}</span>
+                <span class="blocks" *ngIf="g.list[0].seg.finding && blocksExport(g.list[0].seg.finding!)">Blocks export</span>
+              </div>
+              <div class="qa-item" *ngFor="let f of g.list">
+                <span class="sid">{{ f.sec }}</span>
+                <div class="body">
+                  <div class="src">{{ f.seg.src }}</div>
+                  <div class="msg">{{ f.seg.finding?.msg }}</div>
+                </div>
+                <button class="btn ghost sm" (click)="openSeg(f.sec, f.seg.id)">Open segment</button>
+              </div>
+            </div>
+          </div>
+        </ng-template>
+      </div>
+    </div>
+
+    <!-- ═════════ EXPORT ═════════ -->
+    <div class="scrollview" *ngIf="view === 'export'">
+      <div class="exp-wrap">
+        <span class="eyebrow">Export</span>
+        <h1>{{ docName }}<span *ngIf="targetLabel"> — {{ targetLabel }}</span></h1>
+        <div class="blocked" *ngIf="exportBlocked">
+          <div class="blocked-head">
+            <div class="t"><span class="neq">≠</span>Export is blocked — {{ criticals.length }} finding{{ criticals.length !== 1 ? 's' : '' }} still open</div>
+            <p>These checks fail on content that must match the source exactly. Fix them below — everything else is ready.</p>
+          </div>
+          <div class="blocked-item" *ngFor="let f of criticals">
+            <span class="sid">{{ f.sec }}</span>
+            <div class="body">
+              <div class="src">{{ f.seg.src }}</div>
+              <div class="msg">{{ f.seg.finding?.msg }}</div>
+            </div>
+            <button class="btn sm" (click)="openSeg(f.sec, f.seg.id)">Resolve now</button>
+          </div>
+        </div>
+        <div class="exp-ready" *ngIf="!exportBlocked">
+          <ng-container *ngTemplateOutlet="allClearBlock; context: {compact: true}"></ng-container>
+          <div class="file-card">
+            <svg class="fico" width="26" height="32" viewBox="0 0 15 18" fill="none"><path d="M1.5 2.5A1.5 1.5 0 013 1h6l4.5 4.5V15A1.5 1.5 0 0112 16.5H3A1.5 1.5 0 011.5 15V2.5z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4.5h4.5" stroke="currentColor" stroke-width="1.2"/></svg>
+            <div class="body">
+              <div class="t">{{ docName }}</div>
+              <div class="d">same layout · only reviewed translations are written back</div>
+            </div>
+            <button class="btn" (click)="doExport()">{{ exported ? '✓ Downloaded — download again' : 'Download .docx' }}</button>
+          </div>
+          <p class="exp-meta" *ngIf="dr.open > 0">
+            {{ dr.open | number }} segments are not approved yet — they keep their current translation in the export.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ GLOSSARY ═════════ -->
+    <div class="scrollview" *ngIf="view === 'glossary'">
+      <div class="gloss-wrap">
+        <div class="gloss-head">
+          <div>
+            <span class="eyebrow">Glossary</span>
+            <h1>Terminology</h1>
+            <p>What the review workspace underlines. The QA checks run server-side against the stored glossary.</p>
+          </div>
+          <div style="flex:1"></div>
+          <div class="segtoggle">
+            <button [class.on]="glossDomain === 'financial'" (click)="glossDomain = 'financial'">Financial</button>
+            <button [class.on]="glossDomain === 'marketing'" (click)="glossDomain = 'marketing'">Marketing</button>
+          </div>
+        </div>
+        <div class="gloss-table">
+          <div class="gloss-cols"><span>English (source)</span><span>Dutch</span><span>German</span></div>
+          <div class="gloss-row" *ngFor="let r of glossRows">
+            <span class="en">{{ r.en }}</span><span>{{ r.nl }}</span><span>{{ r.de }}</span>
+          </div>
+        </div>
+        <div class="dnt-label">
+          <div class="t">Do-not-translate (shared across domains)</div>
+          <p>Brand and program names, entities and standard references survive translation verbatim — violations become QA findings.</p>
+        </div>
+        <div class="dnt-chips"><span class="dnt-chip" *ngFor="let d of dntList">{{ d }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════ TERM MODAL ═════════ -->
+  <div class="modal-overlay" *ngIf="termInfo as ti" (click)="termInfo = null">
+    <div class="term-modal" (click)="$event.stopPropagation()">
+      <div class="lbl">Apply term everywhere</div>
+      <p>Replace <b class="found">“{{ ti.found }}”</b> with the glossary term <b class="expected">“{{ ti.expected }}”</b> across this document.</p>
+      <div class="impact">
+        <div class="n serif">{{ ti.count }} segment{{ ti.count === 1 ? '' : 's' }}</div>
+        <div class="d">
+          across {{ ti.sections }} section{{ ti.sections === 1 ? '' : 's' }}<span *ngIf="ti.approvedHit"> — {{ ti.approvedHit }} already-approved segment{{ ti.approvedHit === 1 ? '' : 's' }} will be re-opened for review</span>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" (click)="termInfo = null">Cancel</button>
+        <button class="btn" [disabled]="!ti.count" (click)="applyTerm()">Apply to {{ ti.count }} segment{{ ti.count === 1 ? '' : 's' }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════ TOAST ═════════ -->
+  <div class="toast" *ngIf="toast">{{ toast }}</div>
+</div>
+
+<!-- ═════════ SHARED TEMPLATES ═════════ -->
+
+<!-- Glossary/DNT-highlighted text -->
+<ng-template #hlText let-text="text">
+  <ng-container *ngFor="let tok of text | glossHl"><span *ngIf="tok.cls === ''">{{ tok.v }}</span><span *ngIf="tok.cls === 'gl'" class="gl-gl" title="Glossary term">{{ tok.v }}</span><span *ngIf="tok.cls === 'dnt'" class="gl-dnt" title="Do-not-translate term">{{ tok.v }}</span></ng-container>
+</ng-template>
+
+<!-- Provenance badge -->
+<ng-template #provBadge let-seg="seg">
+  <span class="approved-tick" *ngIf="seg.approved" title="Approved">✓ Approved</span>
+  <span class="prov" *ngIf="!seg.approved" [style.color]="provOf(seg).color" [style.background]="provOf(seg).bg" [title]="provOf(seg).hint">{{ provOf(seg).label }}</span>
+</ng-template>
+
+<!-- Row actions: edit · re-translate (popover) · approve -->
+<ng-template #segActs let-sec="sec" let-seg="seg">
+  <span class="acts" [class.pinned]="retransId === seg.id">
+    <span class="spinner sm" *ngIf="busyIds.has(seg.id)"></span>
+    <ng-container *ngIf="!busyIds.has(seg.id)">
+      <button class="iconbtn" title="Edit target (E)" (click)="startEdit(seg); $event.stopPropagation()">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.8 1.8l2.4 2.4L4.6 11.8l-3 .6.6-3 7.6-7.6z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="iconbtn" title="Re-translate with an instruction" [class.active]="retransId === seg.id" (click)="toggleRetrans(seg); $event.stopPropagation()">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M12 7a5 5 0 11-1.5-3.6M12 1v3h-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="iconbtn" *ngIf="!seg.approved" [title]="approveTitle(seg)" (click)="approve(sec, seg); $event.stopPropagation()">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </ng-container>
+    <div class="retrans-pop" *ngIf="retransId === seg.id" (click)="$event.stopPropagation()">
+      <div class="lbl">Re-translate segment</div>
+      <textarea [(ngModel)]="retransDraft" placeholder="Optional instruction — e.g. “more formal” or “use ‘reële waarde’”"></textarea>
+      <div class="row">
+        <button class="btn ghost sm" (click)="retransId = null">Cancel</button>
+        <button class="btn sm" (click)="goRetrans(sec)">Re-translate</button>
+      </div>
+    </div>
+  </span>
+</ng-template>
+
+<!-- Inline edit box -->
+<ng-template #editBox let-sec="sec">
+  <div class="editbox">
+    <textarea [(ngModel)]="editDraft" (keydown.meta.enter)="saveEdit(sec)" (keydown.control.enter)="saveEdit(sec)" (keydown.escape)="cancelEdit()"></textarea>
+    <div class="row">
+      <button class="btn sm" (click)="saveEdit(sec)">Save</button>
+      <button class="btn ghost sm" (click)="cancelEdit()">Cancel</button>
+      <span class="hint">⌘↵ save · esc cancel</span>
+    </div>
+  </div>
+</ng-template>
+
+<!-- QA finding bar -->
+<ng-template #findingBar let-sec="sec" let-seg="seg">
+  <div class="finding" *ngIf="seg.finding as f" [class.critical]="blocksExport(f)">
+    <span class="fico" [style.color]="qaOf(f).color">{{ qaOf(f).icon }}</span>
+    <div class="body">
+      <span class="flabel" [style.color]="qaOf(f).color">{{ qaOf(f).label }}{{ blocksExport(f) ? ' · blocks export' : '' }}</span>
+      <p>{{ f.msg }}</p>
+    </div>
+    <div class="facts">
+      <button class="btn ghost sm" *ngIf="f.term && f.found && f.expected" (click)="openTermModal(sec, seg)">Apply term everywhere</button>
+      <button class="btn soft sm" (click)="startEdit(seg)">Fix</button>
+      <button class="btn ghost sm" *ngIf="!blocksExport(f)" (click)="dismiss(sec, seg)">Dismiss</button>
+    </div>
+  </div>
+</ng-template>
+
+<!--
+  Read-only variant of #groupList for the mid-run preview: same source/target
+  layout and glossary highlighting, without the edit/approve actions or the
+  finding bar — findings only exist once the whole run has finished.
+-->
+<ng-template #peekList let-gs="groups">
+  <ng-container *ngFor="let g of gs; trackBy: trackGroup">
+    <!-- prose / heading row -->
+    <div class="segrow" *ngIf="g.type === 'seg' && g.seg as seg">
+      <div class="cell src">
+        <span class="segtxt dim" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
+          <ng-container *ngTemplateOutlet="hlText; context: {text: seg.src}"></ng-container>
+        </span>
+      </div>
+      <div class="cell tgt">
+        <span class="segtxt" *ngIf="seg.tgt" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
+          <ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container>
+        </span>
+        <span class="segtxt pending" *ngIf="!seg.tgt">—</span>
+      </div>
+    </div>
+
+    <!-- table group -->
+    <div class="tblwrap" *ngIf="g.type === 'table' && g.rows as rows">
+      <div class="tblborder">
+        <table>
+          <thead *ngIf="rows[0].head as head">
+            <tr>
+              <th class="h-src">{{ head.src }}</th>
+              <th class="h-tgt">{{ head.tgt }} <span class="soft">(target)</span></th>
+              <th class="h-num" *ngFor="let c of head.cols">{{ c }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="datarow" *ngFor="let seg of rows; trackBy: trackSeg" [class.bold]="seg.bold">
+              <td class="tsrc">{{ seg.src }}<span class="note" *ngIf="seg.note">{{ seg.note }}</span></td>
+              <td class="ttgt">
+                <span class="txt" *ngIf="seg.tgt"><ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container></span>
+                <span class="txt pending" *ngIf="!seg.tgt">—</span>
+              </td>
+              <td class="lock" *ngFor="let v of seg.nums">
+                <span class="lockspan" title="Locked — figure cells are never edited and never sent to the model">
+                  {{ v }}<svg width="8" height="9" viewBox="0 0 8 9" fill="none"><rect x="1" y="4" width="6" height="4.2" rx="1" fill="currentColor"/><path d="M2.3 4V2.8a1.7 1.7 0 013.4 0V4" stroke="currentColor" stroke-width="1"/></svg>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </ng-container>
+</ng-template>
+
+<!-- Segment group list: prose rows + table groups -->
+<ng-template #groupList let-sec="sec" let-gs="groups">
+  <ng-container *ngFor="let g of gs; trackBy: trackGroup">
+    <!-- prose / heading row -->
+    <ng-container *ngIf="g.type === 'seg' && g.seg as seg">
+      <div class="segrow" [id]="'seg-' + seg.id" [class.focused]="focusSeg === seg.id" (click)="focusSeg = seg.id">
+        <div class="cell src">
+          <span class="segtxt dim" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
+            <ng-container *ngTemplateOutlet="hlText; context: {text: seg.src}"></ng-container>
+          </span>
+        </div>
+        <div class="cell tgt">
+          <div class="meta-row">
+            <div class="grow"></div>
+            <ng-container *ngTemplateOutlet="provBadge; context: {seg: seg}"></ng-container>
+            <ng-container *ngTemplateOutlet="segActs; context: {sec: sec, seg: seg}"></ng-container>
+          </div>
+          <ng-container *ngIf="editingId === seg.id; else tgtText">
+            <ng-container *ngTemplateOutlet="editBox; context: {sec: sec}"></ng-container>
+          </ng-container>
+          <ng-template #tgtText>
+            <span class="segtxt" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
+              <ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container>
+            </span>
+            <ng-container *ngIf="!seg.approved">
+              <ng-container *ngTemplateOutlet="findingBar; context: {sec: sec, seg: seg}"></ng-container>
+            </ng-container>
+          </ng-template>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- table group -->
+    <div class="tblwrap" *ngIf="g.type === 'table' && g.rows as rows">
+      <div class="tblborder">
+        <table>
+          <thead *ngIf="rows[0].head as head">
+            <tr>
+              <th class="h-src">{{ head.src }}</th>
+              <th class="h-tgt">{{ head.tgt }} <span class="soft">(target)</span></th>
+              <th class="h-num" *ngFor="let c of head.cols">{{ c }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let seg of rows; trackBy: trackSeg">
+              <tr class="datarow" [id]="'seg-' + seg.id" [class.focused]="focusSeg === seg.id" [class.bold]="seg.bold" (click)="focusSeg = seg.id">
+                <td class="tsrc">{{ seg.src }}<span class="note" *ngIf="seg.note">{{ seg.note }}</span></td>
+                <td class="ttgt">
+                  <ng-container *ngIf="editingId === seg.id; else cellText">
+                    <ng-container *ngTemplateOutlet="editBox; context: {sec: sec}"></ng-container>
+                  </ng-container>
+                  <ng-template #cellText>
+                    <span class="tgt-flex">
+                      <span class="txt"><ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container></span>
+                      <span class="end">
+                        <ng-container *ngTemplateOutlet="provBadge; context: {seg: seg}"></ng-container>
+                        <ng-container *ngTemplateOutlet="segActs; context: {sec: sec, seg: seg}"></ng-container>
+                      </span>
+                    </span>
+                  </ng-template>
+                </td>
+                <td class="lock" *ngFor="let v of seg.nums">
+                  <span class="lockspan" title="Locked — figure cells are never edited and never sent to the model">
+                    {{ v }}<svg width="8" height="9" viewBox="0 0 8 9" fill="none"><rect x="1" y="4" width="6" height="4.2" rx="1" fill="currentColor"/><path d="M2.3 4V2.8a1.7 1.7 0 013.4 0V4" stroke="currentColor" stroke-width="1"/></svg>
+                  </span>
+                </td>
+              </tr>
+              <tr *ngIf="seg.finding && !seg.approved && editingId !== seg.id">
+                <td class="findcell" [attr.colspan]="2 + (seg.nums?.length || 0)">
+                  <ng-container *ngTemplateOutlet="findingBar; context: {sec: sec, seg: seg}"></ng-container>
+                </td>
+              </tr>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+      <p class="locknote">
+        <svg width="8" height="9" viewBox="0 0 8 9" fill="none"><rect x="1" y="4" width="6" height="4.2" rx="1" fill="currentColor"/><path d="M2.3 4V2.8a1.7 1.7 0 013.4 0V4" stroke="currentColor" stroke-width="1"/></svg>
+        Figure cells are locked — verified against the source, never sent to the model. Only label cells are translated.
+      </p>
+    </div>
+  </ng-container>
+</ng-template>
+
+<!-- All-clear block (QA + export) -->
+<ng-template #allClearBlock let-compact="compact">
+  <div class="allclear" [class.compact]="compact">
+    <div class="ring">✓</div>
+    <h2>All clear</h2>
+    <p>No open findings. Numbers were compared against the source, glossary terms and do-not-translate names checked on every translated segment.</p>
+  </div>
+</ng-template>

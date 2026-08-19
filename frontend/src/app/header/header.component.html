@@ -111,6 +111,45 @@
     </div>
 
     <div
+      routerLink="/market-research"
+      matTooltip="Market Research"
+      matTooltipPosition="right"
+      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+    >
+      <div
+        *ngIf="router.isActive('/market-research', false)"
+        class="flex-1 h-14 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] rounded-full blur-[3px] backdrop-blur-md"
+      ></div>
+      <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
+        <button
+          matFab
+          aria-label="Market Research"
+          class="cursor-pointer w-6 h-6 left-0 top-0 absolute text-center justify-center text-neutral-200 text-2xl"
+        >
+          <mat-icon>insights</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <a
+      href="https://develop.virtualaudience.ai"
+      target="_blank"
+      rel="noopener"
+      matTooltip="Virtual Audience"
+      matTooltipPosition="right"
+      class="relative md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-[#342e26]/70 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
+    >
+      <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
+        <span
+          aria-label="Virtual Audience"
+          class="w-6 h-6 left-0 top-0 absolute text-center justify-center text-neutral-200 text-2xl"
+        >
+          <mat-icon>groups</mat-icon>
+        </span>
+      </div>
+    </a>
+
+    <div
       class="relative md:mb-[10px]"
       (mouseenter)="onToolsEnter()"
       (mouseleave)="onToolsLeave()"
@@ -226,19 +265,20 @@
 
 
         <div
-          routerLink="/data-query"
+          routerLink="/documents"
           class="cursor-pointer w-full h-12 bg-blend-soft-light bg-[#342e26]/70 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-[#4a4238]/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-[#403830]/80 transition-all"
         >
           <div
-            *ngIf="router.isActive('/data-query', true)"
+            *ngIf="router.isActive('/documents', true)"
             class="absolute inset-0 bg-gradient-to-r from-[#e2c8a8] via-[#d4b896] to-[#a8875f] opacity-80 blur-[3px] backdrop-blur-md"
           ></div>
 
           <div class="relative flex items-center px-4 w-full z-10">
-            <mat-icon class="text-neutral-300 mr-3">query_stats</mat-icon>
-            <span class="text-neutral-300 font-medium text-sm whitespace-nowrap">Data Query</span>
+            <mat-icon class="text-neutral-300 mr-3">description</mat-icon>
+            <span class="text-neutral-300 font-medium text-sm whitespace-nowrap">Documents</span>
           </div>
         </div>
+
 
         <div
           routerLink="/deep-research"

@@ -1,0 +1,26 @@
+<!--
+ Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ Market Research section shell: sub-nav + routed sub-view.
+-->
+<div class="mr-shell">
+  <nav class="mr-tabs">
+    <a
+      class="mr-tab"
+      routerLink="./ask"
+      routerLinkActive="active"
+    >
+      <mat-icon>query_stats</mat-icon>
+      Ask your data
+    </a>
+    <a
+      class="mr-tab"
+      routerLink="./manage"
+      routerLinkActive="active"
+    >
+      <mat-icon>dataset</mat-icon>
+      Data management
+    </a>
+  </nav>
+
+  <router-outlet></router-outlet>
+</div>

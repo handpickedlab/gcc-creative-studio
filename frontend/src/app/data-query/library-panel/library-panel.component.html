@@ -1,0 +1,64 @@
+<!--
+ Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0.
+ Research library panel: batch upload, status, tiers, and question scoping.
+-->
+<div class="dq-label lp-label">Research library</div>
+
+<button class="dq-btn ghost" (click)="docInput.click()" [disabled]="uploadsPending > 0">
+  <mat-icon>library_add</mat-icon>
+  Add documents
+</button>
+<input
+  #docInput
+  type="file"
+  accept=".pdf,.docx,.ppt,.pptx,.odp,.png,.jpg,.jpeg"
+  multiple
+  (change)="onFilesSelected($event)"
+  hidden
+/>
+<div class="dq-muted lp-pending" *ngIf="uploadsPending > 0">
+  uploading… {{ uploadsPending }} left
+</div>
+
+<div class="dq-muted lp-empty" *ngIf="!documents.length">no documents yet</div>
+
+<div
+  class="lp-doc"
+  *ngFor="let d of documents"
+  [class.off]="isOff(d)"
+  [class.disabled]="!isSearchable(d)"
+  (click)="toggle(d)"
+  [title]="isSearchable(d) ? 'click to toggle off' : statusDetail(d)"
+>
+  <div class="lp-row">
+    <mat-icon class="lp-status {{ d.status }}">{{ statusIcon(d) }}</mat-icon>
+    <span class="lp-name">{{ d.filename }}</span>
+  </div>
+  <div class="lp-row lp-meta">
+    <span class="dq-muted">{{ statusDetail(d) }}</span>
+    <span class="lp-actions" (click)="$event.stopPropagation()">
+      <select
+        class="lp-tier"
+        [value]="d.priorityTier"
+        (change)="setTier(d, $any($event.target).value)"
+        title="priority tier"
+      >
+        <option *ngFor="let t of tiers" [value]="t">{{ t }}</option>
+      </select>
+      <mat-icon
+        class="lp-act"
+        *ngIf="canReprocess(d)"
+        (click)="reprocess(d, $event)"
+        title="re-process"
+        >refresh</mat-icon
+      >
+      <mat-icon class="lp-act" (click)="delete(d, $event)" title="delete"
+        >delete</mat-icon
+      >
+    </span>
+  </div>
+</div>
+
+<div class="dq-muted dq-hint">
+  Click a document to exclude it from the next question.
+</div>

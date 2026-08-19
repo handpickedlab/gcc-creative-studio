@@ -1,0 +1,91 @@
+/* Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0. */
+/* Research library panel — inherits the data-query noir variables from :host context. */
+
+:host {
+  display: block;
+}
+
+.lp-label {
+  margin-top: 18px;
+}
+
+.lp-pending {
+  font-size: 11.5px;
+  margin: 9px 0;
+}
+
+.lp-empty {
+  margin-top: 8px;
+}
+
+.lp-doc {
+  background: var(--surface);
+  border: 1.5px solid var(--border-lt);
+  border-radius: var(--r);
+  padding: 8px 11px;
+  font-size: 12.5px;
+  margin-top: 7px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.lp-doc:hover { border-color: var(--border); }
+.lp-doc.off { opacity: 0.4; }
+.lp-doc.off .lp-name { text-decoration: line-through; }
+.lp-doc.disabled { cursor: default; opacity: 0.65; }
+
+.lp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lp-meta {
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.lp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.lp-status {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.lp-status.completed { color: #8aa87a; }
+.lp-status.completed_with_errors { color: var(--accent); }
+.lp-status.processing { color: var(--text-m); }
+.lp-status.failed,
+.lp-status.rejected { color: var(--bad); }
+
+.lp-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.lp-tier {
+  background: var(--bg-sub);
+  color: var(--text-m);
+  border: 1px solid var(--border-lt);
+  border-radius: var(--r);
+  font: inherit;
+  font-size: 10.5px;
+  padding: 2px 4px;
+}
+.lp-tier:focus { outline: none; border-color: var(--accent); }
+
+.lp-act {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-s);
+  cursor: pointer;
+}
+.lp-act:hover { color: var(--text); }

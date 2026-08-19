@@ -21,6 +21,10 @@ class GlossaryTermCreateDto(BaseModel):
     language: str = Field(description="Target language this entry applies to.")
     source: str = Field(description="The source word/term to match.")
     target: str = Field(description="The fixed translation to always use.")
+    domain: str = Field(
+        default="marketing",
+        description="'marketing' for campaign copy, 'financial' for reports.",
+    )
 
 
 class GlossaryTermUpdateDto(BaseModel):
@@ -29,6 +33,7 @@ class GlossaryTermUpdateDto(BaseModel):
     language: str | None = Field(default=None, description="New target language.")
     source: str | None = Field(default=None, description="New source word/term.")
     target: str | None = Field(default=None, description="New fixed translation.")
+    domain: str | None = Field(default=None, description="New domain.")
 
 
 class TranslateRequestDto(BaseModel):

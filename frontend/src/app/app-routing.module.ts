@@ -20,6 +20,9 @@ import {AdminAuthGuard} from './admin/admin-auth.guard';
 import {AudioComponent} from './audio/audio.component';
 import {AuthGuardService} from './common/services/auth.guard.service';
 import {DataQueryComponent} from './data-query/data-query.component';
+import {DataSourcesComponent} from './data-query/data-sources/data-sources.component';
+import {MarketResearchComponent} from './market-research/market-research.component';
+import {DataManagementComponent} from './market-research/data-management/data-management.component';
 import {DeepResearchComponent} from './deep-research/deep-research.component';
 import {FunTemplatesComponent} from './fun-templates/fun-templates.component';
 import {MediaDetailComponent} from './gallery/media-detail/media-detail.component';
@@ -27,6 +30,7 @@ import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.compo
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {TranslationsComponent} from './translations/translations.component';
+import {DocumentsComponent} from './documents/documents.component';
 import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
@@ -56,10 +60,23 @@ const routes: Routes = [
     canActivate: [AuthGuardService],
   },
   {
-    path: 'data-query',
-    component: DataQueryComponent,
+    path: 'documents',
+    component: DocumentsComponent,
     canActivate: [AuthGuardService],
   },
+  {
+    path: 'market-research',
+    component: MarketResearchComponent,
+    canActivate: [AuthGuardService],
+    children: [
+      {path: '', redirectTo: 'ask', pathMatch: 'full'},
+      {path: 'ask', component: DataQueryComponent},
+      {path: 'manage', component: DataManagementComponent},
+    ],
+  },
+  // Backwards-compatible redirects for the old standalone routes.
+  {path: 'data-query', redirectTo: 'market-research/ask'},
+  {path: 'data-sources', redirectTo: 'market-research/manage'},
   {
     path: 'workbench',
     component: WorkbenchComponent,

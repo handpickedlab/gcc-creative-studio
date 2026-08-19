@@ -75,6 +75,7 @@ import {AppRoutingModule} from './app-routing.module';
 import {AppComponent} from './app.component';
 import {AudioComponent} from './audio/audio.component';
 import {AuthInterceptor} from './auth.interceptor';
+import {ColdStartInterceptor} from './cold-start.interceptor';
 import {DeepResearchComponent} from './deep-research/deep-research.component';
 
 import {FlowPromptBoxComponent} from './common/components/flow-prompt-box/flow-prompt-box.component';
@@ -93,8 +94,16 @@ import {HeaderComponent} from './header/header.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {DataQueryComponent} from './data-query/data-query.component';
+import {DataSourcesComponent} from './data-query/data-sources/data-sources.component';
+import {MarketResearchComponent} from './market-research/market-research.component';
+import {DataManagementComponent} from './market-research/data-management/data-management.component';
+import {LibraryPanelComponent} from './data-query/library-panel/library-panel.component';
+import {SlideViewerComponent} from './data-query/slide-viewer/slide-viewer.component';
 import {TranslationsComponent} from './translations/translations.component';
 import {TranslatorFeedbackComponent} from './translator-feedback/translator-feedback.component';
+import {DocumentsComponent} from './documents/documents.component';
+import {DocTreeComponent} from './documents/doc-tree/doc-tree.component';
+import {GlossHlPipe} from './documents/gloss-hl.pipe';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
 import {WorkbenchComponent} from './workbench/workbench.component';
@@ -146,8 +155,16 @@ import {UpscaleComponent} from './upscale/upscale.component';
     BatchExecutionModalComponent,
     UpscaleComponent,
     DataQueryComponent,
+    DataSourcesComponent,
+    MarketResearchComponent,
+    DataManagementComponent,
+    LibraryPanelComponent,
+    SlideViewerComponent,
     TranslationsComponent,
     TranslatorFeedbackComponent,
+    DocumentsComponent,
+    DocTreeComponent,
+    GlossHlPipe,
   ],
   imports: [
     BrowserModule,
@@ -213,6 +230,7 @@ import {UpscaleComponent} from './upscale/upscale.component';
       provide: UserTrackingService, // Automatically track user interactions
     },
     {provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true},
+    {provide: HTTP_INTERCEPTORS, useClass: ColdStartInterceptor, multi: true},
   ],
   bootstrap: [AppComponent],
 })

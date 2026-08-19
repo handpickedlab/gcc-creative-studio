@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {HttpClient, HttpEvent, HttpEventType} from '@angular/common/http';
+import {HttpClient} from '@angular/common/http';
 import {Injectable} from '@angular/core';
 import {Observable} from 'rxjs';
 import {environment} from '../../environments/environment';
@@ -32,6 +32,18 @@ export interface SourceTable {
   n_rows: number | null;
 }
 
+/** A durably-cataloged uploaded sheet (manage page). */
+export interface SheetInfo {
+  id: number;
+  tableName: string;
+  sourceFile: string;
+  sheet: string | null;
+  nRows: number | null;
+  nCols: number | null;
+  columns: string[];
+  createdAt?: string;
+}
+
 export interface SqlResult {
   columns?: string[];
   rows?: Record<string, unknown>[];
@@ -40,15 +52,35 @@ export interface SqlResult {
   error?: string;
 }
 
-/** One event from the streaming agent. */
-export interface AgentEvent {
-  t: 'tool' | 'tool_result' | 'text' | 'error' | 'done';
-  v?: string;
+/** A citation behind a research-library fact in the answer. */
+export interface ClaimSource {
+  claim_id: number;
+  document_id: number;
+  document: string;
+  page: number;
+  statement?: string;
+  period?: string | null;
+  source_citation?: string | null;
+}
+
+/** One assembled step of the agent's trace: narrated text or a tool call. */
+export interface AgentStep {
+  kind: 'text' | 'tool';
+  text?: string;
   name?: string;
   input?: Record<string, unknown>;
   summary?: string;
   result?: SqlResult | null;
-  message?: string;
+}
+
+/** A background ask run: kicked off by POST /ask, polled via GET /ask/{id}. */
+export interface DataQueryRun {
+  id: string;
+  status: 'processing' | 'completed' | 'failed';
+  question: string;
+  steps: AgentStep[];
+  answerSources: ClaimSource[];
+  errorMessage?: string | null;
 }
 
 @Injectable({providedIn: 'root'})
@@ -64,52 +96,43 @@ export class DataQueryService {
     return this.http.post<{loaded: LoadedTable[]}>(`${this.baseUrl}/upload`, form);
   }
 
-  /** List the uploaded tables. */
+  /** List the uploaded tables (lightweight, for the query sidebar). */
   sources(): Observable<{tables: SourceTable[]}> {
     return this.http.get<{tables: SourceTable[]}>(`${this.baseUrl}/sources`);
   }
 
+  /** List uploaded sheets with metadata (manage page). */
+  sheets(): Observable<SheetInfo[]> {
+    return this.http.get<SheetInfo[]>(`${this.baseUrl}/sheets`);
+  }
+
+  /** Delete an uploaded sheet (catalog row + warehouse table + raw file). */
+  deleteSheet(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/sheets/${id}`);
+  }
+
   /**
-   * Ask a question; emits the agent's events live (tool calls, results, answer).
-   * Uses HttpClient download-progress so the auth interceptor still applies — no
-   * manual token handling needed. Parses the server-sent-events frames as they
-   * accumulate in `partialText`.
+   * Kick off a background ask; returns the run immediately (status
+   * ``processing``). Deep retrieval can outlast the hosting rewrite's ~60s
+   * timeout on a buffered stream, so the answer is built server-side and the
+   * caller polls {@link getRun} for accumulating steps + the final answer.
    */
-  ask(question: string, allowedTables: string[] | null): Observable<AgentEvent> {
-    const req = this.http.post(
-      `${this.baseUrl}/ask`,
-      {question, allowed_tables: allowedTables},
-      {observe: 'events', responseType: 'text', reportProgress: true},
-    );
-    return new Observable<AgentEvent>(sub => {
-      let seen = 0;
-      const emitFrames = (text: string) => {
-        let idx: number;
-        while ((idx = text.indexOf('\n\n', seen)) >= 0) {
-          const frame = text.slice(seen, idx);
-          seen = idx + 2;
-          const line = frame.split('\n').find(l => l.startsWith('data:'));
-          if (!line) continue;
-          try {
-            sub.next(JSON.parse(line.slice(5).trim()) as AgentEvent);
-          } catch {
-            // ignore partial / malformed frame
-          }
-        }
-      };
-      const inner = req.subscribe({
-        next: (ev: HttpEvent<string>) => {
-          if (ev.type === HttpEventType.DownloadProgress) {
-            emitFrames(((ev as {partialText?: string}).partialText) ?? '');
-          } else if (ev.type === HttpEventType.Response) {
-            if (typeof ev.body === 'string') emitFrames(ev.body);
-            sub.complete();
-          }
-        },
-        error: err => sub.error(err),
-        complete: () => sub.complete(),
-      });
-      return () => inner.unsubscribe();
+  startAsk(
+    question: string,
+    allowedTables: string[] | null,
+    allowedDocuments: number[] | null = null,
+    history: {question: string; answer: string}[] = [],
+  ): Observable<DataQueryRun> {
+    return this.http.post<DataQueryRun>(`${this.baseUrl}/ask`, {
+      question,
+      history,
+      allowed_tables: allowedTables,
+      allowed_documents: allowedDocuments,
     });
+  }
+
+  /** Fetch a run's current state (poll this until status !== 'processing'). */
+  getRun(id: string): Observable<DataQueryRun> {
+    return this.http.get<DataQueryRun>(`${this.baseUrl}/ask/${id}`);
   }
 }

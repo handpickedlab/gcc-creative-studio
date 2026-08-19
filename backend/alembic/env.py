@@ -21,14 +21,28 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from src.database import Base, get_conn_string
+from src.data_query.schema.data_query_sheet_model import (
+    DataQuerySheet,
+)  # Import to ensure registered with Base.metadata
 from src.deep_research.schema.deep_research_model import (
     DeepResearchReport,
+)  # Import to ensure registered with Base.metadata
+from src.research_library.schema.research_document_model import (
+    ResearchClaim,
+    ResearchDocument,
+    ResearchDocumentPage,
+    TagAlias,
 )  # Import to ensure registered with Base.metadata
 from src.tags.schema.tags_model import (
     Tag,
 )  # Import to ensure registered with Base.metadata
 from src.translations.schema.language_config_model import (
     TranslationLanguageConfig,
+)  # Import to ensure registered with Base.metadata
+from src.translations.documents.schema.document_translation_model import (
+    DocumentTranslationJob,
+    DocumentTranslationMemory,
+    DocumentTranslationSegment,
 )  # Import to ensure registered with Base.metadata
 
 # this is the Alembic Config object, which provides

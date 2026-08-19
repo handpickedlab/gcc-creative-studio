@@ -23,8 +23,9 @@ logger = logging.getLogger(__name__)
 # Register SQLAlchemy event listeners
 from src.common import events  # noqa: F401
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from os import getenv
 
 from fastapi import FastAPI, Request, status
@@ -48,6 +49,13 @@ from src.media_templates.media_templates_controller import (
     router as media_template_router,
 )
 from src.multimodal.gemini_controller import router as gemini_router
+from src.research_library import config as research_library_config
+from src.research_library.research_library_controller import (
+    router as research_library_router,
+)
+from src.translations.documents.controller import (
+    router as document_translations_router,
+)
 from src.source_assets.source_asset_controller import (
     router as source_asset_router,
 )
@@ -129,13 +137,17 @@ async def lifespan(app: FastAPI):
         # We might want to stop startup here if migrations fail
         raise e
 
-    # Seed the default glossary once (guarded by a flag inside the seeder).
+    # Seed the glossaries once (each guarded by a flag inside the seeder).
     try:
         from src.database import async_session_local
-        from src.translations.glossary_seed import seed_default_glossary
+        from src.translations.glossary_seed import (
+            seed_default_glossary,
+            seed_financial_glossary,
+        )
 
         async with async_session_local() as session:
             await seed_default_glossary(session)
+            await seed_financial_glossary(session)
     except Exception as e:
         logger.error(f"Failed to seed default glossary: {e}")
 
@@ -143,12 +155,36 @@ async def lifespan(app: FastAPI):
     # Create the pool and attach it to the app's state
     app.state.executor = ThreadPoolExecutor(max_workers=4)
 
+    logger.info("Creating research library ingest ThreadPoolExecutor...")
+    # Dedicated pool so a bulk research-library ingest run can't starve
+    # other background jobs (video, brand guidelines, ...) on the shared one.
+    app.state.research_ingest_executor = ThreadPoolExecutor(
+        max_workers=research_library_config.INGEST_WORKERS,
+    )
+
+    logger.info("Starting research library stalled-ingest sweeper...")
+    # The executor queue dies with the instance, so documents left in
+    # PROCESSING are re-queued from the database instead of being lost.
+    from src.research_library.ingest.stalled_sweeper import run_sweeper_loop
+
+    app.state.research_sweeper_task = asyncio.create_task(
+        run_sweeper_loop(app.state.research_ingest_executor),
+    )
+
     yield
 
     logger.info("Application shutdown terminating")
 
     logger.info("Closing ThreadPoolExecutor...")
     app.state.executor.shutdown(wait=True)
+
+    logger.info("Stopping research library stalled-ingest sweeper...")
+    app.state.research_sweeper_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await app.state.research_sweeper_task
+
+    logger.info("Closing research library ingest ThreadPoolExecutor...")
+    app.state.research_ingest_executor.shutdown(wait=True)
     # Your shutdown logic here, e.g., closing database connections
 
 
@@ -213,3 +249,5 @@ app.include_router(briefings_router)
 app.include_router(feedback_router)
 app.include_router(public_feedback_router)
 app.include_router(data_query_router)
+app.include_router(research_library_router)
+app.include_router(document_translations_router)

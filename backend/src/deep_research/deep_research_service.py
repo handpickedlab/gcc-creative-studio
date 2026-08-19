@@ -41,6 +41,7 @@ from src.deep_research.dto.intake_schema_dto import (
     IntakeStepDto,
 )
 from src.deep_research.dto.start_deep_research_dto import StartDeepResearchDto
+from src.deep_research.errors import describe_exception
 from src.deep_research.repository.deep_research_repository import (
     DeepResearchRepository,
 )
@@ -169,12 +170,16 @@ def _run_deep_research_in_background(
                         )
                     except Exception as e:
                         flusher.cancel()
+                        # ADK's ParallelAgent surfaces a researcher's failure as an
+                        # opaque "unhandled errors in a task group"; unwrap it to
+                        # the real cause for the report and the (full) log.
+                        cause = describe_exception(e)
                         worker_logger.error(
                             "Deep research pipeline failed.",
                             extra={
                                 "json_fields": {
                                     "report_id": report_id,
-                                    "error": str(e),
+                                    "error": cause,
                                 },
                             },
                             exc_info=True,
@@ -183,7 +188,7 @@ def _run_deep_research_in_background(
                             report_id,
                             {
                                 "status": JobStatusEnum.FAILED,
-                                "error_message": str(e),
+                                "error_message": cause,
                                 "progress": list(steps),
                             },
                         )
@@ -345,10 +350,11 @@ class DeepResearchService:
                     }
                 )
             except Exception as e:
+                cause = describe_exception(e)
                 logger.error(
                     "Deep research stream failed for %s: %s",
                     report_id,
-                    e,
+                    cause,
                     exc_info=True,
                 )
                 try:
@@ -357,13 +363,13 @@ class DeepResearchService:
                             report_id,
                             {
                                 "status": JobStatusEnum.FAILED,
-                                "error_message": str(e),
+                                "error_message": cause,
                             },
                         )
                 except Exception:
                     pass
                 queue.put_nowait(
-                    {"t": "error", "id": report_id, "message": str(e)}
+                    {"t": "error", "id": report_id, "message": cause}
                 )
             finally:
                 queue.put_nowait(None)

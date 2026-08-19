@@ -1,0 +1,54 @@
+/* Copyright 2026 Google LLC — Licensed under the Apache License, Version 2.0. */
+/* Market Research shell — floating sub-nav that clears the nav rail. */
+
+:host {
+  --surface: #2a251d;
+  --surf-h: #342e26;
+  --border: #403830;
+  --border-lt: #34302a;
+  --text: #f0e8df;
+  --text-m: #9a8a7a;
+  --accent: #d4b896;
+  display: block;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* Offset the whole section below the fixed workspace switcher / top chrome
+   (padding, not margin, to avoid margin-collapse with the child). */
+.mr-shell { padding-top: 10vh; }
+
+.mr-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 5vw 14px max(calc(5vw + 4.5rem), 2rem);
+}
+
+.mr-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border-lt);
+  background: var(--surface);
+  color: var(--text-m);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mr-tab:hover { background: var(--surf-h); color: var(--text); }
+.mr-tab mat-icon { font-size: 17px; width: 17px; height: 17px; }
+.mr-tab.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: #19160f;
+}
+
+/* The tab bar already provides the top offset; the routed child sits
+   directly under it (children keep their own left margin to clear the rail). */
+.mr-shell ::ng-deep .dq-wrap,
+.mr-shell ::ng-deep .dm-wrap {
+  margin-top: 0;
+}

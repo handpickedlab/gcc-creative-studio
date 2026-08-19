@@ -4,7 +4,7 @@ Per-language localization profiles (formality, casing preservation, free-text
 guidance). Additive only.
 
 Revision ID: b2c3d4e5f6a7
-Revises: e2f3a4b5c6d7
+Revises: a1b2c3d4e5f7
 Create Date: 2026-07-09
 """
 
@@ -14,7 +14,9 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b2c3d4e5f6a7"
-down_revision: Union[str, None] = "e2f3a4b5c6d7"
+# Chained after the data-query/research-library migrations (develop) so the
+# integrated branch has a single linear alembic head.
+down_revision: Union[str, None] = "a1b2c3d4e5f7"
 branch_labels = None
 depends_on = None
 

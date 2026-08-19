@@ -44,21 +44,25 @@ class TranslationService:
 
     # --- Glossary CRUD ---------------------------------------------------
 
-    async def list_terms(self) -> list[GlossaryTermModel]:
-        return await self.repo.find_all(limit=1000)
+    async def list_terms(
+        self, domain: str | None = None
+    ) -> list[GlossaryTermModel]:
+        if domain:
+            return await self.repo.find_by_domain(domain)
+        return await self.repo.find_all(limit=2000)
 
     async def create_term(
         self, dto: GlossaryTermCreateDto
     ) -> GlossaryTermModel:
         existing = await self.repo.get_by_language_and_source(
-            dto.language, dto.source
+            dto.language, dto.source, dto.domain
         )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     f"A glossary term for '{dto.source}' already exists "
-                    f"in the {dto.language} dictionary."
+                    f"in the {dto.language} {dto.domain} dictionary."
                 ),
             )
         return await self.repo.create(dto)

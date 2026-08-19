@@ -34,6 +34,7 @@ from functools import cached_property
 
 from google.adk.models import Gemini
 from google.genai import Client
+from google.genai.types import HttpOptions, HttpRetryOptions
 
 from src.common.vertex_credentials import (
     get_vertex_credentials,
@@ -41,6 +42,12 @@ from src.common.vertex_credentials import (
 )
 
 from . import config
+
+# Retry transient failures rather than let one abort the whole run: rate limits
+# (429), server-side hiccups (5xx) and timeouts are the ones worth retrying, and
+# grounded search fans out enough concurrent calls that they show up regularly.
+# httpx timeouts/connect errors are retried by google-genai regardless of code.
+_RETRY_STATUS_CODES = [408, 429, 500, 502, 503, 504]
 
 
 class ScopedVertexGemini(Gemini):
@@ -58,6 +65,14 @@ class ScopedVertexGemini(Gemini):
             project=get_vertex_project(),
             location=config.VERTEX_LOCATION,
             credentials=get_vertex_credentials(),
+            # Without this google-genai never retries (stop_after_attempt(1)), so
+            # a single 429/5xx in any parallel researcher sinks the whole run.
+            http_options=HttpOptions(
+                retry_options=HttpRetryOptions(
+                    attempts=config.RETRY_ATTEMPTS,
+                    http_status_codes=_RETRY_STATUS_CODES,
+                )
+            ),
         )
 
 
