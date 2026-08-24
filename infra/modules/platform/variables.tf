@@ -87,3 +87,15 @@ variable "backend_runtime_secrets" {
   description = "Secrets to mount in the backend container at runtime."
   default     = {}
 }
+
+variable "db_tier" {
+  type        = string
+  description = "Cloud SQL machine type passed to the postgresql module."
+  default     = "db-g1-small"
+}
+
+variable "db_edition" {
+  type        = string
+  description = "Cloud SQL edition passed to the postgresql module."
+  default     = "ENTERPRISE"
+}
