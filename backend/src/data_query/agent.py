@@ -94,8 +94,9 @@ back for clear questions: do the work first, clarify only as a last resort.
 
 Tool guidance:
 - `search_claims` results are ranked by relevance × the document's priority
-  tier × recency (newer documents rank higher); prefer primary and recent
-  sources when they disagree.
+  tier × recency (newer content ranks higher). A user-set recency cutoff,
+  if any, is already applied server-side — older editions will not appear.
+  Prefer primary and recent sources when they disagree.
 - `run_sql` is a single read-only SELECT/WITH. NEVER guess or invent column
   names — call `describe_table` and use ONLY the exact columns and values it
   returns (it lists each column's distinct values under `categories`). If a
@@ -229,7 +230,8 @@ _TOOLS = [
 
 
 def _dispatch(name, args, allowed, claim_search=None,
-              allowed_documents=None, list_tags=None, list_facets=None):
+              allowed_documents=None, list_tags=None, list_facets=None,
+              min_period=None):
     if name == "list_tables":
         ts = store.list_tables()
         return [t for t in ts if allowed is None or t["table"] in allowed]
@@ -250,9 +252,10 @@ def _dispatch(name, args, allowed, claim_search=None,
             tags=args.get("tags"),
             period=args.get("period"),
             geography=args.get("geography"),
-            # allowed_documents is enforced server-side from the request DTO,
-            # never trusted from the model's own arguments.
+            # allowed_documents and min_period are enforced server-side from
+            # the request DTO, never trusted from the model's own arguments.
             allowed_documents=allowed_documents,
+            min_period=min_period,
             max_results=int(args.get("max_results") or 10),
         )
     if name == "list_tags":
@@ -313,7 +316,7 @@ def _collect_sources(sources, out):
 
 def stream_answer(client: Client, model: str, question: str, allowed=None,
                   claim_search=None, allowed_documents=None, history=None,
-                  list_tags=None, list_facets=None):
+                  list_tags=None, list_facets=None, min_period=None):
     """Run the function-calling loop, yielding event dicts:
     {t:'tool',name,input}, {t:'tool_result',name,summary,result}, {t:'text',v},
     {t:'sources',v} (citations for search_claims facts), {t:'done'}.
@@ -374,7 +377,8 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
                             claim_search=claim_search,
                             allowed_documents=allowed_documents,
                             list_tags=list_tags,
-                            list_facets=list_facets)
+                            list_facets=list_facets,
+                            min_period=min_period)
             if fc.name == "search_claims" and isinstance(out, dict):
                 _collect_sources(sources, out)
             yield {"t": "tool_result", "name": fc.name,

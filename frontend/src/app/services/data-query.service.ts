@@ -122,12 +122,14 @@ export class DataQueryService {
     allowedTables: string[] | null,
     allowedDocuments: number[] | null = null,
     history: {question: string; answer: string}[] = [],
+    minPeriod: string | null = null,
   ): Observable<DataQueryRun> {
     return this.http.post<DataQueryRun>(`${this.baseUrl}/ask`, {
       question,
       history,
       allowed_tables: allowedTables,
       allowed_documents: allowedDocuments,
+      min_period: minPeriod,
     });
   }
 

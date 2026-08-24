@@ -166,6 +166,7 @@ class DataQueryService:
         allowed_tables: list[str] | None = None,
         allowed_documents: list[int] | None = None,
         history: list[dict] | None = None,
+        min_period: str | None = None,
     ) -> Iterator[dict]:
         """Yield the agent's streaming events. Callers must `await
         ensure_loaded()` before iterating so the DuckDB warehouse is current.
@@ -187,6 +188,7 @@ class DataQueryService:
             history=history,
             list_tags=claim_search_service.list_tags_sync,
             list_facets=claim_search_service.list_facets_sync,
+            min_period=min_period,
         )
 
     # ── background ask (poll model) ─────────────────────────────────
@@ -196,6 +198,7 @@ class DataQueryService:
         allowed_tables: list[str] | None = None,
         allowed_documents: list[int] | None = None,
         history: list[dict] | None = None,
+        min_period: str | None = None,
     ) -> DataQueryRunModel:
         """Create a run row and kick the agent off in the background.
 
@@ -208,7 +211,12 @@ class DataQueryService:
         )
         task = asyncio.create_task(
             self._run_ask(
-                run.id, question, allowed_tables, allowed_documents, history
+                run.id,
+                question,
+                allowed_tables,
+                allowed_documents,
+                history,
+                min_period,
             )
         )
         _ASK_TASKS.add(task)
@@ -227,6 +235,7 @@ class DataQueryService:
         allowed_tables: list[str] | None,
         allowed_documents: list[int] | None,
         history: list[dict] | None,
+        min_period: str | None,
     ) -> None:
         """Background worker: run the agent, assemble the trace, and persist it.
 
@@ -255,6 +264,7 @@ class DataQueryService:
                 history=history,
                 list_tags=claim_search_service.list_tags_sync,
                 list_facets=claim_search_service.list_facets_sync,
+                min_period=min_period,
             ):
                 t = ev.get("t")
                 if t == "tool":

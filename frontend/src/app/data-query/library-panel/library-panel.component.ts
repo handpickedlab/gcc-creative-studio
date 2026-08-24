@@ -25,6 +25,21 @@ import {
 } from '../../services/research-library.service';
 import {handleErrorSnackbar} from '../../utils/handleMessageSnackbar';
 
+export type RecencyPreset = 'all' | '12m' | '24m' | '2024' | '2025';
+
+/** Maps a sidebar recency preset onto the YYYY-MM key claim search filters on. */
+export function minPeriodFor(
+  preset: RecencyPreset,
+  now = new Date(),
+): string | null {
+  if (preset === 'all') return null;
+  if (preset === '2024') return '2024-00';
+  if (preset === '2025') return '2025-00';
+  const months = preset === '12m' ? 12 : 24;
+  const from = new Date(now.getFullYear(), now.getMonth() - months, 1);
+  return `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}`;
+}
+
 /**
  * Sidebar panel for the research document library: batch upload, per-document
  * status/tier management, and toggling documents in/out of the next question
@@ -41,13 +56,31 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
    * every document participates, otherwise the non-excluded ids.
    */
   @Output() allowedDocumentsChange = new EventEmitter<number[] | null>();
+  /**
+   * Sortable YYYY-MM cutoff for the next question, or null when every
+   * vintage participates. Enforced server-side on claim search.
+   */
+  @Output() minPeriodChange = new EventEmitter<string | null>();
 
   documents: ResearchDocument[] = [];
   uploadsPending = 0;
 
   readonly tiers: PriorityTier[] = ['primary', 'supporting', 'background'];
+  readonly recencyOptions: {id: RecencyPreset; label: string}[] = [
+    {id: 'all', label: 'All years'},
+    {id: '12m', label: 'Last 12 months'},
+    {id: '24m', label: 'Last 2 years'},
+    {id: '2024', label: 'Since 2024'},
+    {id: '2025', label: 'Since 2025'},
+  ];
+  recency: RecencyPreset = 'all';
 
   private readonly off = new Set<number>();
+  /**
+   * Local tier writes that must survive a poll. A GET that left before the
+   * PATCH committed would otherwise snap the dropdown back to the old value.
+   */
+  private readonly stickyTiers = new Map<number, PriorityTier>();
   private poller: Subscription | null = null;
 
   constructor(
@@ -66,11 +99,22 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
   refresh(): void {
     this.service.list().subscribe({
       next: r => {
-        this.documents = r.data ?? [];
+        const incoming = r.data ?? [];
+        for (const doc of incoming) {
+          const sticky = this.stickyTiers.get(doc.id);
+          if (!sticky) continue;
+          if (doc.priorityTier === sticky) this.stickyTiers.delete(doc.id);
+          else doc.priorityTier = sticky;
+        }
+        this.documents = incoming;
         this.syncPolling();
       },
       error: () => {},
     });
+  }
+
+  trackById(_index: number, doc: ResearchDocument): number {
+    return doc.id;
   }
 
   // ── upload ─────────────────────────────────────────────────────
@@ -99,10 +143,27 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
 
   // ── management ─────────────────────────────────────────────────
   setTier(doc: ResearchDocument, tier: string): void {
-    this.service.updateTier(doc.id, tier as PriorityTier).subscribe({
-      next: updated => Object.assign(doc, updated),
-      error: err => handleErrorSnackbar(this.snackBar, err, 'Tier'),
+    const next = tier as PriorityTier;
+    if (doc.priorityTier === next && !this.stickyTiers.has(doc.id)) return;
+    const previous = doc.priorityTier;
+    doc.priorityTier = next;
+    this.stickyTiers.set(doc.id, next);
+    this.service.updateTier(doc.id, next).subscribe({
+      next: updated => {
+        Object.assign(doc, updated);
+        doc.priorityTier = this.stickyTiers.get(doc.id) ?? doc.priorityTier;
+      },
+      error: err => {
+        this.stickyTiers.delete(doc.id);
+        doc.priorityTier = previous;
+        handleErrorSnackbar(this.snackBar, err, 'Tier');
+      },
     });
+  }
+
+  setRecency(preset: RecencyPreset): void {
+    this.recency = preset;
+    this.minPeriodChange.emit(minPeriodFor(preset));
   }
 
   delete(doc: ResearchDocument, ev: MouseEvent): void {

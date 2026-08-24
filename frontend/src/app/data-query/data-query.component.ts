@@ -68,6 +68,8 @@ export class DataQueryComponent implements OnInit, OnDestroy {
   viewerSource: ClaimSource | null = null;
   /** Document whitelist emitted by the library panel (null = all). */
   allowedDocuments: number[] | null = null;
+  /** YYYY-MM recency cutoff from the library panel (null = all years). */
+  minPeriod: string | null = null;
 
   private poll?: Subscription;
   @ViewChild('pendingAnchor') private pendingAnchor?: ElementRef<HTMLElement>;
@@ -171,7 +173,7 @@ export class DataQueryComponent implements OnInit, OnDestroy {
     }));
 
     this.service
-      .startAsk(q, allowed, this.allowedDocuments, history)
+      .startAsk(q, allowed, this.allowedDocuments, history, this.minPeriod)
       .subscribe({
         next: run => this.startPolling(run.id),
         error: err => {

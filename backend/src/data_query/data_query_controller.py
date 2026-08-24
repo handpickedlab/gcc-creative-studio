@@ -107,6 +107,7 @@ async def ask(body: AskRequestDto, service: DataQueryService = Depends()):
         body.allowed_tables,
         body.allowed_documents,
         history=history,
+        min_period=body.min_period,
     )
 
 

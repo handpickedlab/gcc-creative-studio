@@ -70,6 +70,16 @@
   gap: 5px;
 }
 
+.lp-recency {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.lp-recency label { font-size: 11px; }
+.lp-recency-select { flex: 1; min-width: 0; }
+
 .lp-tier {
   background: var(--bg-sub);
   color: var(--text-m);

@@ -4,6 +4,19 @@
 -->
 <div class="dq-label lp-label">Research library</div>
 
+<div class="lp-recency">
+  <label class="dq-muted" for="lp-recency">Recency</label>
+  <select
+    id="lp-recency"
+    class="lp-tier lp-recency-select"
+    [ngModel]="recency"
+    (ngModelChange)="setRecency($event)"
+    title="Only search claims from this period onward"
+  >
+    <option *ngFor="let o of recencyOptions" [value]="o.id">{{ o.label }}</option>
+  </select>
+</div>
+
 <button class="dq-btn ghost" (click)="docInput.click()" [disabled]="uploadsPending > 0">
   <mat-icon>library_add</mat-icon>
   Add documents
@@ -24,7 +37,7 @@
 
 <div
   class="lp-doc"
-  *ngFor="let d of documents"
+  *ngFor="let d of documents; trackBy: trackById"
   [class.off]="isOff(d)"
   [class.disabled]="!isSearchable(d)"
   (click)="toggle(d)"
@@ -39,8 +52,8 @@
     <span class="lp-actions" (click)="$event.stopPropagation()">
       <select
         class="lp-tier"
-        [value]="d.priorityTier"
-        (change)="setTier(d, $any($event.target).value)"
+        [ngModel]="d.priorityTier"
+        (ngModelChange)="setTier(d, $event)"
         title="priority tier"
       >
         <option *ngFor="let t of tiers" [value]="t">{{ t }}</option>
@@ -60,5 +73,6 @@
 </div>
 
 <div class="dq-muted dq-hint">
-  Click a document to exclude it from the next question.
+  Click a document to exclude it from the next question. Recency and
+  tiers apply to the next question.
 </div>

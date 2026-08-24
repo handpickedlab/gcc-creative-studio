@@ -114,6 +114,29 @@ class TestHybridAgent:
 
         assert claim_search.call_args.kwargs["allowed_documents"] == [7]
 
+    def test_min_period_comes_from_server_not_model(self):
+        client = MagicMock()
+        client.models.generate_content.side_effect = [
+            _tool_response(
+                "search_claims",
+                {"query": "x", "min_period": "2019-00"},
+            ),
+            _text_response("done"),
+        ]
+        claim_search = MagicMock(return_value={"count": 0, "results": []})
+
+        list(
+            stream_answer(
+                client,
+                "gemini-test",
+                "vraag",
+                claim_search=claim_search,
+                min_period="2025-00",
+            ),
+        )
+
+        assert claim_search.call_args.kwargs["min_period"] == "2025-00"
+
     def test_sheet_only_flow_has_no_sources_event(self):
         client = MagicMock()
         client.models.generate_content.side_effect = [

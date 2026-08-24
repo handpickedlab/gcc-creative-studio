@@ -78,6 +78,8 @@ WHERE d.deleted_at IS NULL
   AND (CAST(:tags AS text[]) IS NULL
        OR jsonb_exists_any(c.canonical_tags, CAST(:tags AS text[]))
        OR jsonb_exists_any(c.raw_tags, CAST(:tags AS text[])))
+  AND (CAST(:min_period AS text) IS NULL
+       OR COALESCE(c.period_key, d.vintage_key) >= CAST(:min_period AS text))
 ORDER BY c.embedding <=> CAST(:query_embedding AS vector)
 LIMIT :pool
 """
@@ -98,13 +100,17 @@ def search_claims_sync(
     geography: str | None = None,
     allowed_documents: list[int] | None = None,
     max_results: int = 8,
+    min_period: str | None = None,
 ) -> dict[str, Any]:
     """Searches the claim library; safe to call from the sync agent loop."""
     max_results = max(1, min(int(max_results or 8), 25))
     # geography/period are soft hints: fold them into the embedded query text
     # rather than filtering on the free-text columns (which silently excludes
     # e.g. "The Netherlands" when the agent passes "NL").
+    # min_period is the opposite: a hard YYYY-MM cutoff from the user's
+    # recency control, applied in SQL so old editions cannot leak through.
     augmented = " ".join(p for p in (query, geography, period) if p)
+    cutoff = _normalize_min_period(min_period)
     try:
         query_embedding = embedding_service.embed_text(
             client, augmented, embedding_service.TASK_QUERY
@@ -114,6 +120,7 @@ def search_claims_sync(
                 query_embedding,
                 tags=tags,
                 allowed_documents=allowed_documents,
+                min_period=cutoff,
             ),
         )
     except Exception as e:
@@ -289,6 +296,7 @@ async def _fetch_candidates(
     query_embedding: list[float],
     tags: list[str] | None,
     allowed_documents: list[int] | None,
+    min_period: str | None = None,
 ) -> list[dict[str, Any]]:
     """Runs the pgvector similarity query on a fresh worker engine."""
     from src.database import WorkerDatabase
@@ -302,10 +310,25 @@ async def _fetch_candidates(
                     "query_embedding": embedding_literal,
                     "document_ids": allowed_documents,
                     "tags": tags,
+                    "min_period": min_period,
                     "pool": _CANDIDATE_POOL,
                 },
             )
             return [dict(row) for row in result.mappings().all()]
+
+
+def _normalize_min_period(raw: str | None) -> str | None:
+    """Accepts ``YYYY-MM`` or a free-text year/period and returns a key."""
+    if not raw:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    if len(text) == 7 and text[4] == "-" and text[:4].isdigit() and text[5:].isdigit():
+        return text
+    from src.research_library import period_service
+
+    return period_service.normalize_period(text)
 
 
 def _month_ordinal(key: str | None) -> int | None:

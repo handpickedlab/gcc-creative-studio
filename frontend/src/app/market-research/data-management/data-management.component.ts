@@ -51,6 +51,11 @@ export class DataManagementComponent implements OnInit, OnDestroy {
   documents: ResearchDocument[] = [];
   docsLoading = true;
   docUploadsPending = 0;
+  /**
+   * Local tier writes that must survive a poll. A GET that left before the
+   * PATCH committed would otherwise snap the dropdown back to the old value.
+   */
+  private readonly stickyTiers = new Map<number, PriorityTier>();
 
   // Spreadsheets (DuckDB warehouse catalog)
   sheets: SheetInfo[] = [];
@@ -101,7 +106,14 @@ export class DataManagementComponent implements OnInit, OnDestroy {
     this.docsLoading = true;
     this.library.list(200).subscribe({
       next: r => {
-        this.documents = r.data ?? [];
+        const incoming = r.data ?? [];
+        for (const doc of incoming) {
+          const sticky = this.stickyTiers.get(doc.id);
+          if (!sticky) continue;
+          if (doc.priorityTier === sticky) this.stickyTiers.delete(doc.id);
+          else doc.priorityTier = sticky;
+        }
+        this.documents = incoming;
         this.docsLoading = false;
         this.syncPolling();
       },
@@ -135,10 +147,26 @@ export class DataManagementComponent implements OnInit, OnDestroy {
   }
 
   setTier(doc: ResearchDocument, tier: string): void {
-    this.library.updateTier(doc.id, tier as PriorityTier).subscribe({
-      next: u => Object.assign(doc, u),
-      error: err => handleErrorSnackbar(this.snackBar, err, 'Tier'),
+    const next = tier as PriorityTier;
+    if (doc.priorityTier === next && !this.stickyTiers.has(doc.id)) return;
+    const previous = doc.priorityTier;
+    doc.priorityTier = next;
+    this.stickyTiers.set(doc.id, next);
+    this.library.updateTier(doc.id, next).subscribe({
+      next: u => {
+        Object.assign(doc, u);
+        doc.priorityTier = this.stickyTiers.get(doc.id) ?? doc.priorityTier;
+      },
+      error: err => {
+        this.stickyTiers.delete(doc.id);
+        doc.priorityTier = previous;
+        handleErrorSnackbar(this.snackBar, err, 'Tier');
+      },
     });
+  }
+
+  trackByDocId(_index: number, doc: ResearchDocument): number {
+    return doc.id;
   }
 
   reprocess(doc: ResearchDocument): void {
