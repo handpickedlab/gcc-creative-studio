@@ -91,7 +91,7 @@ variable "backend_runtime_secrets" {
 variable "db_tier" {
   type        = string
   description = "Cloud SQL machine type passed to the postgresql module."
-  default     = "db-custom-1-3840"
+  default     = "db-g1-small"
 }
 
 variable "db_edition" {

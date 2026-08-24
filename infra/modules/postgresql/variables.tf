@@ -20,8 +20,8 @@ variable "db_password" { sensitive = true }
 
 variable "db_tier" {
   type        = string
-  description = "Cloud SQL machine type. Enterprise Plus performance-optimized SKUs (db-perf-optimized-N-*) are ~4x an Enterprise custom-1 and stay billed 24/7."
-  default     = "db-custom-1-3840"
+  description = "Cloud SQL machine type. Shared-core db-g1-small is the cheapest dedicated-enough SKU; Enterprise Plus db-perf-optimized-N-* is ~8x that and stays billed 24/7."
+  default     = "db-g1-small"
 }
 
 variable "db_edition" {

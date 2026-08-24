@@ -23,9 +23,9 @@ resource "google_sql_database_instance" "default" {
   project          = var.project_id
 
   settings {
-    # Enterprise custom-1 (1 vCPU / 3.75 GiB) instead of the upstream
-    # Enterprise Plus db-perf-optimized-N-2 (2 vCPU / 16 GiB). Cloud SQL
-    # cannot scale to zero, so this is the 24/7 hosting bill.
+    # Shared-core g1-small (1 shared vCPU / 1.7 GiB) instead of the
+    # upstream Enterprise Plus db-perf-optimized-N-2 (2 vCPU / 16 GiB).
+    # Cloud SQL cannot scale to zero, so this is the 24/7 hosting bill.
     tier              = var.db_tier
     edition           = var.db_edition
     availability_type = "ZONAL"

@@ -114,8 +114,8 @@ variable "backend_runtime_secrets" {
 
 variable "db_tier" {
   type        = string
-  description = "Cloud SQL machine type. Defaults to a small Enterprise custom-1."
-  default     = "db-custom-1-3840"
+  description = "Cloud SQL machine type. Defaults to shared-core g1-small."
+  default     = "db-g1-small"
 }
 
 variable "db_edition" {
