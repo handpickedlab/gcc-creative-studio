@@ -91,7 +91,9 @@ module "postgresql" {
   source      = "../postgresql"
   project_id  = var.gcp_project_id
   region      = var.gcp_region
-  
+  db_tier     = var.db_tier
+  db_edition  = var.db_edition
+
   # Pass the ACTUAL value to create the user
   db_password = data.google_secret_manager_secret_version.db_password.secret_data
 }

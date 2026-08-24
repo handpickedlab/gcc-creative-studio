@@ -112,6 +112,18 @@ variable "backend_runtime_secrets" {
   description = "Secrets to mount in the backend container at runtime."
 }
 
+variable "db_tier" {
+  type        = string
+  description = "Cloud SQL machine type. Defaults to a small Enterprise custom-1."
+  default     = "db-custom-1-3840"
+}
+
+variable "db_edition" {
+  type        = string
+  description = "Cloud SQL edition. ENTERPRISE is enough; ENTERPRISE_PLUS is the expensive default upstream used."
+  default     = "ENTERPRISE"
+}
+
 
 # --- List of APIs to enable ---
 variable "apis_to_enable" {

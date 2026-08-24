@@ -17,3 +17,20 @@ variable "region" {}
 variable "db_name" { default = "creative_studio" }
 variable "db_user" { default = "studio_user" }
 variable "db_password" { sensitive = true }
+
+variable "db_tier" {
+  type        = string
+  description = "Cloud SQL machine type. Enterprise Plus performance-optimized SKUs (db-perf-optimized-N-*) are ~4x an Enterprise custom-1 and stay billed 24/7."
+  default     = "db-custom-1-3840"
+}
+
+variable "db_edition" {
+  type        = string
+  description = "ENTERPRISE is enough for this app. ENTERPRISE_PLUS is required only for db-perf-optimized-* / C4 machine series."
+  default     = "ENTERPRISE"
+
+  validation {
+    condition     = contains(["ENTERPRISE", "ENTERPRISE_PLUS"], var.db_edition)
+    error_message = "db_edition must be ENTERPRISE or ENTERPRISE_PLUS."
+  }
+}
