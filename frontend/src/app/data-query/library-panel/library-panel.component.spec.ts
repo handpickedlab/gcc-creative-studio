@@ -17,12 +17,16 @@
 import {NO_ERRORS_SCHEMA} from '@angular/core';
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {MatSnackBar} from '@angular/material/snack-bar';
-import {of} from 'rxjs';
+import {NEVER, of} from 'rxjs';
 import {
   ResearchDocument,
   ResearchLibraryService,
 } from '../../services/research-library.service';
-import {LibraryPanelComponent} from './library-panel.component';
+import {
+  LibraryPanelComponent,
+  minPeriodFor,
+  RecencyPreset,
+} from './library-panel.component';
 
 function doc(overrides: Partial<ResearchDocument> = {}): ResearchDocument {
   return {
@@ -126,5 +130,75 @@ describe('LibraryPanelComponent', () => {
 
     expect(service.updateTier).toHaveBeenCalledWith(1, 'background');
     expect(target.priorityTier).toBe('background');
+  });
+
+  it('keeps an in-flight tier across a poll refresh', () => {
+    const target = doc({priorityTier: 'primary'});
+    service.list.and.returnValue(of({data: [target], count: 1}));
+    fixture.detectChanges();
+
+    service.updateTier.and.returnValue(NEVER);
+    component.setTier(component.documents[0], 'background');
+    expect(component.documents[0].priorityTier).toBe('background');
+
+    service.list.and.returnValue(
+      of({data: [doc({priorityTier: 'primary'})], count: 1}),
+    );
+    component.refresh();
+
+    expect(component.documents[0].priorityTier).toBe('background');
+  });
+
+  it('keeps a saved tier when a stale list arrives', () => {
+    const target = doc({priorityTier: 'primary'});
+    service.list.and.returnValue(of({data: [target], count: 1}));
+    fixture.detectChanges();
+
+    service.updateTier.and.returnValue(
+      of(doc({priorityTier: 'background'})),
+    );
+    component.setTier(component.documents[0], 'background');
+
+    service.list.and.returnValue(
+      of({data: [doc({priorityTier: 'primary'})], count: 1}),
+    );
+    component.refresh();
+
+    expect(component.documents[0].priorityTier).toBe('background');
+  });
+
+  it('emits a YYYY-MM cutoff when recency changes', () => {
+    const emitted: Array<string | null> = [];
+    component.minPeriodChange.subscribe(v => emitted.push(v));
+
+    component.setRecency('2025');
+    expect(emitted[0]).toBe('2025-00');
+
+    component.setRecency('all');
+    expect(emitted[1]).toBeNull();
+  });
+});
+
+describe('minPeriodFor', () => {
+  it('returns null for all years', () => {
+    expect(minPeriodFor('all')).toBeNull();
+  });
+
+  it('maps a year preset onto a year key', () => {
+    expect(minPeriodFor('2024')).toBe('2024-00');
+    expect(minPeriodFor('2025')).toBe('2025-00');
+    expect(minPeriodFor('2026')).toBe('2026-00');
+  });
+
+  it('offers whole years only, so a year-labelled claim is never cut', () => {
+    // A rolling window put "2025" (-> 2025-00) below a mid-year cutoff and so
+    // dropped most of a tracker deck. Every cutoff is now a January key.
+    const presets: RecencyPreset[] = ['all', '2024', '2025', '2026'];
+    const keys = presets
+      .map(p => minPeriodFor(p))
+      .filter((k): k is string => k !== null);
+
+    expect(keys.length).toBe(3);
+    expect(keys.every(k => k.endsWith('-00'))).toBe(true);
   });
 });

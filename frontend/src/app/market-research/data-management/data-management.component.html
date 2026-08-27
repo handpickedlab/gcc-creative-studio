@@ -43,7 +43,7 @@
         <tr><th>Document</th><th>Kind</th><th>Lang</th><th>Status</th><th>Tier</th><th></th></tr>
       </thead>
       <tbody>
-        <tr *ngFor="let d of documents">
+        <tr *ngFor="let d of documents; trackBy: trackByDocId">
           <td class="dm-name">{{ d.filename }}</td>
           <td class="dm-muted">{{ d.docKind || '—' }}</td>
           <td class="dm-muted">{{ d.language || '—' }}</td>
@@ -51,8 +51,9 @@
             <span class="dm-status {{ d.status }}">{{ docStatusDetail(d) }}</span>
           </td>
           <td>
-            <select class="dm-tier" [value]="d.priorityTier"
-                    (change)="setTier(d, $any($event.target).value)"
+            <select class="dm-tier"
+                    [ngModel]="d.priorityTier"
+                    (ngModelChange)="setTier(d, $event)"
                     [disabled]="d.status === 'rejected'">
               <option *ngFor="let t of tiers" [value]="t">{{ t }}</option>
             </select>

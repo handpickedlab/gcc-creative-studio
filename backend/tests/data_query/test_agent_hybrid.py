@@ -14,9 +14,10 @@
 
 """Tests for the hybrid (sheets + research library) agent loop."""
 
+from datetime import date
 from unittest.mock import MagicMock
 
-from src.data_query.agent import stream_answer
+from src.data_query.agent import stream_answer, system_instruction
 
 
 def _text_response(text: str) -> MagicMock:
@@ -114,6 +115,29 @@ class TestHybridAgent:
 
         assert claim_search.call_args.kwargs["allowed_documents"] == [7]
 
+    def test_min_period_comes_from_server_not_model(self):
+        client = MagicMock()
+        client.models.generate_content.side_effect = [
+            _tool_response(
+                "search_claims",
+                {"query": "x", "min_period": "2019-00"},
+            ),
+            _text_response("done"),
+        ]
+        claim_search = MagicMock(return_value={"count": 0, "results": []})
+
+        list(
+            stream_answer(
+                client,
+                "gemini-test",
+                "vraag",
+                claim_search=claim_search,
+                min_period="2025-00",
+            ),
+        )
+
+        assert claim_search.call_args.kwargs["min_period"] == "2025-00"
+
     def test_sheet_only_flow_has_no_sources_event(self):
         client = MagicMock()
         client.models.generate_content.side_effect = [
@@ -139,3 +163,35 @@ class TestHybridAgent:
 
         tool_result = next(e for e in events if e["t"] == "tool_result")
         assert "not available" in tool_result["result"]["error"]
+
+
+class TestSystemInstruction:
+    """The prompt must carry the real date.
+
+    Without it the model reasoned from its training cutoff and told a tester
+    that Q4 2025 and Q1 2026 "lie in the future", offering to look for
+    forecasts instead of searching two quarters the library covers.
+    """
+
+    def test_today_is_substituted(self):
+        out = system_instruction(date(2026, 8, 25))
+
+        assert "Today's date is 2026-08-25" in out
+        assert "{today}" not in out
+
+    def test_defaults_to_the_real_today(self):
+        assert date.today().isoformat() in system_instruction()
+
+    def test_forbids_calling_a_past_period_the_future(self):
+        out = system_instruction(date(2026, 8, 25))
+
+        assert "has already happened" in out
+        assert "forecasts" in out
+
+    def test_the_date_is_not_frozen_at_import_time(self):
+        """A warm instance must not keep answering from its boot date."""
+        first = system_instruction(date(2026, 1, 1))
+        second = system_instruction(date(2026, 8, 25))
+
+        assert "2026-01-01" in first
+        assert "2026-08-25" in second

@@ -23,6 +23,7 @@ trend reports, with document + page provenance). It yields a stream of events
 work live and render slide citations.
 """
 import logging
+from datetime import date
 
 from google.genai import Client, types
 
@@ -40,6 +41,9 @@ MAX_STEPS = 30
 # produce an unbounded sources event.
 MAX_SOURCES = 20
 
+# ``{today}`` is substituted per run (see ``system_instruction``), never at
+# import time — a Cloud Run instance can stay warm for days, and a date frozen
+# at boot is the same class of bug as no date at all.
 SYSTEM = """You are a market research analyst answering questions about
 Hunkemöller (a lingerie / bodyfashion retailer, often abbreviated "HKM" or
 "hkm" — always treat those as "Hunkemöller"). You have TWO data sources and
@@ -92,9 +96,22 @@ then ask the user ONE short clarifying question instead of guessing. This is a
 multi-turn tool, so a clarifying question is a valid answer. But do NOT ask
 back for clear questions: do the work first, clarify only as a last resort.
 
+Today's date is {today}. Reason about time from THAT date and never from
+your own sense of "now": your training data ends earlier, so a period that
+feels like the future to you can be a finished quarter this corpus reports on.
+Any period at or before {today} has already happened — never tell the user it
+lies in the future, never go looking for "forecasts" or "predictions" instead
+of the reported figures, and if the sources genuinely do not cover it, say
+exactly that. "The most recent figures" means the most recent ones present in
+these sources, judged against {today}.
+
 Tool guidance:
 - `search_claims` results are ranked by relevance × the document's priority
-  tier × recency (newer documents rank higher); prefer primary and recent
+  tier × recency (newer content ranks higher). A user-set recency cutoff, if
+  any, is already applied server-side: editions older than the cutoff will not
+  appear, but sources whose own date could not be established still do (their
+  `period_key` and `document_vintage_key` are both null). Say so when you lean
+  on an undated source under an active cutoff. Prefer primary and recent
   sources when they disagree.
 - `run_sql` is a single read-only SELECT/WITH. NEVER guess or invent column
   names — call `describe_table` and use ONLY the exact columns and values it
@@ -229,7 +246,8 @@ _TOOLS = [
 
 
 def _dispatch(name, args, allowed, claim_search=None,
-              allowed_documents=None, list_tags=None, list_facets=None):
+              allowed_documents=None, list_tags=None, list_facets=None,
+              min_period=None):
     if name == "list_tables":
         ts = store.list_tables()
         return [t for t in ts if allowed is None or t["table"] in allowed]
@@ -250,9 +268,10 @@ def _dispatch(name, args, allowed, claim_search=None,
             tags=args.get("tags"),
             period=args.get("period"),
             geography=args.get("geography"),
-            # allowed_documents is enforced server-side from the request DTO,
-            # never trusted from the model's own arguments.
+            # allowed_documents and min_period are enforced server-side from
+            # the request DTO, never trusted from the model's own arguments.
             allowed_documents=allowed_documents,
+            min_period=min_period,
             max_results=int(args.get("max_results") or 10),
         )
     if name == "list_tags":
@@ -311,9 +330,20 @@ def _collect_sources(sources, out):
         }
 
 
+def system_instruction(today: date | None = None) -> str:
+    """The system prompt with today's date substituted in.
+
+    Called per run so a long-lived instance never answers from a stale date.
+    Without this the model fell back on its training cutoff and told testers
+    that Q4 2025 and Q1 2026 "lie in the future" — refusing to search two
+    quarters the library actually covers.
+    """
+    return SYSTEM.replace("{today}", (today or date.today()).isoformat())
+
+
 def stream_answer(client: Client, model: str, question: str, allowed=None,
                   claim_search=None, allowed_documents=None, history=None,
-                  list_tags=None, list_facets=None):
+                  list_tags=None, list_facets=None, min_period=None):
     """Run the function-calling loop, yielding event dicts:
     {t:'tool',name,input}, {t:'tool_result',name,summary,result}, {t:'text',v},
     {t:'sources',v} (citations for search_claims facts), {t:'done'}.
@@ -325,7 +355,7 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
     """
     tool = types.Tool(function_declarations=[types.FunctionDeclaration(**d) for d in _TOOLS])
     config = types.GenerateContentConfig(
-        tools=[tool], system_instruction=SYSTEM, temperature=0
+        tools=[tool], system_instruction=system_instruction(), temperature=0
     )
     contents = []
     for turn in (history or []):
@@ -374,7 +404,8 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
                             claim_search=claim_search,
                             allowed_documents=allowed_documents,
                             list_tags=list_tags,
-                            list_facets=list_facets)
+                            list_facets=list_facets,
+                            min_period=min_period)
             if fc.name == "search_claims" and isinstance(out, dict):
                 _collect_sources(sources, out)
             yield {"t": "tool_result", "name": fc.name,

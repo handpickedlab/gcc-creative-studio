@@ -25,6 +25,20 @@ import {
 } from '../../services/research-library.service';
 import {handleErrorSnackbar} from '../../utils/handleMessageSnackbar';
 
+export type RecencyPreset = 'all' | '2024' | '2025' | '2026';
+
+/**
+ * Maps a sidebar recency preset onto the YYYY-MM key claim search filters on.
+ *
+ * Cutoffs are whole years on purpose. This corpus dates itself by year, wave
+ * and quarter ("2025", "Q1 2026", "P10 2024"), so a rolling month window was
+ * precision the sources cannot back: "last 12 months" excluded every claim
+ * labelled only with the current year, which is most of a tracker deck.
+ */
+export function minPeriodFor(preset: RecencyPreset): string | null {
+  return preset === 'all' ? null : `${preset}-00`;
+}
+
 /**
  * Sidebar panel for the research document library: batch upload, per-document
  * status/tier management, and toggling documents in/out of the next question
@@ -41,13 +55,30 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
    * every document participates, otherwise the non-excluded ids.
    */
   @Output() allowedDocumentsChange = new EventEmitter<number[] | null>();
+  /**
+   * Sortable YYYY-MM cutoff for the next question, or null when every
+   * vintage participates. Enforced server-side on claim search.
+   */
+  @Output() minPeriodChange = new EventEmitter<string | null>();
 
   documents: ResearchDocument[] = [];
   uploadsPending = 0;
 
   readonly tiers: PriorityTier[] = ['primary', 'supporting', 'background'];
+  readonly recencyOptions: {id: RecencyPreset; label: string}[] = [
+    {id: 'all', label: 'All years'},
+    {id: '2024', label: 'Since 2024'},
+    {id: '2025', label: 'Since 2025'},
+    {id: '2026', label: 'Since 2026'},
+  ];
+  recency: RecencyPreset = 'all';
 
   private readonly off = new Set<number>();
+  /**
+   * Local tier writes that must survive a poll. A GET that left before the
+   * PATCH committed would otherwise snap the dropdown back to the old value.
+   */
+  private readonly stickyTiers = new Map<number, PriorityTier>();
   private poller: Subscription | null = null;
 
   constructor(
@@ -66,11 +97,22 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
   refresh(): void {
     this.service.list().subscribe({
       next: r => {
-        this.documents = r.data ?? [];
+        const incoming = r.data ?? [];
+        for (const doc of incoming) {
+          const sticky = this.stickyTiers.get(doc.id);
+          if (!sticky) continue;
+          if (doc.priorityTier === sticky) this.stickyTiers.delete(doc.id);
+          else doc.priorityTier = sticky;
+        }
+        this.documents = incoming;
         this.syncPolling();
       },
       error: () => {},
     });
+  }
+
+  trackById(_index: number, doc: ResearchDocument): number {
+    return doc.id;
   }
 
   // ── upload ─────────────────────────────────────────────────────
@@ -99,10 +141,27 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
 
   // ── management ─────────────────────────────────────────────────
   setTier(doc: ResearchDocument, tier: string): void {
-    this.service.updateTier(doc.id, tier as PriorityTier).subscribe({
-      next: updated => Object.assign(doc, updated),
-      error: err => handleErrorSnackbar(this.snackBar, err, 'Tier'),
+    const next = tier as PriorityTier;
+    if (doc.priorityTier === next && !this.stickyTiers.has(doc.id)) return;
+    const previous = doc.priorityTier;
+    doc.priorityTier = next;
+    this.stickyTiers.set(doc.id, next);
+    this.service.updateTier(doc.id, next).subscribe({
+      next: updated => {
+        Object.assign(doc, updated);
+        doc.priorityTier = this.stickyTiers.get(doc.id) ?? doc.priorityTier;
+      },
+      error: err => {
+        this.stickyTiers.delete(doc.id);
+        doc.priorityTier = previous;
+        handleErrorSnackbar(this.snackBar, err, 'Tier');
+      },
     });
+  }
+
+  setRecency(preset: RecencyPreset): void {
+    this.recency = preset;
+    this.minPeriodChange.emit(minPeriodFor(preset));
   }
 
   delete(doc: ResearchDocument, ev: MouseEvent): void {

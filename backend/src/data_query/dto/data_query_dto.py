@@ -41,3 +41,8 @@ class AskRequestDto(BaseModel):
         description="Optional whitelist of research-library document ids the "
         "agent may search. None = the whole library.",
     )
+    min_period: str | None = Field(
+        default=None,
+        description="Optional YYYY-MM recency cutoff. Claims older than this "
+        "(by period_key, else document vintage) are excluded. None = all years.",
+    )
