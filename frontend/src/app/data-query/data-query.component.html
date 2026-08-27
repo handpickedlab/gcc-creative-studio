@@ -63,8 +63,9 @@
           <div class="msg bot">
             <div class="trace live" *ngIf="traceSteps(steps).length || busy">
               <ng-container *ngTemplateOutlet="traceTpl; context: {steps: steps}"></ng-container>
-              <div class="working" *ngIf="busy">
-                <span class="dots"><i></i><i></i><i></i></span> thinking…
+              <div class="working" *ngIf="busy && !toolRunning(steps)">
+                <span class="dots"><i></i><i></i><i></i></span>
+                {{ thinkingLabel(steps) }}
               </div>
             </div>
             <div class="answer" *ngIf="answerText(steps)">
@@ -156,7 +157,11 @@
         <mat-icon>{{ s.name === 'run_sql' ? 'database' : 'search' }}</mat-icon>
         <b>{{ s.name }}</b>
         <code *ngIf="s.name !== 'run_sql'">{{ toolArgs(s) }}</code>
-        <span class="dq-muted">→ {{ s.summary }}</span>
+        <span class="dq-muted" *ngIf="!running(s)">→ {{ s.summary }}</span>
+        <span class="dq-muted" *ngIf="running(s)">
+          <span class="dots"><i></i><i></i><i></i></span> running…
+        </span>
+        <span class="s-ms" *ngIf="took(s)">{{ took(s) }}</span>
       </span>
 
       <div *ngIf="s.name === 'run_sql'" class="s-sql">

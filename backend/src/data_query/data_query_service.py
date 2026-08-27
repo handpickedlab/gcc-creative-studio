@@ -23,6 +23,7 @@ restarts and are shared across instances.
 """
 import asyncio
 import logging
+import time
 import uuid
 from collections.abc import Iterator
 from functools import partial
@@ -54,9 +55,27 @@ _SHEET_PREFIX = "data-query-sheets/global"
 # run well past that, so polling — not SSE — is the reliable path in prod.
 _PROGRESS_FLUSH_S = 1.5
 # Hold references to in-flight background tasks so they aren't garbage-collected
-# if the launching request returns first (CPU stays allocated: cpu-throttling
-# is disabled and min-instances=1 keeps the instance warm while the client polls).
+# if the launching request returns first. CPU stays allocated (cpu-throttling is
+# disabled), but the service runs min-instances=0 since 2026-08-11, so what keeps
+# the instance alive mid-run is the client's own polling — a run whose client
+# walks away can lose its instance before it finishes.
 _ASK_TASKS: set[asyncio.Task] = set()
+
+
+def _set_thinking(steps: list[dict], n: int | None) -> None:
+    """Keep exactly one trailing "the model is thinking" marker.
+
+    It is a live-progress artefact, not part of the answer trace: the next tool
+    call or text chunk drops it again, so a finished run stores only its real
+    steps and the collapsible trace stays clean.
+    """
+    _clear_thinking(steps)
+    steps.append({"kind": "model", "n": n})
+
+
+def _clear_thinking(steps: list[dict]) -> None:
+    if steps and steps[-1].get("kind") == "model":
+        steps.pop()
 
 
 class DataQueryService:
@@ -267,6 +286,13 @@ class DataQueryService:
                 min_period=min_period,
             ):
                 t = ev.get("t")
+                if t == "step":
+                    # A model turn is starting: show it, drop it again as soon
+                    # as the turn produces something real.
+                    _set_thinking(steps, ev.get("n"))
+                    continue
+                if t in ("tool", "text", "error"):
+                    _clear_thinking(steps)
                 if t == "tool":
                     cur_text = None
                     cur_tool = {
@@ -280,6 +306,7 @@ class DataQueryService:
                     if cur_tool is not None:
                         cur_tool["summary"] = ev.get("summary") or ""
                         cur_tool["result"] = ev.get("result")
+                        cur_tool["ms"] = ev.get("ms")
                 elif t == "text":
                     if cur_text is None:
                         cur_text = {"kind": "text", "text": ""}
@@ -316,9 +343,17 @@ class DataQueryService:
             logger.error("Rehydrate before ask failed for %s: %s", run_id, e)
 
         flusher = asyncio.create_task(_flush())
+        started = time.monotonic()
         try:
             await asyncio.to_thread(_consume)
             flusher.cancel()
+            _clear_thinking(steps)
+            logger.info(
+                "Data-query ask %s done in %.1fs: %s steps",
+                run_id,
+                time.monotonic() - started,
+                len(steps),
+            )
             async with async_session_local() as db:
                 await DataQueryRunRepository(db).update(
                     run_id,
@@ -330,6 +365,7 @@ class DataQueryService:
                 )
         except Exception as e:
             flusher.cancel()
+            _clear_thinking(steps)
             logger.error(
                 "Data-query ask %s failed: %s", run_id, e, exc_info=True
             )
