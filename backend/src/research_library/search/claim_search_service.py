@@ -79,7 +79,20 @@ WHERE d.deleted_at IS NULL
        OR jsonb_exists_any(c.canonical_tags, CAST(:tags AS text[]))
        OR jsonb_exists_any(c.raw_tags, CAST(:tags AS text[])))
   AND (CAST(:min_period AS text) IS NULL
-       OR COALESCE(c.period_key, d.vintage_key) >= CAST(:min_period AS text))
+       -- A source whose own date could never be established has no vintage to
+       -- compare. Dropping it would silently delete evergreen material (a
+       -- brandbook, a segmentation deck) from every filtered answer, so it
+       -- stays in and the agent is told to flag it.
+       OR COALESCE(c.period_key, d.vintage_key) IS NULL
+       -- ``YYYY-00`` means "that year, no finer granularity". It sorts as
+       -- January, so a plain string compare would drop a claim dated "2025"
+       -- from a cutoff of 2025-09 even though most of that year is inside the
+       -- window. Judge those at the end of their year instead.
+       OR CASE
+            WHEN right(COALESCE(c.period_key, d.vintage_key), 3) = '-00'
+              THEN left(COALESCE(c.period_key, d.vintage_key), 4) || '-12'
+            ELSE COALESCE(c.period_key, d.vintage_key)
+          END >= CAST(:min_period AS text))
 ORDER BY c.embedding <=> CAST(:query_embedding AS vector)
 LIMIT :pool
 """
@@ -108,7 +121,9 @@ def search_claims_sync(
     # rather than filtering on the free-text columns (which silently excludes
     # e.g. "The Netherlands" when the agent passes "NL").
     # min_period is the opposite: a hard YYYY-MM cutoff from the user's
-    # recency control, applied in SQL so old editions cannot leak through.
+    # recency control, applied in SQL (before the candidate LIMIT, so old
+    # editions cannot crowd the pool). Undated sources survive the cutoff by
+    # design — see _SEARCH_SQL — and are counted back for the agent.
     augmented = " ".join(p for p in (query, geography, period) if p)
     cutoff = _normalize_min_period(min_period)
     try:
@@ -128,10 +143,19 @@ def search_claims_sync(
         return {"error": f"claim search failed: {e}"}
 
     ranked = rank_candidates(rows, config.TIER_WEIGHTS)[:max_results]
-    return {
+    out: dict[str, Any] = {
         "count": len(ranked),
         "results": [_format_result(row) for row in ranked],
     }
+    if cutoff:
+        # Undated sources are not filtered out, so name how many of these
+        # results the cutoff could not actually vouch for.
+        out["undated"] = sum(
+            1
+            for r in ranked
+            if not r.get("period_key") and not r.get("document_vintage_key")
+        )
+    return out
 
 
 _TAGS_SQL = """

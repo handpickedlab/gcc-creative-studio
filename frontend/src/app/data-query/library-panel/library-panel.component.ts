@@ -25,19 +25,18 @@ import {
 } from '../../services/research-library.service';
 import {handleErrorSnackbar} from '../../utils/handleMessageSnackbar';
 
-export type RecencyPreset = 'all' | '12m' | '24m' | '2024' | '2025';
+export type RecencyPreset = 'all' | '2024' | '2025' | '2026';
 
-/** Maps a sidebar recency preset onto the YYYY-MM key claim search filters on. */
-export function minPeriodFor(
-  preset: RecencyPreset,
-  now = new Date(),
-): string | null {
-  if (preset === 'all') return null;
-  if (preset === '2024') return '2024-00';
-  if (preset === '2025') return '2025-00';
-  const months = preset === '12m' ? 12 : 24;
-  const from = new Date(now.getFullYear(), now.getMonth() - months, 1);
-  return `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}`;
+/**
+ * Maps a sidebar recency preset onto the YYYY-MM key claim search filters on.
+ *
+ * Cutoffs are whole years on purpose. This corpus dates itself by year, wave
+ * and quarter ("2025", "Q1 2026", "P10 2024"), so a rolling month window was
+ * precision the sources cannot back: "last 12 months" excluded every claim
+ * labelled only with the current year, which is most of a tracker deck.
+ */
+export function minPeriodFor(preset: RecencyPreset): string | null {
+  return preset === 'all' ? null : `${preset}-00`;
 }
 
 /**
@@ -68,10 +67,9 @@ export class LibraryPanelComponent implements OnInit, OnDestroy {
   readonly tiers: PriorityTier[] = ['primary', 'supporting', 'background'];
   readonly recencyOptions: {id: RecencyPreset; label: string}[] = [
     {id: 'all', label: 'All years'},
-    {id: '12m', label: 'Last 12 months'},
-    {id: '24m', label: 'Last 2 years'},
     {id: '2024', label: 'Since 2024'},
     {id: '2025', label: 'Since 2025'},
+    {id: '2026', label: 'Since 2026'},
   ];
   recency: RecencyPreset = 'all';
 

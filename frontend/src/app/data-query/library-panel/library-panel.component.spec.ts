@@ -22,7 +22,11 @@ import {
   ResearchDocument,
   ResearchLibraryService,
 } from '../../services/research-library.service';
-import {LibraryPanelComponent, minPeriodFor} from './library-panel.component';
+import {
+  LibraryPanelComponent,
+  minPeriodFor,
+  RecencyPreset,
+} from './library-panel.component';
 
 function doc(overrides: Partial<ResearchDocument> = {}): ResearchDocument {
   return {
@@ -183,11 +187,18 @@ describe('minPeriodFor', () => {
   it('maps a year preset onto a year key', () => {
     expect(minPeriodFor('2024')).toBe('2024-00');
     expect(minPeriodFor('2025')).toBe('2025-00');
+    expect(minPeriodFor('2026')).toBe('2026-00');
   });
 
-  it('subtracts months from today for the rolling windows', () => {
-    const now = new Date(2026, 7, 24); // 24 Aug 2026
-    expect(minPeriodFor('12m', now)).toBe('2025-08');
-    expect(minPeriodFor('24m', now)).toBe('2024-08');
+  it('offers whole years only, so a year-labelled claim is never cut', () => {
+    // A rolling window put "2025" (-> 2025-00) below a mid-year cutoff and so
+    // dropped most of a tracker deck. Every cutoff is now a January key.
+    const presets: RecencyPreset[] = ['all', '2024', '2025', '2026'];
+    const keys = presets
+      .map(p => minPeriodFor(p))
+      .filter((k): k is string => k !== null);
+
+    expect(keys.length).toBe(3);
+    expect(keys.every(k => k.endsWith('-00'))).toBe(true);
   });
 });

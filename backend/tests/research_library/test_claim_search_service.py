@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 
 from src.research_library.search.claim_search_service import (
     _normalize_min_period,
+    _SEARCH_SQL,
     rank_candidates,
     search_claims_sync,
 )
@@ -221,17 +222,6 @@ class TestSearchClaimsSync:
         assert mock_fetch.call_args.kwargs["min_period"] == "2024-00"
 
 
-class TestNormalizeMinPeriod:
-    def test_passthrough_yyyy_mm(self):
-        assert _normalize_min_period("2025-08") == "2025-08"
-
-    def test_bare_year_becomes_year_key(self):
-        assert _normalize_min_period("2024") == "2024-00"
-
-    def test_blank_is_none(self):
-        assert _normalize_min_period("  ") is None
-        assert _normalize_min_period(None) is None
-
     @patch(
         "src.research_library.search.claim_search_service"
         ".embedding_service.embed_text"
@@ -242,3 +232,77 @@ class TestNormalizeMinPeriod:
         out = search_claims_sync(MagicMock(), "trends")
 
         assert "claim search failed" in out["error"]
+
+    @patch(
+        "src.research_library.search.claim_search_service._fetch_candidates"
+    )
+    @patch(
+        "src.research_library.search.claim_search_service"
+        ".embedding_service.embed_text"
+    )
+    def test_undated_results_are_counted_under_a_cutoff(
+        self, mock_embed, mock_fetch
+    ):
+        """A cutoff cannot vouch for a source with no date, so say how many."""
+        mock_embed.return_value = [1.0] + [0.0] * 767
+        mock_fetch.return_value = [
+            _row(
+                1,
+                0.90,
+                "primary",
+                period_key=None,
+                document_vintage_key=None,
+            ),
+            _row(2, 0.80, "primary", period_key="2026-01"),
+        ]
+
+        out = search_claims_sync(MagicMock(), "NPS", min_period="2025")
+
+        assert out["undated"] == 1
+
+    @patch(
+        "src.research_library.search.claim_search_service._fetch_candidates"
+    )
+    @patch(
+        "src.research_library.search.claim_search_service"
+        ".embedding_service.embed_text"
+    )
+    def test_no_undated_count_without_a_cutoff(self, mock_embed, mock_fetch):
+        mock_embed.return_value = [1.0] + [0.0] * 767
+        mock_fetch.return_value = [
+            _row(
+                1,
+                0.90,
+                "primary",
+                period_key=None,
+                document_vintage_key=None,
+            ),
+        ]
+
+        out = search_claims_sync(MagicMock(), "NPS")
+
+        assert "undated" not in out
+
+
+class TestCutoffSql:
+    """The cutoff runs in SQL (it must precede the candidate LIMIT), so these
+    guard the two clauses that keep it from silently deleting sources."""
+
+    def test_undated_sources_survive_the_cutoff(self):
+        assert "OR COALESCE(c.period_key, d.vintage_key) IS NULL" in _SEARCH_SQL
+
+    def test_year_only_keys_are_judged_at_the_end_of_their_year(self):
+        assert "'-00'" in _SEARCH_SQL
+        assert "|| '-12'" in _SEARCH_SQL
+
+
+class TestNormalizeMinPeriod:
+    def test_passthrough_yyyy_mm(self):
+        assert _normalize_min_period("2025-08") == "2025-08"
+
+    def test_bare_year_becomes_year_key(self):
+        assert _normalize_min_period("2024") == "2024-00"
+
+    def test_blank_is_none(self):
+        assert _normalize_min_period("  ") is None
+        assert _normalize_min_period(None) is None
