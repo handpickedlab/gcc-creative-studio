@@ -83,11 +83,14 @@ class TestHybridAgent:
         )
 
         kinds = [e["t"] for e in events]
-        assert kinds == ["tool", "tool_result", "text", "sources"]
+        # 'step' announces each model turn for the live view (TestLiveProgress).
+        assert kinds == [
+            "step", "tool", "tool_result", "step", "text", "sources",
+        ]
         # The search tool result is streamed to the frontend.
-        assert events[1]["result"]["count"] == 1
+        assert events[2]["result"]["count"] == 1
         # Sources carry document + page for the citation viewer.
-        source = events[3]["v"][0]
+        source = events[5]["v"][0]
         assert source["document_id"] == 7
         assert source["page"] == 3
 
@@ -148,7 +151,7 @@ class TestHybridAgent:
             stream_answer(client, "gemini-test", "Welke tabellen zijn er?"),
         )
 
-        assert [e["t"] for e in events] == ["text"]
+        assert [e["t"] for e in events] == ["step", "text"]
 
     def test_search_without_library_returns_clear_error(self):
         client = MagicMock()
@@ -195,3 +198,43 @@ class TestSystemInstruction:
 
         assert "2026-01-01" in first
         assert "2026-08-25" in second
+
+
+class TestLiveProgress:
+    """The client can only render "watch it work" from what the loop emits.
+
+    The model's own turn is the longest silence in a run, so it is announced
+    before the call rather than only after it produces something.
+    """
+
+    def _run(self):
+        client = MagicMock()
+        client.models.generate_content.side_effect = [
+            _tool_response("search_claims", {"query": "smartphone 2030"}),
+            _text_response("46%."),
+        ]
+        return list(
+            stream_answer(
+                client,
+                "gemini-test",
+                "Hoeveel via smartphone in 2030?",
+                claim_search=MagicMock(return_value=_search_result()),
+            )
+        )
+
+    def test_every_model_turn_is_announced_before_it_starts(self):
+        events = self._run()
+
+        assert events[0] == {"t": "step", "n": 1}
+        steps = [e["n"] for e in events if e["t"] == "step"]
+        assert steps == [1, 2]
+        # The announcement precedes the tool call it leads to.
+        assert events.index({"t": "step", "n": 1}) < next(
+            i for i, e in enumerate(events) if e["t"] == "tool"
+        )
+
+    def test_a_tool_result_carries_how_long_the_call_took(self):
+        result = next(e for e in self._run() if e["t"] == "tool_result")
+
+        assert isinstance(result["ms"], int)
+        assert result["ms"] >= 0

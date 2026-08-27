@@ -63,14 +63,22 @@ export interface ClaimSource {
   source_citation?: string | null;
 }
 
-/** One assembled step of the agent's trace: narrated text or a tool call. */
+/**
+ * One assembled step of the agent's trace: narrated text, a tool call, or —
+ * only while the run is in flight — a ``model`` marker saying the agent is
+ * mid-turn. The marker never survives into a finished run.
+ */
 export interface AgentStep {
-  kind: 'text' | 'tool';
+  kind: 'text' | 'tool' | 'model';
   text?: string;
   name?: string;
   input?: Record<string, unknown>;
   summary?: string;
   result?: SqlResult | null;
+  /** How long the tool call took, in ms (tool steps, once finished). */
+  ms?: number;
+  /** Which loop step the agent is on (``model`` markers). */
+  n?: number;
 }
 
 /** A background ask run: kicked off by POST /ask, polled via GET /ask/{id}. */

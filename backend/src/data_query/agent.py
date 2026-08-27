@@ -23,6 +23,7 @@ trend reports, with document + page provenance). It yields a stream of events
 work live and render slide citations.
 """
 import logging
+import time
 from datetime import date
 
 from google.genai import Client, types
@@ -330,6 +331,12 @@ def _collect_sources(sources, out):
         }
 
 
+def _arg_preview(args: dict, limit: int = 160) -> str:
+    """One-line rendering of a tool's arguments for the server log."""
+    flat = " ".join(f"{k}={v!r}" for k, v in args.items())
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
 def system_instruction(today: date | None = None) -> str:
     """The system prompt with today's date substituted in.
 
@@ -345,7 +352,8 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
                   claim_search=None, allowed_documents=None, history=None,
                   list_tags=None, list_facets=None, min_period=None):
     """Run the function-calling loop, yielding event dicts:
-    {t:'tool',name,input}, {t:'tool_result',name,summary,result}, {t:'text',v},
+    {t:'step',n} (a model turn is starting), {t:'tool',name,input},
+    {t:'tool_result',name,summary,ms,result}, {t:'text',v},
     {t:'sources',v} (citations for search_claims facts), {t:'done'}.
 
     ``history`` is an optional list of prior turns ({"question", "answer"}) that
@@ -375,8 +383,15 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
             yield {"t": "sources",
                    "v": list(sources.values())[:MAX_SOURCES]}
 
-    for _ in range(MAX_STEPS):
+    for step in range(MAX_STEPS):
+        # The model's own turn is the longest silence in a run — 5-30s for a
+        # deep retrieval — so announce it before the call. Without this the
+        # client has nothing to show but a spinner until a tool comes back.
+        yield {"t": "step", "n": step + 1}
+        started = time.monotonic()
         resp = client.models.generate_content(model=model, contents=contents, config=config)
+        logger.info("agent step %s: model turn %.1fs", step + 1,
+                    time.monotonic() - started)
         cand = resp.candidates[0] if resp.candidates else None
         text_parts, calls = [], []
         if cand and cand.content:
@@ -400,16 +415,21 @@ def stream_answer(client: Client, model: str, question: str, allowed=None,
         for fc in calls:
             args = dict(fc.args) if fc.args else {}
             yield {"t": "tool", "name": fc.name, "input": args}
+            t0 = time.monotonic()
             out = _dispatch(fc.name, args, allowed,
                             claim_search=claim_search,
                             allowed_documents=allowed_documents,
                             list_tags=list_tags,
                             list_facets=list_facets,
                             min_period=min_period)
+            ms = int((time.monotonic() - t0) * 1000)
+            logger.info("agent step %s: %s %s -> %sms", step + 1, fc.name,
+                        _arg_preview(args), ms)
             if fc.name == "search_claims" and isinstance(out, dict):
                 _collect_sources(sources, out)
             yield {"t": "tool_result", "name": fc.name,
                    "summary": _summarize(fc.name, out),
+                   "ms": ms,
                    "result": out if fc.name in ("run_sql", "search_claims") else None}
             responses.append(types.Part.from_function_response(
                 name=fc.name, response={"result": out}))

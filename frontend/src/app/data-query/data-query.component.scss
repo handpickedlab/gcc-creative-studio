@@ -133,6 +133,7 @@
   border-left: 2px solid var(--border); margin: 4px 0 10px; padding: 4px 0 4px 14px;
 }
 .trace.live { border-left-color: var(--accent); }
+.s-ms { color: var(--text-s); font-size: 11px; font-variant-numeric: tabular-nums; }
 
 /* answer body */
 .answer { font-size: 14px; line-height: 1.65; }

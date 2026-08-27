@@ -23,7 +23,7 @@ import {
 } from '@angular/core';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {Subscription, timer} from 'rxjs';
-import {switchMap, takeWhile} from 'rxjs/operators';
+import {exhaustMap, takeWhile} from 'rxjs/operators';
 import {
   AgentStep,
   ClaimSource,
@@ -186,9 +186,12 @@ export class DataQueryComponent implements OnInit, OnDestroy {
   /** Poll the run until it leaves ``processing``; render progress as it lands. */
   private startPolling(runId: string): void {
     this.poll?.unsubscribe();
-    this.poll = timer(0, 1500)
+    // exhaustMap, not switchMap: a poll that outlives the next tick (a cold
+    // instance, a busy worker) must still land instead of being cancelled and
+    // leaving the trace frozen.
+    this.poll = timer(0, 1000)
       .pipe(
-        switchMap(() => this.service.getRun(runId)),
+        exhaustMap(() => this.service.getRun(runId)),
         takeWhile(run => run.status === 'processing', true),
       )
       .subscribe({
@@ -263,6 +266,32 @@ export class DataQueryComponent implements OnInit, OnDestroy {
   /** The tool calls of a turn (the collapsible reasoning trace). */
   traceSteps(steps: AgentStep[]): AgentStep[] {
     return steps.filter(s => s.kind === 'tool');
+  }
+  /** Which loop step the agent is mid-way through, if it is thinking now. */
+  thinkingStep(steps: AgentStep[]): number | null {
+    const last = steps[steps.length - 1];
+    return last?.kind === 'model' ? last.n ?? null : null;
+  }
+  /** Live label under the trace: names the step so the wait is legible. */
+  thinkingLabel(steps: AgentStep[]): string {
+    const n = this.thinkingStep(steps);
+    return n ? `thinking… (step ${n})` : 'thinking…';
+  }
+  /** A finished tool call's duration, e.g. "1.4s"; empty while it runs. */
+  took(s: AgentStep): string {
+    return s.ms == null ? '' : `${(s.ms / 1000).toFixed(1)}s`;
+  }
+  /**
+   * True while this tool call has not come back yet. Keyed on the placeholder
+   * summary the worker writes when a call starts, not on the duration, so this
+   * still reads correctly against a backend that does not send ``ms`` yet.
+   */
+  running(s: AgentStep): boolean {
+    return s.kind === 'tool' && s.summary === '…';
+  }
+  /** True while any tool call in the turn is still in flight. */
+  toolRunning(steps: AgentStep[]): boolean {
+    return this.traceSteps(steps).some(s => this.running(s));
   }
   traceLabel(steps: AgentStep[]): string {
     const n = this.traceSteps(steps).length;
