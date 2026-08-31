@@ -57,7 +57,10 @@
 .body { flex: 1; display: flex; min-height: 0; }
 
 /* ---- rail ---- */
-.rail { width: 288px; flex-shrink: 0; background: var(--bg-sub); border-right: 1px solid var(--border-lt);
+/* The rail never shrank, so at high browser zoom it kept a fixed 288px of an
+   already-small viewport and starved the canvas. Row names already ellipsize,
+   so narrowing it costs nothing. */
+.rail { width: clamp(208px, 22vw, 288px); flex-shrink: 0; background: var(--bg-sub); border-right: 1px solid var(--border-lt);
   display: flex; flex-direction: column; }
 .rail-sec { padding: 16px; flex-shrink: 0; }
 .rail-label { font-size: 9px; font-weight: 600; color: var(--text-s); letter-spacing: 0.14em; text-transform: uppercase; }
@@ -94,8 +97,12 @@
 .dict-link .t2 { font-size: 10px; color: var(--text-s); margin-top: 1px; }
 
 /* ---- canvas ---- */
-.canvas { flex: 1; min-width: 0; overflow-y: auto; }
-.canvas-inner { max-width: 980px; margin: 0 auto; padding: 36px; }
+/* Everything inside the canvas sizes against the CANVAS, not the viewport: the
+   real constraint is the viewport minus the page padding and the rail, so a
+   viewport media query fires at the wrong moment — which is how the right-hand
+   markets panel ended up clipped when you zoomed in. */
+.canvas { flex: 1; min-width: 0; overflow-y: auto; container-type: inline-size; }
+.canvas-inner { max-width: 980px; margin: 0 auto; padding: clamp(16px, 3.4cqi, 36px); }
 .canvas-inner.wide { max-width: 1180px; }
 
 /* ---- buttons ---- */
@@ -203,8 +210,11 @@
 .addblock:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ---- two column work ---- */
-.work-grid { display: grid; grid-template-columns: 1fr 380px; gap: 28px; align-items: start; }
-.panel { }
+/* minmax(0, …) rather than a bare 1fr: 1fr keeps an auto minimum, so one long
+   line of source copy made the grid wider than the canvas and pushed the
+   markets panel out of view instead of letting the layout give. */
+.work-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(288px, 380px); gap: 28px; align-items: start; }
+.panel { min-width: 0; }
 .seg-toggle { display: inline-flex; padding: 2px; background: var(--surface); border: 1px solid var(--border-lt); border-radius: 100px; }
 .seg-toggle button { padding: 5px 14px; border: none; border-radius: 100px; background: transparent; color: var(--text-m); font-size: 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
 .seg-toggle button.on { background: var(--bg); color: var(--text); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -232,9 +242,9 @@
 .appr-bar .stat .d { width: 7px; height: 7px; border-radius: 50%; }
 .appr-bar .acts { margin-left: auto; display: flex; gap: 7px; }
 
-.tbl-head { display: grid; grid-template-columns: 150px 1fr 1fr 76px; gap: 14px; padding: 0 6px 8px 11px; }
+.tbl-head { display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr) 76px; gap: 14px; padding: 0 6px 8px 11px; }
 .tbl-head span { font-size: 9px; font-weight: 600; color: var(--text-s); letter-spacing: .1em; text-transform: uppercase; }
-.frow { display: grid; grid-template-columns: 150px 1fr 1fr 76px; gap: 14px; padding: 12px 6px; border-bottom: 1px solid var(--border-lt);
+.frow { display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr) 76px; gap: 14px; padding: 12px 6px; border-bottom: 1px solid var(--border-lt);
   border-left: 3px solid transparent; padding-left: 11px; align-items: start; }
 .frow.approved { border-left-color: var(--ok); }
 .frow.changes { border-left-color: var(--bad); }
@@ -310,7 +320,7 @@
 .intake-row .head input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
 
 /* ---- Instructies rail + editor ---- */
-.lang-layout { display: grid; grid-template-columns: 232px 1fr; gap: 26px; align-items: start; }
+.lang-layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 26px; align-items: start; }
 .lang-rail { background: var(--bg-sub); border: 1px solid var(--border-lt); border-radius: var(--rl); padding: 16px 14px;
   display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }
 .lang-pick { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: var(--r); cursor: pointer; font-family: inherit;
@@ -329,7 +339,31 @@
 .snip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1.5px solid var(--border-lt); border-radius: 100px;
   background: var(--surface); color: var(--text-m); font-size: 11px; cursor: pointer; font-family: inherit; transition: all .12s; }
 .snip:hover { border-color: var(--accent); color: var(--text); }
-@media (max-width: 900px) { .lang-layout { grid-template-columns: 1fr; } .lang-rail { position: static; } }
+
+/* ---- narrow canvas ----
+   Steps measured against the canvas, so they fire whenever the column is
+   genuinely too narrow — a small window, a wide window at 175% zoom, or a
+   future third pane — instead of at a guessed viewport width. */
+@container (max-width: 900px) {
+  /* The markets panel wraps under the editor rather than being squeezed off. */
+  .work-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .lang-layout { grid-template-columns: minmax(0, 1fr); }
+  .lang-rail { position: static; }
+  .tbl-head, .frow { grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1fr) 40px; gap: 10px; }
+}
+@container (max-width: 620px) {
+  .meta-grid, .empty-cards { grid-template-columns: minmax(0, 1fr); }
+  /* Too narrow for four columns: field label and its action share the first
+     line, then source and translation each get the full width. The header row
+     no longer maps onto columns, so it goes. */
+  .tbl-head { display: none; }
+  .frow { grid-template-columns: minmax(0, 1fr) 40px; gap: 6px 10px; }
+  .frow > *:nth-child(1) { grid-area: 1 / 1; display: flex; align-items: center; gap: 8px; }
+  .frow > *:nth-child(4) { grid-area: 1 / 2; }
+  .frow > *:nth-child(2) { grid-area: 2 / 1 / 3 / 3; padding-top: 0; }
+  .frow > *:nth-child(3) { grid-area: 3 / 1 / 4 / 3; }
+  .frow .fl-name { margin-top: 0; }
+}
 
 @keyframes vspin { to { transform: rotate(360deg); } }
 @keyframes vpulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
