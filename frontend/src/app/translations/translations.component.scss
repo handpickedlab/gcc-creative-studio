@@ -183,6 +183,11 @@
 .metabar .mrow b { color: var(--text); font-weight: 500; }
 .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-lt); }
 .meta-grid .full { grid-column: 1 / -1; }
+/* Notes carry real weight — they reach the model — so the label says so and
+   the collapsed meta row flags that there is something to read. */
+.fld-note { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text-s); }
+.notes-flag { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 100px;
+  background: var(--accent-lt); border: 1px solid var(--accent); color: var(--accent-h); cursor: pointer; }
 .fld-label { font-size: 9px; font-weight: 600; color: var(--text-s); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
 .tinput { width: 100%; padding: 8px 11px; border: 1.5px solid var(--border-lt); border-radius: var(--r); background: var(--surface);
   color: var(--text); font-family: inherit; font-size: 12px; }
