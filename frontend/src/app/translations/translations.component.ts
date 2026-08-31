@@ -248,6 +248,7 @@ export class TranslationsComponent implements OnInit {
     this.service.getBriefing(id).subscribe({
       next: res => {
         this.briefing = this.fromBackend(res.briefing, id);
+        this.revealNotes();
         this.mstate = {};
         const fields = this.briefing.fields;
         const codes: string[] = [];
@@ -343,10 +344,25 @@ export class TranslationsComponent implements OnInit {
         {id: fid(), block: 'B2', type: 'block', name: 'CTA', limit: 22, text: '', translate: true},
       ],
     };
+    this.revealNotes();
     this.mstate = {};
     this.selected = [];
     this.workTab = 'briefing';
     this.view = 'work';
+  }
+
+  /**
+   * Notes steer the translation (they are sent to the model), but they live
+   * behind the collapsed "Details" panel, so a note carried in from the
+   * uploaded sheet was invisible unless you happened to open it. Opening the
+   * panel when there is something to read makes it findable; the flag in the
+   * meta row keeps it findable after you close it again.
+   */
+  private revealNotes(): void {
+    if (this.briefing?.notes?.trim()) this.metaOpen = true;
+  }
+  get hasNotes(): boolean {
+    return !!this.briefing?.notes?.trim();
   }
 
   onFileSelected(ev: Event): void {

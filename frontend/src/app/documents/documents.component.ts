@@ -999,6 +999,12 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     this.api.getJob(job.id).subscribe({
       next: updated => {
         this.job = updated;
+        // A stalled run will never report progress again; polling it forever
+        // only keeps a dead spinner alive.
+        if (updated.stalled) {
+          this.stopPolling();
+          return;
+        }
         if (updated.status !== 'translating') {
           this.stopPolling();
           if (updated.status === 'review' || updated.status === 'completed') {
@@ -1029,6 +1035,20 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   get runFailed(): boolean {
     return this.job?.status === 'failed';
+  }
+
+  /**
+   * The run says it is translating but its worker is gone — the backend flags
+   * this from the job's own heartbeat. Whatever it managed is kept, so this
+   * offers Resume instead of a bar that never moves again.
+   */
+  get runStalled(): boolean {
+    return this.job?.status === 'translating' && !!this.job?.stalled;
+  }
+
+  /** True while the run is genuinely working (spinner earns its place). */
+  get runWorking(): boolean {
+    return !this.runComplete && !this.runFailed && !this.runStalled;
   }
 
   /** Section run states for the outline while a job is translating. */
@@ -1100,7 +1120,21 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     }
   }
 
-  retryRun() {
+  /** Picks the run back up: the segments already translated are kept. */
+  resumeRun() {
+    const job = this.job;
+    if (!job) return;
+    this.api.resumeTranslation(job.id).subscribe({
+      next: updated => {
+        this.job = updated;
+        this.startPolling();
+      },
+      error: this.failed('Resuming'),
+    });
+  }
+
+  /** Starts the document over from scratch, discarding the previous output. */
+  restartRun() {
     const job = this.job;
     if (!job) return;
     this.api
@@ -1110,7 +1144,7 @@ export class DocumentsComponent implements OnInit, OnDestroy {
           this.job = updated;
           this.startPolling();
         },
-        error: this.failed('Retrying'),
+        error: this.failed('Starting over'),
       });
   }
 

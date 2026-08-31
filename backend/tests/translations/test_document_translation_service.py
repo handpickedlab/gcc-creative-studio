@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for the document translation job service (upload/review/export)."""
 
+import datetime
 import io
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,9 +21,11 @@ import pytest
 from docx import Document
 from fastapi import HTTPException
 
+from src.translations.documents import service as svc
 from src.translations.documents.dto.document_translation_dto import (
     FinalizeUploadDto,
     GenerateUploadUrlDto,
+    StartTranslationDto,
     UpdateSegmentDto,
 )
 from src.translations.documents.service import MAX_UPLOAD_BYTES
@@ -293,3 +296,273 @@ async def test_export_applies_reviewed_translations():
     service.gcs.upload_bytes_to_gcs.assert_called_once()
     update_values = service.jobs.update.call_args.args[1]
     assert update_values["status"] == "completed"
+
+
+# ── resuming an interrupted run ──────────────────────────────────────────
+#
+# The worker is an asyncio task inside one Cloud Run instance and the service
+# scales to zero, so an instance reclaimed mid-run takes the task with it
+# WITHOUT raising: the job keeps status "translating" at its last flushed
+# percentage. A real 1,300-segment annual report froze at 36% that way, and the
+# 409 on "translating" meant it could never be started again either.
+
+
+def _stale(minutes: int) -> datetime.datetime:
+    return datetime.datetime.now(datetime.UTC) - datetime.timedelta(
+        minutes=minutes
+    )
+
+
+def _seg(index: int, section: str, translation: str | None, status: str):
+    return DocumentTranslationSegmentModel(
+        id=index,
+        job_id="job-1",
+        seg_index=index,
+        kind="prose",
+        section_id=section,
+        section_path=[section],
+        source_text=f"source {index}",
+        translation=translation,
+        status=status,
+    )
+
+
+class TestStallDetection:
+    def test_a_beating_job_is_not_stalled(self):
+        job = _job_model(status="translating", updated_at=_stale(minutes=1))
+
+        assert svc._is_stalled(job) is False
+
+    def test_a_silent_translating_job_is_stalled(self):
+        job = _job_model(status="translating", updated_at=_stale(minutes=45))
+
+        assert svc._is_stalled(job) is True
+
+    def test_only_translating_jobs_can_stall(self):
+        """A finished job is old by definition — that is not a stall."""
+        for state in ("review", "completed", "failed", "uploaded"):
+            job = _job_model(status=state, updated_at=_stale(minutes=600))
+            assert svc._is_stalled(job) is False, state
+
+
+class TestResumeGuards:
+    @pytest.mark.anyio
+    async def test_a_live_run_is_not_resumable(self):
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(
+            status="translating", updated_at=_stale(minutes=1)
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await service.resume_translation("job-1")
+
+        assert exc.value.status_code == 409
+        assert "still translating" in exc.value.detail
+
+    @pytest.mark.anyio
+    async def test_a_finished_run_has_nothing_to_resume(self):
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(status="review")
+
+        with pytest.raises(HTTPException) as exc:
+            await service.resume_translation("job-1")
+
+        assert exc.value.status_code == 409
+
+    @pytest.mark.anyio
+    async def test_starting_over_is_allowed_once_a_run_has_stalled(self):
+        """The 409 that wedged the stuck job must not fire on a dead one."""
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(
+            status="translating", updated_at=_stale(minutes=45)
+        )
+        service.segments.find_by_job.return_value = []
+        service.memory.find_matches.return_value = {}
+        service.jobs.update.return_value = _job_model(status="translating")
+        service._build_translator = AsyncMock()
+        service._launch = MagicMock()
+
+        await service.start_translation(
+            "job-1", StartTranslationDto(target_market="NL")
+        )
+
+        assert service._launch.called
+
+    @pytest.mark.anyio
+    async def test_resume_keeps_the_market_and_model_of_the_dead_run(self):
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(
+            status="translating",
+            target_market="DE",
+            model_id="gemini-x",
+            updated_at=_stale(minutes=45),
+        )
+        service.jobs.update.return_value = _job_model(status="translating")
+        service._build_translator = AsyncMock()
+        service._launch = MagicMock()
+
+        await service.resume_translation("job-1")
+
+        service._build_translator.assert_awaited_once_with("DE", "gemini-x")
+        assert service._launch.call_args.kwargs["resume"] is True
+        # The progress dict is untouched, so the bar carries on from where it
+        # froze instead of snapping back to zero.
+        assert "progress" not in service.jobs.update.call_args.args[1]
+
+    @pytest.mark.anyio
+    async def test_resume_needs_a_market_to_resume_with(self):
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(
+            status="failed", target_market=None
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await service.resume_translation("job-1")
+
+        assert exc.value.status_code == 400
+
+
+class _FakeSession:
+    """Stands in for `async_session_local()` — the worker opens its own."""
+
+    async def __aenter__(self):
+        return "db"
+
+    async def __aexit__(self, *_exc):
+        return False
+
+
+class TestResumeRun:
+    """What resume actually has to get right, at the worker level."""
+
+    def _wire(self, monkeypatch, rows_before, rows_after):
+        seg_repo, job_repo = AsyncMock(), AsyncMock()
+        seg_repo.find_by_job.side_effect = [rows_before, rows_after]
+        monkeypatch.setattr(svc, "async_session_local", lambda: _FakeSession())
+        monkeypatch.setattr(
+            svc, "DocumentTranslationSegmentRepository", lambda _db: seg_repo
+        )
+        monkeypatch.setattr(
+            svc, "DocumentTranslationJobRepository", lambda _db: job_repo
+        )
+        qa_run = MagicMock(return_value=[])
+        monkeypatch.setattr(svc.qa, "run_all", qa_run)
+        translator = MagicMock()
+        translator.translate_batch.side_effect = lambda batch: {
+            s.id: f"vertaling {s.id}" for s in batch
+        }
+        return seg_repo, job_repo, qa_run, translator
+
+    @pytest.mark.anyio
+    async def test_only_the_untranslated_segments_go_back_to_the_model(
+        self, monkeypatch
+    ):
+        # Section "1" was finished by the dead run; section "2" never got there.
+        before = [
+            _seg(1, "1", "vertaling 1", "translated"),
+            _seg(2, "1", "vertaling 2", "translated"),
+            _seg(3, "2", None, "pending"),
+            _seg(4, "2", None, "pending"),
+        ]
+        after = [
+            _seg(i, s, f"vertaling {i}", "translated")
+            for i, s in ((1, "1"), (2, "1"), (3, "2"), (4, "2"))
+        ]
+        seg_repo, job_repo, qa_run, translator = self._wire(
+            monkeypatch, before, after
+        )
+
+        await svc.DocumentTranslationService(
+            jobs=AsyncMock(), segments=AsyncMock(), memory=AsyncMock(),
+            gcs=MagicMock(), signer=MagicMock(),
+        )._run_translation("job-1", translator, resume=True)
+
+        sent = [
+            s.id
+            for call in translator.translate_batch.call_args_list
+            for s in call.args[0]
+        ]
+        assert sent == [3, 4], "already-translated segments were re-sent"
+
+    @pytest.mark.anyio
+    async def test_progress_carries_on_instead_of_restarting_at_zero(
+        self, monkeypatch
+    ):
+        before = [
+            _seg(1, "1", "vertaling 1", "translated"),
+            _seg(2, "1", "vertaling 2", "translated"),
+            _seg(3, "2", None, "pending"),
+        ]
+        after = [_seg(i, s, f"vertaling {i}", "translated")
+                 for i, s in ((1, "1"), (2, "1"), (3, "2"))]
+        seg_repo, job_repo, qa_run, translator = self._wire(
+            monkeypatch, before, after
+        )
+
+        await svc.DocumentTranslationService(
+            jobs=AsyncMock(), segments=AsyncMock(), memory=AsyncMock(),
+            gcs=MagicMock(), signer=MagicMock(),
+        )._run_translation("job-1", translator, resume=True)
+
+        progress = [
+            c.args[1]["progress"]
+            for c in job_repo.update.call_args_list
+            if "progress" in c.args[1]
+        ]
+        assert progress, "no progress was flushed"
+        assert progress[0]["total"] == 3
+        # 2 carried + the 1 just done — not 1 out of 1.
+        assert progress[-1]["translated"] == 3
+        # And the finished section is not shown as queued again.
+        assert progress[-1]["sections"]["1"] == "done"
+
+    @pytest.mark.anyio
+    async def test_qa_judges_the_whole_document_not_just_this_pass(
+        self, monkeypatch
+    ):
+        """`set_findings` clears every prior finding, so a resume that ran QA
+        over its own pass only would erase the earlier half's findings."""
+        before = [
+            _seg(1, "1", "vertaling 1", "translated"),
+            _seg(2, "2", None, "pending"),
+        ]
+        after = [
+            _seg(1, "1", "vertaling 1", "translated"),
+            _seg(2, "2", "vertaling 2", "translated"),
+        ]
+        seg_repo, job_repo, qa_run, translator = self._wire(
+            monkeypatch, before, after
+        )
+
+        await svc.DocumentTranslationService(
+            jobs=AsyncMock(), segments=AsyncMock(), memory=AsyncMock(),
+            gcs=MagicMock(), signer=MagicMock(),
+        )._run_translation("job-1", translator, resume=True)
+
+        judged = sorted(s.id for s in qa_run.call_args.args[0])
+        assert judged == [1, 2]
+
+    @pytest.mark.anyio
+    async def test_a_restart_still_replaces_everything(self, monkeypatch):
+        """Starting over is the other button: prior output is not kept."""
+        before = [
+            _seg(1, "1", "oude vertaling", "translated"),
+            _seg(2, "1", None, "pending"),
+        ]
+        after = [_seg(1, "1", "vertaling 1", "translated"),
+                 _seg(2, "1", "vertaling 2", "translated")]
+        seg_repo, job_repo, qa_run, translator = self._wire(
+            monkeypatch, before, after
+        )
+
+        await svc.DocumentTranslationService(
+            jobs=AsyncMock(), segments=AsyncMock(), memory=AsyncMock(),
+            gcs=MagicMock(), signer=MagicMock(),
+        )._run_translation("job-1", translator, resume=False)
+
+        sent = [
+            s.id
+            for call in translator.translate_batch.call_args_list
+            for s in call.args[0]
+        ]
+        assert sent == [1, 2]

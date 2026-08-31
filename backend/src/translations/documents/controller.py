@@ -143,6 +143,20 @@ async def start_translation(
     return await service.start_translation(job_id, dto)
 
 
+@router.post(
+    "/{job_id}/resume",
+    response_model=DocumentTranslationJobModel,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Resume a stalled or failed run, keeping what was already translated",
+)
+async def resume_translation(
+    job_id: str,
+    service: DocumentTranslationService = Depends(),
+):
+    """Continues an interrupted run instead of re-translating the document."""
+    return await service.resume_translation(job_id)
+
+
 @router.get(
     "/{job_id}/segments",
     response_model=list[DocumentTranslationSegmentModel],
