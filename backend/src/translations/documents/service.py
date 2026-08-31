@@ -22,8 +22,10 @@ job row through short-lived sessions, and the client polls GET /{id}.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import io
 import logging
+import os
 import re
 import uuid
 import zipfile
@@ -77,6 +79,15 @@ MAX_UPLOAD_BYTES = 150 * 1024 * 1024
 # Keeps background tasks alive (see data_query: the loop only holds weak refs).
 _JOB_TASKS: set[asyncio.Task] = set()
 
+# A run flushes progress to the job row after every section batch and
+# `updated_at` carries onupdate=now(), so the row beats like a heartbeat. Going
+# quiet for longer than this while still "translating" means the worker is gone
+# rather than slow: the task lives inside one Cloud Run instance and the service
+# scales to zero, so an instance reclaimed mid-run (or replaced by a deploy)
+# takes the task with it WITHOUT raising — the except branch never runs, and the
+# job would otherwise sit at its last percentage forever with no way out.
+_STALL_AFTER_S = float(os.getenv("DOC_TRANSLATION_STALL_AFTER_S", "600"))
+
 
 def _doc_properties(content: bytes) -> dict[str, int]:
     """Pages/words from docProps/app.xml (Word's own extended properties)."""
@@ -91,6 +102,23 @@ def _doc_properties(content: bytes) -> dict[str, int]:
         return props
     except Exception:  # missing part, corrupt zip: cosmetic, never fatal
         return {}
+
+
+def _is_stalled(job: DocumentTranslationJobModel) -> bool:
+    """True when a translating job has stopped beating (see _STALL_AFTER_S)."""
+    if job.status != "translating" or job.updated_at is None:
+        return False
+    beat = job.updated_at
+    if beat.tzinfo is None:  # older rows may come back naive
+        beat = beat.replace(tzinfo=datetime.UTC)
+    age = (datetime.datetime.now(datetime.UTC) - beat).total_seconds()
+    return age > _STALL_AFTER_S
+
+
+def _flag_stalled(job: DocumentTranslationJobModel) -> DocumentTranslationJobModel:
+    """Stamps the computed `stalled` flag the review UI offers Resume on."""
+    job.stalled = _is_stalled(job)
+    return job
 
 
 def _row_to_segment(row: DocumentTranslationSegmentModel) -> Segment:
@@ -271,7 +299,7 @@ class DocumentTranslationService:
     # --- job lifecycle ----------------------------------------------------
 
     async def list_jobs(self) -> list[DocumentTranslationJobModel]:
-        return await self.jobs.find_recent()
+        return [_flag_stalled(j) for j in await self.jobs.find_recent()]
 
     async def get_job(self, job_id: str) -> DocumentTranslationJobModel:
         job = await self.jobs.get_by_id(job_id)
@@ -280,7 +308,7 @@ class DocumentTranslationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Job not found.",
             )
-        return job
+        return _flag_stalled(job)
 
     async def estimate_reuse(
         self, job_id: str, target_market: str
@@ -310,7 +338,7 @@ class DocumentTranslationService:
         self, job_id: str, dto: StartTranslationDto
     ) -> DocumentTranslationJobModel:
         job = await self.get_job(job_id)
-        if job.status == "translating":
+        if job.status == "translating" and not job.stalled:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Job is already translating.",
@@ -333,12 +361,66 @@ class DocumentTranslationService:
             },
         )
         translator = await self._build_translator(dto.target_market, model_id)
+        self._launch(job_id, translator)
+        return job
+
+    def _launch(
+        self, job_id: str, translator: SegmentTranslator, resume: bool = False
+    ) -> None:
         task = asyncio.create_task(
-            self._run_translation(job_id, translator)
+            self._run_translation(job_id, translator, resume=resume)
         )
         _JOB_TASKS.add(task)
         task.add_done_callback(_JOB_TASKS.discard)
-        return job
+
+    async def resume_translation(
+        self, job_id: str
+    ) -> DocumentTranslationJobModel:
+        """Pick a stalled or failed run back up where it stopped.
+
+        Unlike starting over, this keeps every segment the dead run already
+        translated and only sends the gaps to the model — on a 1,300-segment
+        annual report that is the difference between minutes and re-paying for
+        work already done. Same market and model by definition: resuming with
+        different settings would mix two translations in one document, so that
+        case belongs to `start_translation`.
+        """
+        job = await self.get_job(job_id)
+        if job.status == "translating" and not job.stalled:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Job is still translating.",
+            )
+        if job.status not in ("translating", "failed"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Nothing to resume: job is '{job.status}'.",
+            )
+        if not job.target_market:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This job never started, so there is nothing to resume.",
+            )
+        # Read the settings off the row we just validated, not off the row the
+        # update returns: the market decides the language every remaining
+        # segment is translated into, and it must be the one checked above.
+        target_market = job.target_market
+        model_id = job.model_id or config_service.GEMINI_MODEL_ID
+        logger.info(
+            "Resuming translation job %s (%s, was '%s')",
+            job_id,
+            target_market,
+            job.status,
+        )
+        # No memory prefill: that ran when the job first started, and the
+        # progress dict is left alone so the bar carries on from where the
+        # dead run left it instead of snapping back to zero.
+        job = await self.jobs.update(
+            job_id, {"status": "translating", "error_message": None}
+        )
+        translator = await self._build_translator(target_market, model_id)
+        self._launch(job_id, translator, resume=True)
+        return _flag_stalled(job)
 
     async def _prefill_from_memory(
         self, job_id: str, target_market: str
@@ -425,7 +507,7 @@ class DocumentTranslationService:
         return glossary, protected or list(financial_glossary.DO_NOT_TRANSLATE)
 
     async def _run_translation(
-        self, job_id: str, translator: SegmentTranslator
+        self, job_id: str, translator: SegmentTranslator, resume: bool = False
     ) -> None:
         """Background worker: fresh short-lived sessions only."""
         try:
@@ -433,17 +515,30 @@ class DocumentTranslationService:
                 rows = await DocumentTranslationSegmentRepository(
                     db
                 ).find_by_job(job_id, translatable_only=True)
-            pending = [
-                _row_to_segment(r) for r in rows if r.status != "approved"
-            ]
-            for seg in pending:
-                seg.translation = None  # re-running replaces prior output
-            total = len(pending)
-            done = 0
+            todo = [r for r in rows if r.status != "approved"]
+            if resume:
+                # Keep what the dead run produced; only the gaps go to the
+                # model again.
+                carried = [r for r in todo if r.translation]
+                pending = [
+                    _row_to_segment(r) for r in todo if not r.translation
+                ]
+            else:
+                carried = []
+                pending = [_row_to_segment(r) for r in todo]
+                for seg in pending:
+                    seg.translation = None  # a restart replaces prior output
+            total = len(todo)
+            # Seeding the count with what is already translated keeps the
+            # progress bar continuing from where it froze.
+            done = len(carried)
             failed_all: list[int] = []
             # Section states drive the tree during a run: queued -> run ->
             # done/fail. Batches never span sections (iter_batches).
             sections = {s.section_id: "queued" for s in pending}
+            for row in carried:
+                # A section the dead run finished must not flip back to queued.
+                sections.setdefault(row.section_id or "", "done")
             for batch in iter_batches(pending):
                 key = batch[0].section_id
                 sections[key] = "run"
@@ -480,9 +575,21 @@ class DocumentTranslationService:
                             }
                         },
                     )
+            # Re-read the document before QA: `set_findings` clears every
+            # prior finding, so judging only this pass would erase the findings
+            # for whatever an earlier, interrupted pass had translated.
+            async with async_session_local() as db:
+                final_rows = await DocumentTranslationSegmentRepository(
+                    db
+                ).find_by_job(job_id, translatable_only=True)
+            reviewed = [
+                _row_to_segment(r)
+                for r in final_rows
+                if r.status != "approved" and r.translation
+            ]
             # Check against the very terms the model was instructed to use.
             findings = qa.run_all(
-                pending,
+                reviewed,
                 glossary=getattr(translator, "glossary", None),
                 do_not_translate=getattr(translator, "do_not_translate", None),
             )

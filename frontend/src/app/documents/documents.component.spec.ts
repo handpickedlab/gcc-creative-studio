@@ -155,3 +155,88 @@ describe('DocumentsComponent — mid-run section preview', () => {
     expect(states['1.2']).toBe('run');
   });
 });
+
+/**
+ * A run whose worker died with its Cloud Run instance keeps status
+ * `translating` at its last flushed percentage. The backend flags that as
+ * `stalled`; the UI has to stop pretending it is working and offer Resume.
+ */
+describe('DocumentsComponent — an interrupted run', () => {
+  let cmp: DocumentsComponent;
+  let resume: jasmine.Spy;
+  let start: jasmine.Spy;
+  let getJob: jasmine.Spy;
+
+  const stalled: ApiJob = {...JOB, stalled: true};
+
+  beforeEach(async () => {
+    resume = jasmine.createSpy('resumeTranslation').and.returnValue(of(JOB));
+    start = jasmine.createSpy('startTranslation').and.returnValue(of(JOB));
+    getJob = jasmine.createSpy('getJob').and.returnValue(of(stalled));
+    await TestBed.configureTestingModule({
+      declarations: [DocumentsComponent],
+      providers: [
+        {
+          provide: DocumentTranslationsService,
+          useValue: {
+            listJobs: () => of([]),
+            listSegments: () => of([]),
+            getJob,
+            resumeTranslation: resume,
+            startTranslation: start,
+          },
+        },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    cmp = TestBed.createComponent(DocumentsComponent).componentInstance;
+  });
+
+  it('calls a stalled run paused, not working', () => {
+    cmp.job = stalled;
+
+    expect(cmp.runStalled).toBeTrue();
+    expect(cmp.runWorking).toBeFalse();
+    expect(cmp.runFailed).toBeFalse();
+  });
+
+  it('leaves a genuinely running job alone', () => {
+    cmp.job = JOB;
+
+    expect(cmp.runStalled).toBeFalse();
+    expect(cmp.runWorking).toBeTrue();
+  });
+
+  it('keeps the progress it reached, so Resume has something to show', () => {
+    cmp.job = stalled;
+
+    expect(cmp.runPct).toBe(12);
+  });
+
+  it('resumes rather than starting the document over', () => {
+    cmp.job = stalled;
+
+    cmp.resumeRun();
+
+    expect(resume).toHaveBeenCalledOnceWith('j1');
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('still offers a full restart as the other choice', () => {
+    cmp.job = stalled;
+
+    cmp.restartRun();
+
+    expect(start).toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it('stops polling a dead run instead of spinning forever', () => {
+    cmp.job = JOB;
+    cmp['startPolling']();
+
+    cmp['pollJob']();
+
+    expect(cmp['poller']).toBeNull();
+  });
+});

@@ -168,6 +168,9 @@ class DocumentTranslationJobModel(BaseStringDocument):
     qa_findings: list | None = None
     error_message: str | None = None
     created_by: str | None = None
+    # Computed, never stored: a "translating" job whose worker died with its
+    # instance. The review UI offers Resume on it.
+    stalled: bool = False
 
 
 class DocumentTranslationSegmentModel(BaseDocument):

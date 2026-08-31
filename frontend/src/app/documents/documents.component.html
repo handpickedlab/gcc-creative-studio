@@ -217,29 +217,40 @@
       <div class="run-center" [class.peeking]="runPeek">
         <div class="run-card" *ngIf="!runPeek">
           <div class="check" *ngIf="runComplete">✓</div>
-          <div class="spin-wrap" *ngIf="!runComplete && !runFailed"><span class="spinner xl"></span></div>
+          <div class="spin-wrap" *ngIf="runWorking"><span class="spinner xl"></span></div>
           <div class="check" *ngIf="runFailed" style="color:var(--bad)">✕</div>
+          <div class="check" *ngIf="runStalled" style="color:var(--warn, #D99A40)">⏸</div>
           <h2>
-            {{ runFailed ? 'Translation failed' : runComplete ? 'Translation complete' : 'Translating section by section' }}
+            {{ runFailed ? 'Translation failed'
+              : runStalled ? 'Translation paused'
+              : runComplete ? 'Translation complete'
+              : 'Translating section by section' }}
           </h2>
           <p>
             {{ runFailed
-              ? 'Nothing was lost — the sections that finished are kept. Retry when ready.'
-              : runComplete
-                ? 'QA checks ran over every translated segment. Ready for review.'
-                : 'Leave anytime — progress is saved per section and the library shows the status.' }}
+              ? 'Nothing was lost — the sections that finished are kept. Resume when ready.'
+              : runStalled
+                ? 'The run stopped before it finished, most likely because the tab was closed. Everything translated so far is kept.'
+                : runComplete
+                  ? 'QA checks ran over every translated segment. Ready for review.'
+                  : 'Leave anytime — progress is saved per section and the library shows the status.' }}
           </p>
           <div class="run-bar"><span class="fill" [class.done]="runComplete" [style.width.%]="runPct"></span></div>
           <div class="run-count" *ngIf="runProgress as p">
             {{ runPct }}% · {{ p.translated | number }} of {{ p.total | number }} segments<span *ngIf="p.failed"> · {{ p.failed }} failed</span>
           </div>
-          <div class="fail-box" *ngIf="runFailed">
-            <span class="x">✕</span>
+          <div class="fail-box" *ngIf="runFailed || runStalled">
+            <span class="x">{{ runStalled ? '⏸' : '✕' }}</span>
             <div class="body">
-              <div class="t">{{ job?.errorMessage || 'The run stopped with an error.' }}</div>
-              <div class="d">Retrying picks up the segments that are still open.</div>
+              <div class="t">
+                {{ runStalled
+                  ? 'This run was interrupted and did not finish.'
+                  : job?.errorMessage || 'The run stopped with an error.' }}
+              </div>
+              <div class="d">Resuming translates only the segments that are still open.</div>
             </div>
-            <button class="btn sm" (click)="retryRun()">Retry</button>
+            <button class="btn sm primary" (click)="resumeRun()">Resume</button>
+            <button class="btn sm" (click)="restartRun()">Start over</button>
           </div>
           <div class="run-actions">
             <button class="btn" *ngIf="runComplete" (click)="openReview()">
@@ -247,7 +258,7 @@
             </button>
             <button class="btn soft" *ngIf="!runComplete" (click)="backToLibrary()">Back to library</button>
           </div>
-          <div class="run-hint" *ngIf="!runComplete && !runFailed">Open a finished section on the left to read it while the rest translates.</div>
+          <div class="run-hint" *ngIf="runWorking">Open a finished section on the left to read it while the rest translates.</div>
         </div>
 
         <!-- a finished section, read while the rest of the document translates -->
@@ -261,7 +272,7 @@
             <button class="btn sm" *ngIf="runComplete" (click)="openReview()">Open review</button>
           </div>
 
-          <div class="peek-status" *ngIf="!runComplete && !runFailed">
+          <div class="peek-status" *ngIf="runWorking">
             <span class="spinner sm"></span>
             <span class="pst" *ngIf="runProgress as p">
               Still translating — {{ runPct }}% · {{ p.translated | number }} of {{ p.total | number }} segments

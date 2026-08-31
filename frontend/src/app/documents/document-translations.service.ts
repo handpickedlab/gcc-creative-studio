@@ -84,6 +84,13 @@ export interface ApiJob {
   createdBy?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /**
+   * Computed server-side: the run says `translating` but its worker is gone
+   * (the task lives in one Cloud Run instance and the service scales to zero).
+   * The progress it did make is intact, so this offers Resume rather than a
+   * spinner that never moves.
+   */
+  stalled?: boolean;
 }
 
 export type ApiSegmentKind =
@@ -167,6 +174,14 @@ export class DocumentTranslationsService {
     const body: Record<string, string> = {targetMarket};
     if (modelId) body['modelId'] = modelId;
     return this.http.post<ApiJob>(`${this.base}/${jobId}/translate`, body);
+  }
+
+  /**
+   * Picks an interrupted run back up: same market and model, and every segment
+   * already translated is kept — only the gaps go to the model again.
+   */
+  resumeTranslation(jobId: string): Observable<ApiJob> {
+    return this.http.post<ApiJob>(`${this.base}/${jobId}/resume`, {});
   }
 
   listSegments(
