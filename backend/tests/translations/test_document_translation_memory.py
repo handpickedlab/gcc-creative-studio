@@ -75,6 +75,9 @@ def _service(rows):
         status="uploaded",
         target_market="NL",
     )
+    # Re-checking an edited segment reads the market's glossary through its
+    # own session; these tests are about memory, not terminology.
+    service._load_glossary = AsyncMock(return_value=([], []))
     return service
 
 

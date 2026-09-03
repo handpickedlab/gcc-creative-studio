@@ -46,6 +46,10 @@ class DocumentTranslationJob(Base):
     )
     target_market: Mapped[str | None] = mapped_column(String, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Renotate figures and dates for the target market on export.
+    localise_numbers: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     source_gcs_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     output_gcs_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     stats: Mapped[dict | None] = mapped_column(_JsonType, nullable=True)
@@ -161,6 +165,7 @@ class DocumentTranslationJobModel(BaseStringDocument):
     status: str = "uploaded"
     target_market: str | None = None
     model_id: str | None = None
+    localise_numbers: bool = False
     source_gcs_uri: str | None = None
     output_gcs_uri: str | None = None
     stats: dict | None = None

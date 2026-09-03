@@ -37,7 +37,7 @@ from src.common.storage_service import GcsService
 from src.config.config_service import config_service
 from src.database import async_session_local
 from src.translations import markets
-from src.translations.documents import financial_glossary, qa
+from src.translations.documents import financial_glossary, locale_format, qa
 from src.translations.documents.docx_engine import DocxTranslationEngine
 from src.translations.documents.dto.document_translation_dto import (
     FinalizeUploadDto,
@@ -46,6 +46,7 @@ from src.translations.documents.dto.document_translation_dto import (
     StartTranslationDto,
     UpdateSegmentDto,
 )
+from src.translations.documents.locale_format import LocaleFormat
 from src.translations.documents.model import Segment, SegmentKind
 from src.translations.documents import memory as tm
 from src.translations.documents.repository.document_translation_repository import (
@@ -356,19 +357,30 @@ class DocumentTranslationService:
                 "status": "translating",
                 "target_market": dto.target_market,
                 "model_id": model_id,
+                "localise_numbers": dto.localise_numbers,
                 "error_message": None,
                 "progress": {"reused": reused},
             },
         )
         translator = await self._build_translator(dto.target_market, model_id)
-        self._launch(job_id, translator)
+        # Export renotates figures; QA has to accept that spelling too.
+        fmt = (
+            locale_format.for_market(dto.target_market)
+            if dto.localise_numbers
+            else None
+        )
+        self._launch(job_id, translator, fmt)
         return job
 
     def _launch(
-        self, job_id: str, translator: SegmentTranslator, resume: bool = False
+        self,
+        job_id: str,
+        translator: SegmentTranslator,
+        fmt: LocaleFormat | None = None,
+        resume: bool = False,
     ) -> None:
         task = asyncio.create_task(
-            self._run_translation(job_id, translator, resume=resume)
+            self._run_translation(job_id, translator, fmt, resume=resume)
         )
         _JOB_TASKS.add(task)
         task.add_done_callback(_JOB_TASKS.discard)
@@ -406,6 +418,12 @@ class DocumentTranslationService:
         # segment is translated into, and it must be the one checked above.
         target_market = job.target_market
         model_id = job.model_id or config_service.GEMINI_MODEL_ID
+        # Same reason: the notation choice was made when the run started.
+        fmt = (
+            locale_format.for_market(target_market)
+            if job.localise_numbers
+            else None
+        )
         logger.info(
             "Resuming translation job %s (%s, was '%s')",
             job_id,
@@ -419,7 +437,7 @@ class DocumentTranslationService:
             job_id, {"status": "translating", "error_message": None}
         )
         translator = await self._build_translator(target_market, model_id)
-        self._launch(job_id, translator, resume=True)
+        self._launch(job_id, translator, fmt, resume=True)
         return _flag_stalled(job)
 
     async def _prefill_from_memory(
@@ -506,8 +524,41 @@ class DocumentTranslationService:
         protected = [t.source for t in terms if t.do_not_translate]
         return glossary, protected or list(financial_glossary.DO_NOT_TRANSLATE)
 
+    async def _recheck(
+        self, job: DocumentTranslationJobModel, segment: Segment
+    ) -> dict | None:
+        """Re-runs the deterministic checks over one segment.
+
+        A finding is written by the worker and then has to be *resolvable*:
+        a reviewer who corrects the figure must see the flag go, and one who
+        corrects it wrongly must see it stay. Blindly clearing it would hand
+        a retranslation that dropped a number a free pass, and leaving it
+        would block the export on a segment that is already right.
+        """
+        if segment.translation is None or not job.target_market:
+            return None
+        glossary, protected = await self._load_glossary(job.target_market)
+        fmt = (
+            locale_format.for_market(job.target_market)
+            if job.localise_numbers
+            else None
+        )
+        findings = qa.run_all(
+            [segment],
+            glossary=glossary,
+            do_not_translate=protected,
+            fmt=fmt,
+        )
+        # run_all orders errors first, so the first finding is the one the
+        # review workspace should show.
+        return _finding_payload(findings[0]) if findings else None
+
     async def _run_translation(
-        self, job_id: str, translator: SegmentTranslator, resume: bool = False
+        self,
+        job_id: str,
+        translator: SegmentTranslator,
+        fmt: LocaleFormat | None = None,
+        resume: bool = False,
     ) -> None:
         """Background worker: fresh short-lived sessions only."""
         try:
@@ -592,6 +643,7 @@ class DocumentTranslationService:
                 reviewed,
                 glossary=getattr(translator, "glossary", None),
                 do_not_translate=getattr(translator, "do_not_translate", None),
+                fmt=fmt,
             )
             payloads = [_finding_payload(f) for f in findings]
             async with async_session_local() as db:
@@ -683,6 +735,17 @@ class DocumentTranslationService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Nothing to update.",
             )
+        if dto.translation is not None:
+            # Judge the text the reviewer just wrote, in the same write, so
+            # a corrected figure stops blocking the export.
+            rows = await self.segments.find_by_job(job_id)
+            row = next(
+                (r for r in rows if r.seg_index == seg_index), None
+            )
+            if row is not None:
+                segment = _row_to_segment(row)
+                segment.translation = dto.translation
+                values["finding"] = await self._recheck(job, segment)
         updated = await self.segments.update_segment(
             job_id, seg_index, values
         )
@@ -726,6 +789,7 @@ class DocumentTranslationService:
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="The model returned no translation; try again.",
             )
+        segment.translation = results[seg_index]
         updated = await self.segments.update_segment(
             job_id,
             seg_index,
@@ -733,7 +797,8 @@ class DocumentTranslationService:
                 "translation": results[seg_index],
                 "status": "translated",
                 "provenance": "ai",
-                "finding": None,
+                # Not None: a retranslation can drop a figure of its own.
+                "finding": await self._recheck(job, segment),
             },
         )
         return updated
@@ -748,10 +813,15 @@ class DocumentTranslationService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Job is not ready for export.",
             )
+        rows = await self.segments.find_by_job(job_id)
+        # The segment rows are the live state: `qa_findings` on the job is
+        # the report of the run that produced it and is never rewritten
+        # during review, so gating on it would keep refusing an export whose
+        # findings were all resolved. Approved rows count too — approving a
+        # section does not look at findings, and that must not become a way
+        # around the checks.
         blocking = [
-            f
-            for f in (job.qa_findings or [])
-            if f.get("severity") == "error"
+            r for r in rows if (r.finding or {}).get("severity") == "error"
         ]
         if blocking:
             raise HTTPException(
@@ -767,7 +837,6 @@ class DocumentTranslationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source document is no longer available.",
             )
-        rows = await self.segments.find_by_job(job_id)
         translations = {
             r.seg_index: r.translation
             for r in rows
@@ -776,9 +845,42 @@ class DocumentTranslationService:
         engine = await asyncio.to_thread(
             DocxTranslationEngine, io.BytesIO(content)
         )
+        fmt = (
+            locale_format.for_market(job.target_market)
+            if job.localise_numbers
+            else None
+        )
+        renotated = 0
         for seg in engine.tree.segments:
-            if seg.id in translations:
-                seg.translation = translations[seg.id]
+            translation = translations.get(seg.id)
+            if translation is None:
+                # Locked cells are never translated, but they hold the
+                # figures — and those are read in the target market too.
+                if fmt and seg.kind == SegmentKind.NUMERIC:
+                    seg.translation = locale_format.localise_locked(
+                        seg.text, fmt
+                    )
+                    if seg.translation != seg.text:
+                        renotated += 1
+                continue
+            if fmt:
+                localised = locale_format.localise_translation(
+                    seg.text,
+                    translation,
+                    fmt,
+                    conservative=seg.kind == SegmentKind.HEADING,
+                )
+                if localised != translation:
+                    renotated += 1
+                translation = localised
+            seg.translation = translation
+        if fmt:
+            logger.info(
+                "Job %s: renotated %s segments for %s",
+                job_id,
+                renotated,
+                job.target_market,
+            )
         engine.apply()
         out = io.BytesIO()
         engine.save(out)

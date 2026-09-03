@@ -21,6 +21,7 @@ import pytest
 from docx import Document
 from fastapi import HTTPException
 
+from src.translations.documents import locale_format
 from src.translations.documents import service as svc
 from src.translations.documents.dto.document_translation_dto import (
     FinalizeUploadDto,
@@ -40,6 +41,26 @@ def _fixture_docx_bytes() -> bytes:
     doc = Document()
     doc.add_heading("2.19 Right-of-use assets", level=1)
     doc.add_paragraph("The Group recognised an impairment of EUR 1,234.")
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def _table_docx_bytes() -> bytes:
+    """A heading, a prose line and a financial table with locked figures."""
+    doc = Document()
+    doc.add_heading("2.19 Right-of-use assets", level=1)
+    doc.add_paragraph(
+        "Total assets amounted to 319,915 as at January 31, 2026."
+    )
+    table = doc.add_table(rows=2, cols=2)
+    rows = [
+        ["€ in thousands", "January 31, 2026"],
+        ["Total assets", "319,915"],
+    ]
+    for r, values in enumerate(rows):
+        for c, value in enumerate(values):
+            table.rows[r].cells[c].paragraphs[0].add_run(value)
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue()
@@ -192,6 +213,7 @@ async def test_retranslate_segment_applies_instruction():
     fake_translator = MagicMock()
     fake_translator.translate_batch.return_value = {1: "nieuw"}
     service._build_translator = AsyncMock(return_value=fake_translator)
+    service._load_glossary = AsyncMock(return_value=([], []))
 
     await service.retranslate_segment("job-1", 1, "more formal")
 
@@ -248,13 +270,75 @@ async def test_update_segment_edit_marks_edited():
 @pytest.mark.anyio
 async def test_export_blocked_by_qa_errors():
     service = _service()
-    service.jobs.get_by_id.return_value = _job_model(
-        qa_findings=[{"severity": "error", "check": "numbers"}]
-    )
+    service.jobs.get_by_id.return_value = _job_model()
+    service.segments.find_by_job.return_value = [
+        DocumentTranslationSegmentModel(
+            id=1,
+            job_id="job-1",
+            seg_index=1,
+            kind="prose",
+            source_text="Total assets were 319,915.",
+            translation="De totale activa bedroegen 319.915.",
+            status="translated",
+            finding={"severity": "error", "type": "number"},
+        )
+    ]
     with pytest.raises(HTTPException) as exc:
         await service.export("job-1")
     assert exc.value.status_code == 409
     assert "QA findings" in exc.value.detail
+
+
+@pytest.mark.anyio
+async def test_export_blocked_by_an_approved_segment_too():
+    """Approving a section does not look at findings, so gating on open
+    segments alone would make bulk approval a way around the checks."""
+    service = _service()
+    service.jobs.get_by_id.return_value = _job_model()
+    service.segments.find_by_job.return_value = [
+        DocumentTranslationSegmentModel(
+            id=1,
+            job_id="job-1",
+            seg_index=1,
+            kind="prose",
+            source_text="Total assets were 319,915.",
+            translation="De totale activa bedroegen 400.000.",
+            status="approved",
+            finding={"severity": "error", "type": "number"},
+        )
+    ]
+    with pytest.raises(HTTPException) as exc:
+        await service.export("job-1")
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_export_is_not_blocked_by_the_report_of_an_earlier_run():
+    """`qa_findings` on the job is the report of the run that produced it and
+    is never rewritten during review. Gating on it kept refusing an export
+    whose findings had all been resolved — a permanent block."""
+    service = _service()
+    service.jobs.get_by_id.return_value = _job_model(
+        qa_findings=[{"severity": "error", "type": "number"}]
+    )
+    service.gcs.download_bytes_from_gcs.return_value = _fixture_docx_bytes()
+    service.segments.find_by_job.return_value = [
+        DocumentTranslationSegmentModel(
+            id=1,
+            job_id="job-1",
+            seg_index=1,
+            kind="prose",
+            source_text="The Group recognised an impairment of EUR 1,234.",
+            translation="De Groep verwerkte een waardedaling van EUR 1,234.",
+            status="approved",
+            finding=None,
+        )
+    ]
+
+    name, data = await service.export("job-1")
+
+    assert name.endswith("(NL).docx")
+    assert data
 
 
 @pytest.mark.anyio
@@ -408,6 +492,70 @@ class TestResumeGuards:
         # The progress dict is untouched, so the bar carries on from where it
         # froze instead of snapping back to zero.
         assert "progress" not in service.jobs.update.call_args.args[1]
+
+    @pytest.mark.anyio
+    async def test_resume_keeps_the_notation_choice_of_the_dead_run(self):
+        """Notation is decided when a run starts. Resuming with a different
+        answer would renotate half a document and leave the rest English."""
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(
+            status="translating",
+            target_market="DE",
+            localise_numbers=True,
+            updated_at=_stale(minutes=45),
+        )
+        service.jobs.update.return_value = _job_model(status="translating")
+        service._build_translator = AsyncMock()
+        service._launch = MagicMock()
+
+        await service.resume_translation("job-1")
+
+        assert (
+            service._launch.call_args.args[2]
+            == locale_format.for_market("DE")
+        )
+
+    @pytest.mark.anyio
+    async def test_a_plain_run_resumes_without_renotation(self):
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(
+            status="translating",
+            target_market="DE",
+            localise_numbers=False,
+            updated_at=_stale(minutes=45),
+        )
+        service.jobs.update.return_value = _job_model(status="translating")
+        service._build_translator = AsyncMock()
+        service._launch = MagicMock()
+
+        await service.resume_translation("job-1")
+
+        assert service._launch.call_args.args[2] is None
+
+    @pytest.mark.anyio
+    async def test_starting_a_run_hands_the_notation_to_the_worker(self):
+        """QA has to accept the localised spelling of a figure, so the worker
+        needs the same format the export will use."""
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(status="uploaded")
+        service.segments.find_by_job.return_value = []
+        service.memory.find_matches.return_value = {}
+        service.jobs.update.return_value = _job_model(status="translating")
+        service._build_translator = AsyncMock()
+        service._launch = MagicMock()
+
+        await service.start_translation(
+            "job-1",
+            StartTranslationDto(target_market="NL", localise_numbers=True),
+        )
+
+        assert (
+            service._launch.call_args.args[2]
+            == locale_format.for_market("NL")
+        )
+        assert (
+            service.jobs.update.call_args.args[1]["localise_numbers"] is True
+        )
 
     @pytest.mark.anyio
     async def test_resume_needs_a_market_to_resume_with(self):
@@ -566,3 +714,195 @@ class TestResumeRun:
             for s in call.args[0]
         ]
         assert sent == [1, 2]
+def _localisation_rows() -> list[DocumentTranslationSegmentModel]:
+    """Translations that reproduced the source's figures, as instructed."""
+    return [
+        DocumentTranslationSegmentModel(
+            id=1,
+            job_id="job-1",
+            seg_index=0,
+            kind="heading",
+            source_text="2.19 Right-of-use assets",
+            translation="2.19 Gebruiksrechten",
+            status="approved",
+        ),
+        DocumentTranslationSegmentModel(
+            id=2,
+            job_id="job-1",
+            seg_index=1,
+            kind="prose",
+            source_text=(
+                "Total assets amounted to 319,915 as at January 31, 2026."
+            ),
+            translation=(
+                "De totale activa bedroegen 319,915 per January 31, 2026."
+            ),
+            status="approved",
+        ),
+        DocumentTranslationSegmentModel(
+            id=3,
+            job_id="job-1",
+            seg_index=2,
+            kind="table_label",
+            source_text="€ in thousands",
+            translation="€ in duizenden",
+            status="approved",
+        ),
+        DocumentTranslationSegmentModel(
+            id=4,
+            job_id="job-1",
+            seg_index=3,
+            kind="table_label",
+            source_text="January 31, 2026",
+            translation="January 31, 2026",
+            status="approved",
+        ),
+        DocumentTranslationSegmentModel(
+            id=5,
+            job_id="job-1",
+            seg_index=4,
+            kind="table_label",
+            source_text="Total assets",
+            translation="Totale activa",
+            status="approved",
+        ),
+    ]
+
+
+async def _export_table_docx(**job_overrides) -> list[str]:
+    service = _service()
+    service.jobs.get_by_id.return_value = _job_model(**job_overrides)
+    service.gcs.download_bytes_from_gcs.return_value = _table_docx_bytes()
+    service.segments.find_by_job.return_value = _localisation_rows()
+
+    _, data = await service.export("job-1")
+
+    exported = Document(io.BytesIO(data))
+    cells = [
+        cell.text
+        for table in exported.tables
+        for row in table.rows
+        for cell in row.cells
+    ]
+    return [p.text for p in exported.paragraphs] + cells
+
+
+@pytest.mark.anyio
+async def test_export_renotates_figures_and_dates_when_asked():
+    texts = await _export_table_docx(localise_numbers=True)
+
+    assert "De totale activa bedroegen 319.915 per 31 januari 2026." in texts
+    # The locked figure cell is never translated, only renotated.
+    assert "319.915" in texts
+    assert "31 januari 2026" in texts
+    # A section number is a reference, not a figure.
+    assert "2.19 Gebruiksrechten" in texts
+    assert not any("319,915" in t for t in texts)
+
+
+@pytest.mark.anyio
+async def test_export_keeps_english_notation_by_default():
+    texts = await _export_table_docx()
+
+    assert "De totale activa bedroegen 319,915 per January 31, 2026." in texts
+    assert "319,915" in texts
+    assert not any("319.915" in t for t in texts)
+
+
+class TestResolvingAFinding:
+    """A blocking finding has to be resolvable without re-running the whole
+    document: the reviewer corrects the figure and the flag goes."""
+
+    def _service_with(self, translation: str):
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model()
+        service.segments.find_by_job.return_value = [
+            DocumentTranslationSegmentModel(
+                id=1,
+                job_id="job-1",
+                seg_index=1,
+                kind="prose",
+                source_text="Total assets were 319,915.",
+                translation=translation,
+                status="translated",
+                finding={"severity": "error", "type": "number"},
+            )
+        ]
+        service.segments.update_segment.return_value = (
+            DocumentTranslationSegmentModel(
+                id=1,
+                job_id="job-1",
+                seg_index=1,
+                kind="prose",
+                source_text="Total assets were 319,915.",
+                translation=translation,
+                status="translated",
+            )
+        )
+        service._load_glossary = AsyncMock(return_value=([], []))
+        return service
+
+    @pytest.mark.anyio
+    async def test_correcting_the_figure_clears_the_flag(self):
+        service = self._service_with("De totale activa bedroegen 319.915.")
+
+        await service.update_segment(
+            "job-1",
+            1,
+            UpdateSegmentDto(
+                translation="De totale activa bedroegen 319,915."
+            ),
+        )
+
+        values = service.segments.update_segment.call_args.args[2]
+        assert values["finding"] is None
+
+    @pytest.mark.anyio
+    async def test_an_edit_that_is_still_wrong_keeps_the_flag(self):
+        service = self._service_with("De totale activa bedroegen 319.915.")
+
+        await service.update_segment(
+            "job-1",
+            1,
+            UpdateSegmentDto(
+                translation="De totale activa bedroegen 400,000."
+            ),
+        )
+
+        values = service.segments.update_segment.call_args.args[2]
+        assert values["finding"]["severity"] == "error"
+        assert values["finding"]["type"] == "number"
+
+    @pytest.mark.anyio
+    async def test_a_localised_run_accepts_the_reviewers_notation(self):
+        """With renotation on, 319.915 is the same figure as 319,915 — the
+        export writes it that way anyway."""
+        service = self._service_with("De totale activa bedroegen 319.915.")
+        service.jobs.get_by_id.return_value = _job_model(
+            localise_numbers=True
+        )
+
+        await service.update_segment(
+            "job-1",
+            1,
+            UpdateSegmentDto(
+                translation="De totale activa bedroegen 319.915."
+            ),
+        )
+
+        values = service.segments.update_segment.call_args.args[2]
+        assert values["finding"] is None
+
+    @pytest.mark.anyio
+    async def test_a_retranslation_that_drops_a_figure_is_flagged(self):
+        """Clearing the finding blindly handed this a free pass."""
+        service = self._service_with("De totale activa waren hoog.")
+        fake = MagicMock()
+        fake.translate_batch.return_value = {1: "De totale activa waren hoog."}
+        service._build_translator = AsyncMock(return_value=fake)
+
+        await service.retranslate_segment("job-1", 1, None)
+
+        values = service.segments.update_segment.call_args.args[2]
+        assert values["finding"]["type"] == "number"
+        assert values["finding"]["expected"] == "319,915"
