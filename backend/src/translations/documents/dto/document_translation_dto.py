@@ -44,6 +44,12 @@ class StartTranslationDto(BaseDto):
         default=None,
         description="Optional Gemini model override; defaults to app config.",
     )
+    localise_numbers: bool = Field(
+        default=False,
+        description="Write figures and dates the way the target market does "
+        "when the document is exported (319,915 -> 319.915, "
+        "'January 31, 2026' -> '31 januari 2026').",
+    )
 
 
 class RetranslateSegmentDto(BaseDto):

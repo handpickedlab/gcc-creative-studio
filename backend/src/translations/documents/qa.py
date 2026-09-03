@@ -25,7 +25,9 @@ from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 
-from src.translations.documents.model import Segment
+from src.translations.documents import locale_format
+from src.translations.documents.locale_format import LocaleFormat
+from src.translations.documents.model import Segment, SegmentKind
 from src.translations.documents.translator import GlossaryEntry
 
 
@@ -59,33 +61,67 @@ def _numbers(text: str) -> Counter:
     return Counter(_NUMBER.findall(text))
 
 
-def check_numbers(segments: list[Segment]) -> list[Finding]:
+def _pair_up(
+    source: Counter, target: Counter, variants: dict[str, str]
+) -> tuple[Counter, Counter]:
+    """Matches source figures against the target's, accepting each figure's
+    localised spelling as the same figure. Returns (missing, added)."""
+    remaining = Counter(target)
+    missing: Counter = Counter()
+    for token, count in source.items():
+        for _ in range(count):
+            for form in (token, variants.get(token)):
+                if form and remaining[form] > 0:
+                    remaining[form] -= 1
+                    break
+            else:
+                missing[token] += 1
+    return missing, +remaining
+
+
+def check_numbers(
+    segments: list[Segment], fmt: LocaleFormat | None = None
+) -> list[Finding]:
     """Every number in the source must appear in the translation, and no
-    new numbers may be introduced. Exact-match: number localisation, when
-    we add it, happens deterministically *after* this check."""
+    new numbers may be introduced.
+
+    Exact-match by default. When the export will renotate figures (`fmt`),
+    a figure already carrying the target market's spelling counts as
+    reproduced: the model is told to copy figures verbatim, but one that
+    localised a figure anyway did not change its value.
+    """
     findings = []
     for seg in segments:
         if seg.translation is None:
             continue
         source, target = _numbers(seg.text), _numbers(seg.translation)
-        if source != target:
-            missing = source - target
-            added = target - source
-            parts = []
-            if missing:
-                parts.append("missing: " + ", ".join(sorted(missing)))
-            if added:
-                parts.append("added: " + ", ".join(sorted(added)))
-            findings.append(
-                Finding(
-                    segment_id=seg.id,
-                    check="number",
-                    severity=Severity.ERROR,
-                    detail="; ".join(parts),
-                    expected=", ".join(sorted(missing)) or None,
-                    found=", ".join(sorted(added)) or None,
-                )
+        if source == target:
+            continue
+        variants = (
+            locale_format.number_plan(
+                seg.text, fmt, conservative=seg.kind == SegmentKind.HEADING
             )
+            if fmt
+            else {}
+        )
+        missing, added = _pair_up(source, target, variants)
+        if not missing and not added:
+            continue
+        parts = []
+        if missing:
+            parts.append("missing: " + ", ".join(sorted(missing)))
+        if added:
+            parts.append("added: " + ", ".join(sorted(added)))
+        findings.append(
+            Finding(
+                segment_id=seg.id,
+                check="number",
+                severity=Severity.ERROR,
+                detail="; ".join(parts),
+                expected=", ".join(sorted(missing)) or None,
+                found=", ".join(sorted(added)) or None,
+            )
+        )
     return findings
 
 
@@ -170,8 +206,9 @@ def run_all(
     segments: list[Segment],
     glossary: list[GlossaryEntry] | None = None,
     do_not_translate: list[str] | None = None,
+    fmt: LocaleFormat | None = None,
 ) -> list[Finding]:
-    findings = check_numbers(segments)
+    findings = check_numbers(segments, fmt)
     if do_not_translate:
         findings += check_do_not_translate(segments, do_not_translate)
     if glossary:
