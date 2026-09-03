@@ -39,6 +39,7 @@ import {
   STATUS_META,
   StatusMeta,
   marketLabel,
+  NOTATION_SAMPLES,
 } from './documents.data';
 import {
   ApiJob,
@@ -183,6 +184,9 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   /* preflight — the API translates into one market per job */
   pfTarget = 'NL';
+  /* Renotate figures and dates for the market, applied at export. Off by
+     default: a reviewer who wants the source notation gets it untouched. */
+  pfLocalise = false;
   reusePct: number | null = null;
   reuseTotal = 0;
   reuseCount = 0;
@@ -472,6 +476,20 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     return marketLabel(code);
   }
 
+  /** What the run was actually started with — the export follows this. */
+  get jobLocalised(): boolean {
+    return !!this.job?.localiseNumbers;
+  }
+
+  /** UK reads the source notation, so there is nothing to renotate. */
+  get localiseAvailable(): boolean {
+    return !!NOTATION_SAMPLES[this.pfTarget];
+  }
+
+  get notationExample(): string {
+    return NOTATION_SAMPLES[this.pfTarget] || '';
+  }
+
   /* ── review view model ──────────────────────────────────────── */
 
   private matches(seg: Segment): boolean {
@@ -629,6 +647,10 @@ export class DocumentsComponent implements OnInit, OnDestroy {
   /* ── segment mutations ──────────────────────────────────────── */
 
   /** Replaces one segment in place from the API's answer. */
+  private qaTypeOf(type: string, fallback?: QaType): QaType {
+    return type in QA_META ? (type as QaType) : (fallback ?? 'glossary');
+  }
+
   private absorb(sec: string, api: ApiSegment) {
     const list = this.segs[sec];
     if (!list) return;
@@ -642,7 +664,9 @@ export class DocumentsComponent implements OnInit, OnDestroy {
       tgt: api.translation ?? '',
       finding: api.finding
         ? {
-            type: before.finding?.type ?? 'glossary',
+            // A re-check can replace a finding with one of another kind, so
+            // the kind comes off the response, not off what was there.
+            type: this.qaTypeOf(api.finding.type, before.finding?.type),
             msg: api.finding.msg,
             severity: api.finding.severity,
             term: api.finding.term ?? undefined,
@@ -945,6 +969,9 @@ export class DocumentsComponent implements OnInit, OnDestroy {
   pickTarget(code: string) {
     if (this.pfTarget === code) return;
     this.pfTarget = code;
+    // A market that writes figures like the source has nothing to renotate;
+    // leaving the switch on would promise something the export cannot do.
+    if (!this.localiseAvailable) this.pfLocalise = false;
     this.loadReuse();
   }
 
@@ -972,14 +999,16 @@ export class DocumentsComponent implements OnInit, OnDestroy {
   startRun() {
     const job = this.job;
     if (!job) return;
-    this.api.startTranslation(job.id, this.pfTarget).subscribe({
-      next: updated => {
-        this.job = updated;
-        this.setView('run');
-        this.startPolling();
-      },
-      error: this.failed('Starting the translation'),
-    });
+    this.api
+      .startTranslation(job.id, this.pfTarget, this.pfLocalise)
+      .subscribe({
+        next: updated => {
+          this.job = updated;
+          this.setView('run');
+          this.startPolling();
+        },
+        error: this.failed('Starting the translation'),
+      });
   }
 
   private startPolling() {
@@ -1138,7 +1167,13 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     const job = this.job;
     if (!job) return;
     this.api
-      .startTranslation(job.id, job.targetMarket || this.pfTarget)
+      // Starting over redoes the whole document, so it has to redo it with
+      // the notation the run was started with — not with a fresh default.
+      .startTranslation(
+        job.id,
+        job.targetMarket || this.pfTarget,
+        job.localiseNumbers ?? this.pfLocalise,
+      )
       .subscribe({
         next: updated => {
           this.job = updated;

@@ -153,6 +153,7 @@ textarea:focus, input:focus { outline: none; border-color: var(--accent) !import
 }
 .switch.on { background: var(--accent); }
 .switch.on .knob { left: 20px; }
+.switch:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---- badges ---- */
 .status-badge {

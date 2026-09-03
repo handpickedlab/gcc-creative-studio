@@ -196,6 +196,20 @@
                 </div>
                 <div class="more-note">One market per run — start another run for a second language.</div>
               </div>
+              <div>
+                <div class="cfg-label">Notation</div>
+                <div class="opt">
+                  <button class="switch" [class.on]="pfLocalise" [disabled]="!localiseAvailable"
+                          [attr.aria-pressed]="pfLocalise" aria-label="Write figures and dates the way the market does"
+                          (click)="pfLocalise = !pfLocalise"><span class="knob"></span></button>
+                  <div>
+                    <div class="t">Write figures and dates the way {{ marketOf(pfTarget) }} does</div>
+                    <div class="d mono" *ngIf="localiseAvailable">319,915.00 · January 31, 2026 → {{ notationExample }}</div>
+                    <div class="d" *ngIf="!localiseAvailable">{{ marketOf(pfTarget) }} writes them like the source, so there is nothing to renotate.</div>
+                  </div>
+                </div>
+                <div class="more-note" *ngIf="localiseAvailable">Applied when the document is exported, to the locked table figures too. While reviewing you see the figures as the source wrote them.</div>
+              </div>
             </div>
             <div class="pf-actions">
               <button class="btn full" [disabled]="!pfTarget" (click)="startRun()">
@@ -451,7 +465,7 @@
             <svg class="fico" width="26" height="32" viewBox="0 0 15 18" fill="none"><path d="M1.5 2.5A1.5 1.5 0 013 1h6l4.5 4.5V15A1.5 1.5 0 0112 16.5H3A1.5 1.5 0 011.5 15V2.5z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4.5h4.5" stroke="currentColor" stroke-width="1.2"/></svg>
             <div class="body">
               <div class="t">{{ docName }}</div>
-              <div class="d">same layout · only reviewed translations are written back</div>
+              <div class="d">same layout · only reviewed translations are written back<span *ngIf="jobLocalised"> · figures and dates written the way {{ targetLabel }} does</span></div>
             </div>
             <button class="btn" (click)="doExport()">{{ exported ? '✓ Downloaded — download again' : 'Download .docx' }}</button>
           </div>
