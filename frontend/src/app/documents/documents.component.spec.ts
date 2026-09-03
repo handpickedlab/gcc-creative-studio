@@ -240,3 +240,72 @@ describe('DocumentsComponent — an interrupted run', () => {
     expect(cmp['poller']).toBeNull();
   });
 });
+
+describe('DocumentsComponent — notation', () => {
+  let cmp: DocumentsComponent;
+  let start: jasmine.Spy;
+
+  beforeEach(async () => {
+    start = jasmine.createSpy('startTranslation').and.returnValue(of(JOB));
+    await TestBed.configureTestingModule({
+      declarations: [DocumentsComponent],
+      providers: [
+        {
+          provide: DocumentTranslationsService,
+          useValue: {
+            listJobs: () => of([]),
+            listSegments: () => of([]),
+            getJob: () => of(JOB),
+            reuseEstimate: () => of({pct: 0, total: 0, reusable: 0}),
+            startTranslation: start,
+          },
+        },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    cmp = TestBed.createComponent(DocumentsComponent).componentInstance;
+  });
+
+  it('leaves the source notation alone unless asked', () => {
+    cmp.job = {...JOB, status: 'uploaded'};
+
+    cmp.startRun();
+
+    expect(start).toHaveBeenCalledOnceWith('j1', 'NL', false);
+  });
+
+  it('sends the choice the reviewer made', () => {
+    cmp.job = {...JOB, status: 'uploaded'};
+    cmp.pfLocalise = true;
+
+    cmp.startRun();
+
+    expect(start).toHaveBeenCalledOnceWith('j1', 'NL', true);
+  });
+
+  it('shows what the market writes instead of the source notation', () => {
+    cmp.pickTarget('DE');
+
+    expect(cmp.localiseAvailable).toBeTrue();
+    expect(cmp.notationExample).toContain('319.915,00');
+  });
+
+  it('has nothing to offer a market that writes like the source', () => {
+    cmp.pfLocalise = true;
+
+    cmp.pickTarget('UK');
+
+    expect(cmp.localiseAvailable).toBeFalse();
+    // The switch is disabled, so leaving it on would promise renotation the
+    // export will never do.
+    expect(cmp.pfLocalise).toBeFalse();
+  });
+
+  it('starts a document over with the notation it was started with', () => {
+    cmp.job = {...JOB, targetMarket: 'FR', localiseNumbers: true};
+
+    cmp.restartRun();
+
+    expect(start).toHaveBeenCalledOnceWith('j1', 'FR', true);
+  });
+});

@@ -183,6 +183,28 @@ export const DOC_TARGETS: Array<{code: string; label: string}> = [
   {code: 'NO', label: 'Norwegian'},
 ];
 
+/**
+ * What the notation toggle produces, per market — "319,915.00 · January 31,
+ * 2026" as that market writes it. Generated from the backend's
+ * `locale_format._FORMATS`, which decides the real thing at export; a market
+ * missing here (UK) reads the source notation and needs no renotation.
+ */
+export const NOTATION_SAMPLES: Record<string, string> = {
+  NL: '319.915,00 · 31 januari 2026',
+  BENL: '319.915,00 · 31 januari 2026',
+  DE: '319.915,00 · 31. Januar 2026',
+  AT: '319.915,00 · 31. Januar 2026',
+  CHDE: "319'915.00 · 31. Januar 2026",
+  CHFR: "319'915.00 · 31 janvier 2026",
+  FR: '319\u00A0915,00 · 31 janvier 2026',
+  BEFR: '319\u00A0915,00 · 31 janvier 2026',
+  LU: '319\u00A0915,00 · 31 janvier 2026',
+  DK: '319.915,00 · 31. januar 2026',
+  ES: '319.915,00 · 31 de enero de 2026',
+  SE: '319\u00A0915,00 · 31 januari 2026',
+  NO: '319\u00A0915,00 · 31. januar 2026',
+};
+
 export function marketLabel(code: string | null | undefined): string {
   if (!code) return '';
   return DOC_TARGETS.find(t => t.code === code)?.label || code;

@@ -75,6 +75,8 @@ export interface ApiJob {
   status: ApiJobStatus;
   targetMarket?: string | null;
   modelId?: string | null;
+  /** Figures and dates are renotated for the market when exported. */
+  localiseNumbers?: boolean;
   sourceGcsUri?: string | null;
   outputGcsUri?: string | null;
   stats?: ApiJobStats | null;
@@ -169,9 +171,13 @@ export class DocumentTranslationsService {
   startTranslation(
     jobId: string,
     targetMarket: string,
+    localiseNumbers = false,
     modelId?: string,
   ): Observable<ApiJob> {
-    const body: Record<string, string> = {targetMarket};
+    const body: Record<string, string | boolean> = {
+      targetMarket,
+      localiseNumbers,
+    };
     if (modelId) body['modelId'] = modelId;
     return this.http.post<ApiJob>(`${this.base}/${jobId}/translate`, body);
   }
