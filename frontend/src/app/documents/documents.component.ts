@@ -125,6 +125,16 @@ interface JobRow {
   activity: string;
 }
 
+/** The API's `detail`, read out of a body that arrived as plain text. */
+function detailOf(text: string): string {
+  try {
+    const detail = (JSON.parse(text) as {detail?: string}).detail;
+    return detail ? ` — ${detail}` : '';
+  } catch {
+    return '';
+  }
+}
+
 const FILTERS: Array<{v: ReviewFilter; label: string}> = [
   {v: 'attention', label: 'Needs attention'},
   {v: 'ai', label: 'AI — new'},
@@ -176,6 +186,7 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   toast = '';
   exported = false;
+  rechecking = false;
 
   /* intake */
   intake: 'idle' | 'parsing' | 'error' = 'idle';
@@ -251,8 +262,19 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   private failed(action: string) {
     return (err: unknown) => {
+      const body = (err as {error?: unknown})?.error;
+      // The export is requested as a blob, so its error body arrives as one
+      // too and the API's own explanation never reaches the reviewer —
+      // "409 OK" was all a blocked download used to say.
+      if (body instanceof Blob) {
+        body
+          .text()
+          .then(text => this.flash(`${action} failed${detailOf(text)}`))
+          .catch(() => this.flash(`${action} failed`));
+        return;
+      }
       const detail =
-        (err as {error?: {detail?: string}})?.error?.detail ||
+        (body as {detail?: string} | undefined)?.detail ||
         (err as {message?: string})?.message ||
         '';
       this.flash(`${action} failed${detail ? ` — ${detail}` : ''}`);
@@ -503,7 +525,11 @@ export class DocumentsComponent implements OnInit, OnDestroy {
       }
     }
     if (this.filter === 'all') return true;
-    if (this.filter === 'attention') return !!seg.finding && !seg.approved;
+    if (this.filter === 'attention') {
+      // A blocking finding needs attention even once approved: it is what
+      // the export refuses on.
+      return !!seg.finding && (!seg.approved || this.blocksExport(seg.finding));
+    }
     if (this.filter === 'ai') return seg.prov === 'ai' && !seg.approved;
     if (this.filter === 'edited') return seg.prov === 'edited';
     return true;
@@ -539,12 +565,14 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     Object.values(this.segs).forEach(segs =>
       segs.forEach(s => {
         total++;
+        // A blocking finding counts wherever it sits. Approving a segment
+        // does not clear it and the export gate still refuses it, so
+        // skipping approved rows here made the workspace read "All clear"
+        // while every download came back 409.
+        if (s.finding && this.blocksExport(s.finding)) critical++;
         if (!s.approved) {
           open++;
-          if (s.finding) {
-            att++;
-            if (this.blocksExport(s.finding)) critical++;
-          }
+          if (s.finding) att++;
           if (s.prov === 'ai') aiOpen++;
         }
         if (s.prov === 'edited') edited++;
@@ -595,7 +623,12 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     const found: Finding[] = [];
     Object.entries(this.segs).forEach(([sec, list]) =>
       list.forEach(seg => {
-        if (seg.finding && !seg.approved) found.push({sec, seg});
+        if (!seg.finding) return;
+        // An approved segment is done being reviewed — unless its finding
+        // blocks the export, in which case it is the only thing standing
+        // between the reviewer and the download.
+        if (seg.approved && !this.blocksExport(seg.finding)) return;
+        found.push({sec, seg});
       }),
     );
     const order: Record<QaType, number> = {
@@ -711,7 +744,14 @@ export class DocumentsComponent implements OnInit, OnDestroy {
     if (!job) return;
     this.api.approveSection(job.id, sec).subscribe({
       next: res => {
-        this.flash(`Section approved — ${res.approved} segments`);
+        // A flagged segment is skipped, not approved: saying only how many
+        // went through would leave the reviewer to discover the rest at a
+        // refused download.
+        this.flash(
+          res.blocked
+            ? `${res.approved} approved — ${res.blocked} left flagged`
+            : `Section approved — ${res.approved} segments`,
+        );
         this.loadSegments();
       },
       error: this.failed('Approving the section'),
@@ -1187,6 +1227,46 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   get exportBlocked(): boolean {
     return this.criticals.length > 0;
+  }
+
+  /**
+   * A run started without renotation, in a market that writes figures its
+   * own way: every figure the model localised anyway was flagged as a
+   * mismatch, and re-checking with the notation on resolves those without
+   * touching the ones that are genuinely wrong.
+   */
+  get notationOffer(): boolean {
+    return !this.jobLocalised && !!this.jobNotationExample;
+  }
+
+  get jobNotationExample(): string {
+    return NOTATION_SAMPLES[this.job?.targetMarket || ''] || '';
+  }
+
+  recheck(localiseNumbers?: boolean) {
+    const job = this.job;
+    if (!job || this.rechecking) return;
+    this.rechecking = true;
+    this.api.recheck(job.id, localiseNumbers).subscribe({
+      next: res => {
+        this.rechecking = false;
+        // The findings live on the segments; reload them, and take the
+        // notation the job now runs on from the server's answer.
+        this.job = {...job, localiseNumbers: res.localiseNumbers};
+        this.loadSegments();
+        this.flash(
+          res.blocking === 1
+            ? '1 finding still blocks the export'
+            : res.blocking
+              ? `${res.blocking} findings still block the export`
+              : 'Checks pass — the export is ready',
+        );
+      },
+      error: err => {
+        this.rechecking = false;
+        this.failed('Re-checking')(err);
+      },
+    });
   }
 
   doExport() {

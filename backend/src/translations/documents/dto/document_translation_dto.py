@@ -52,6 +52,14 @@ class StartTranslationDto(BaseDto):
     )
 
 
+class RecheckDto(BaseDto):
+    localise_numbers: bool | None = Field(
+        default=None,
+        description="Change the notation the export will use before the "
+        "checks are replayed; omit to keep the job's current setting.",
+    )
+
+
 class RetranslateSegmentDto(BaseDto):
     instruction: str | None = Field(
         default=None,

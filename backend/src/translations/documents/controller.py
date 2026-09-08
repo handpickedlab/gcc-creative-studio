@@ -24,6 +24,7 @@ from src.translations.documents.dto.document_translation_dto import (
     FinalizeUploadDto,
     GenerateUploadUrlDto,
     GenerateUploadUrlResponseDto,
+    RecheckDto,
     RetranslateSegmentDto,
     StartTranslationDto,
     UpdateSegmentDto,
@@ -215,6 +216,18 @@ async def retranslate_segment(
     service: DocumentTranslationService = Depends(),
 ):
     return await service.retranslate_segment(job_id, seg_index, dto.instruction)
+
+
+@router.post(
+    "/{job_id}/recheck",
+    summary="Replay the quality checks over the stored translations",
+)
+async def recheck(
+    job_id: str,
+    dto: RecheckDto,
+    service: DocumentTranslationService = Depends(),
+):
+    return await service.recheck(job_id, dto.localise_numbers)
 
 
 @router.post(

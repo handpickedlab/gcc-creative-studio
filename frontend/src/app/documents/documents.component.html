@@ -458,6 +458,12 @@
             </div>
             <button class="btn sm" (click)="openSeg(f.sec, f.seg.id)">Resolve now</button>
           </div>
+          <div class="blocked-foot">
+            <button class="btn sm" (click)="recheck()" [disabled]="rechecking">Re-check</button>
+            <button class="btn sm" *ngIf="notationOffer" (click)="recheck(true)" [disabled]="rechecking">Re-check with {{ targetLabel }} notation</button>
+            <p class="more-note" *ngIf="notationOffer">This run was started without renotation, so a figure the model wrote as {{ jobNotationExample }} reads as a mismatch. Turn it on and those count as reproduced — the export then writes every figure that way, locked table cells included. Figures that really changed value stay flagged.</p>
+            <p class="more-note" *ngIf="!notationOffer">Replays the checks over the current translations — no re-translation.</p>
+          </div>
         </div>
         <div class="exp-ready" *ngIf="!exportBlocked">
           <ng-container *ngTemplateOutlet="allClearBlock; context: {compact: true}"></ng-container>
@@ -715,7 +721,7 @@
                   </span>
                 </td>
               </tr>
-              <tr *ngIf="seg.finding && !seg.approved && editingId !== seg.id">
+              <tr *ngIf="seg.finding && (!seg.approved || blocksExport(seg.finding)) && editingId !== seg.id">
                 <td class="findcell" [attr.colspan]="2 + (seg.nums?.length || 0)">
                   <ng-container *ngTemplateOutlet="findingBar; context: {sec: sec, seg: seg}"></ng-container>
                 </td>

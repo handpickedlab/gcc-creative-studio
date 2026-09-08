@@ -571,6 +571,11 @@ tr:hover .acts, tr.focused .acts { opacity: 1; }
   .src { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .msg { font-size: 10.5px; color: var(--bad); margin-top: 2px; }
 }
+.blocked-foot {
+  padding: 15px 22px; border-top: 1px solid var(--border-lt); background: var(--bg-sub);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
+  .more-note { flex-basis: 100%; margin: 2px 0 0; }
+}
 .exp-ready { display: flex; flex-direction: column; gap: 16px; }
 .file-card {
   border: 1px solid var(--border-lt); border-radius: var(--rl); padding: 20px 22px;
