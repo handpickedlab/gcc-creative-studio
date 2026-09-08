@@ -176,6 +176,8 @@ textarea:focus, input:focus { outline: none; border-color: var(--accent) !import
   animation: dspin .7s linear infinite;
 }
 .spinner.sm { width: 14px; height: 14px; }
+/* Inside a button the accent has no contrast — borrow the label's colour. */
+.spinner.onbtn { width: 12px; height: 12px; border-color: currentColor transparent transparent; opacity: .85; }
 .spinner.lg { width: 22px; height: 22px; }
 .spinner.xl { width: 26px; height: 26px; }
 
@@ -586,6 +588,21 @@ tr:hover .acts, tr.focused .acts { opacity: 1; }
   .d { font-size: 10.5px; color: var(--text-s); font-family: 'DM Mono', monospace; margin-top: 3px; }
 }
 .exp-meta { font-size: 10.5px; color: var(--text-s); line-height: 1.6; margin: 0; }
+.file-card.busy { border-color: var(--border); }
+/* Indeterminate on purpose: the export is one server call that rebuilds the
+   whole document, so there is no percentage to report — only that it runs. */
+.progline {
+  height: 2px; border-radius: 2px; background: var(--border-lt);
+  overflow: hidden; margin-top: 9px; max-width: 320px;
+  span {
+    display: block; height: 100%; width: 38%; border-radius: 2px;
+    background: var(--accent); animation: dslide 1.15s ease-in-out infinite;
+  }
+}
+@keyframes dslide {
+  0% { transform: translateX(-105%); }
+  100% { transform: translateX(368%); }
+}
 
 /* ---- glossary ---- */
 .gloss-wrap { max-width: 880px; margin: 0 auto; padding: 30px 36px 64px; }

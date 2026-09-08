@@ -459,21 +459,32 @@
             <button class="btn sm" (click)="openSeg(f.sec, f.seg.id)">Resolve now</button>
           </div>
           <div class="blocked-foot">
-            <button class="btn sm" (click)="recheck()" [disabled]="rechecking">Re-check</button>
-            <button class="btn sm" *ngIf="notationOffer" (click)="recheck(true)" [disabled]="rechecking">Re-check with {{ targetLabel }} notation</button>
+            <button class="btn sm" (click)="recheck()" [disabled]="rechecking">
+              <span class="spinner sm onbtn" *ngIf="rechecking"></span>{{ rechecking ? 'Checking…' : 'Re-check' }}
+            </button>
+            <button class="btn sm" *ngIf="notationOffer" (click)="recheck(true)" [disabled]="rechecking">
+              <span class="spinner sm onbtn" *ngIf="rechecking"></span>{{ rechecking ? 'Checking…' : 'Re-check with ' + targetLabel + ' notation' }}
+            </button>
             <p class="more-note" *ngIf="notationOffer">This run was started without renotation, so a figure the model wrote as {{ jobNotationExample }} reads as a mismatch. Turn it on and those count as reproduced — the export then writes every figure that way, locked table cells included. Figures that really changed value stay flagged.</p>
             <p class="more-note" *ngIf="!notationOffer">Replays the checks over the current translations — no re-translation.</p>
           </div>
         </div>
         <div class="exp-ready" *ngIf="!exportBlocked">
           <ng-container *ngTemplateOutlet="allClearBlock; context: {compact: true}"></ng-container>
-          <div class="file-card">
+          <div class="file-card" [class.busy]="exporting">
             <svg class="fico" width="26" height="32" viewBox="0 0 15 18" fill="none"><path d="M1.5 2.5A1.5 1.5 0 013 1h6l4.5 4.5V15A1.5 1.5 0 0112 16.5H3A1.5 1.5 0 011.5 15V2.5z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4.5h4.5" stroke="currentColor" stroke-width="1.2"/></svg>
             <div class="body">
               <div class="t">{{ docName }}</div>
-              <div class="d">same layout · only reviewed translations are written back<span *ngIf="jobLocalised"> · figures and dates written the way {{ targetLabel }} does</span></div>
+              <div class="d" *ngIf="!exporting">same layout · only reviewed translations are written back<span *ngIf="jobLocalised"> · figures and dates written the way {{ targetLabel }} does</span></div>
+              <!-- No percentage to report: the server rebuilds the document
+                   in one call, so the honest signal is that it is working. -->
+              <div class="d" *ngIf="exporting">writing {{ dr.total | number }} segments back into the source layout — this takes a moment</div>
+              <div class="progline" *ngIf="exporting"><span></span></div>
             </div>
-            <button class="btn" (click)="doExport()">{{ exported ? '✓ Downloaded — download again' : 'Download .docx' }}</button>
+            <button class="btn" (click)="doExport()" [disabled]="exporting">
+              <span class="spinner sm onbtn" *ngIf="exporting"></span>
+              {{ exporting ? 'Building…' : exported ? '✓ Downloaded — download again' : 'Download .docx' }}
+            </button>
           </div>
           <p class="exp-meta" *ngIf="dr.open > 0">
             {{ dr.open | number }} segments are not approved yet — they keep their current translation in the export.
