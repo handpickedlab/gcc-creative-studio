@@ -134,6 +134,11 @@ def _row_to_segment(row: DocumentTranslationSegmentModel) -> Segment:
     )
 
 
+def _blocks_export(finding: dict | None) -> bool:
+    """The one rule the export gate, the approve step and the UI must share."""
+    return (finding or {}).get("severity") == "error"
+
+
 def _finding_payload(finding) -> dict:
     return {
         "segmentIndex": finding.segment_id,
@@ -696,7 +701,16 @@ class DocumentTranslationService:
     async def approve_section(
         self, job_id: str, section_id: str
     ) -> dict[str, int]:
-        """Approves every translated segment left open in a section."""
+        """Approves every translated segment left open in a section.
+
+        A segment carrying a blocking finding is left alone. The export gate
+        counts approved rows too, so approving past a flag would only hide
+        it — the reviewer loses it from the workspace and is still refused
+        at the download. Approving it also writes the segment into the
+        translation memory, which would carry a wrong figure into the next
+        document. Single-segment approval already refuses; this is the same
+        rule for a whole section.
+        """
         job = await self.get_job(job_id)
         rows = await self.segments.find_by_job(
             job_id, section_id=section_id, translatable_only=True
@@ -706,12 +720,14 @@ class DocumentTranslationService:
             for r in rows
             if r.status not in ("approved", "pending") and r.translation
         ]
-        for row in open_rows:
+        blocked = [r for r in open_rows if _blocks_export(r.finding)]
+        approvable = [r for r in open_rows if not _blocks_export(r.finding)]
+        for row in approvable:
             await self.segments.update_segment(
                 job_id, row.seg_index, {"status": "approved"}
             )
-        await self._remember(job, open_rows)
-        return {"approved": len(open_rows)}
+        await self._remember(job, approvable)
+        return {"approved": len(approvable), "blocked": len(blocked)}
 
     async def update_segment(
         self, job_id: str, seg_index: int, dto: UpdateSegmentDto
@@ -803,6 +819,62 @@ class DocumentTranslationService:
         )
         return updated
 
+    async def recheck(
+        self, job_id: str, localise_numbers: bool | None = None
+    ) -> dict[str, int | bool]:
+        """Replays the deterministic checks over the whole document.
+
+        The findings on a job are the verdict of the run that wrote them, and
+        nothing re-reads the document as a whole afterwards. A reviewer who
+        changes the notation the export will use — or who has corrected
+        figures by hand — needs that verdict recomputed without paying for a
+        second translation, so this replays QA over the stored rows only.
+        """
+        job = await self.get_job(job_id)
+        if job.status not in ("review", "completed"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Job is not ready for a re-check.",
+            )
+        if not job.target_market:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Job has not been translated yet.",
+            )
+        if (
+            localise_numbers is not None
+            and localise_numbers != job.localise_numbers
+        ):
+            job = await self.jobs.update(
+                job_id, {"localise_numbers": localise_numbers}
+            )
+        glossary, protected = await self._load_glossary(job.target_market)
+        fmt = (
+            locale_format.for_market(job.target_market)
+            if job.localise_numbers
+            else None
+        )
+        rows = await self.segments.find_by_job(job_id, translatable_only=True)
+        # Approved rows are checked too: the export gate counts them, so
+        # leaving them out would clear exactly the findings that block it.
+        reviewed = [_row_to_segment(r) for r in rows if r.translation]
+        findings = qa.run_all(
+            reviewed,
+            glossary=glossary,
+            do_not_translate=protected,
+            fmt=fmt,
+        )
+        payloads = [_finding_payload(f) for f in findings]
+        await self.segments.set_findings(
+            job_id, {f["segmentIndex"]: f for f in reversed(payloads)}
+        )
+        await self.jobs.update(job_id, {"qa_findings": payloads})
+        return {
+            "findings": len(payloads),
+            "blocking": sum(1 for f in payloads if _blocks_export(f)),
+            "localiseNumbers": job.localise_numbers,
+        }
+
     # --- export -----------------------------------------------------------
 
     async def export(self, job_id: str) -> tuple[str, bytes]:
@@ -817,12 +889,11 @@ class DocumentTranslationService:
         # The segment rows are the live state: `qa_findings` on the job is
         # the report of the run that produced it and is never rewritten
         # during review, so gating on it would keep refusing an export whose
-        # findings were all resolved. Approved rows count too — approving a
-        # section does not look at findings, and that must not become a way
-        # around the checks.
-        blocking = [
-            r for r in rows if (r.finding or {}).get("severity") == "error"
-        ]
+        # findings were all resolved. Approved rows count too: approval must
+        # never become a way around the checks, and jobs reviewed before
+        # `approve_section` learned to skip a flagged segment still carry
+        # findings on rows that are already approved.
+        blocking = [r for r in rows if _blocks_export(r.finding)]
         if blocking:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

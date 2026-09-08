@@ -906,3 +906,150 @@ class TestResolvingAFinding:
         values = service.segments.update_segment.call_args.args[2]
         assert values["finding"]["type"] == "number"
         assert values["finding"]["expected"] == "319,915"
+
+
+def _flagged(index: int, translation: str, status: str = "translated"):
+    """A row the number check failed on — the export gate's blocker."""
+    row = _seg(index, "1.4", translation, status)
+    row.source_text = "Total assets were 319,915."
+    row.finding = {"severity": "error", "type": "number"}
+    return row
+
+
+class TestSectionApproval:
+    """Bulk approval must obey the same rule as the export gate.
+
+    Live consequence of it not doing so: a reviewer approved 17 sections of
+    a French annual report, the workspace went "All clear" because it only
+    counted findings on open segments, and every download came back 409.
+    """
+
+    def _service_with(self, *rows) -> DocumentTranslationService:
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model()
+        service.segments.find_by_job.return_value = list(rows)
+        return service
+
+    @pytest.mark.anyio
+    async def test_a_flagged_segment_is_left_open(self):
+        service = self._service_with(
+            _seg(1, "1.4", "Vertaald.", "translated"),
+            _flagged(2, "De totale activa bedroegen 400.000."),
+        )
+
+        result = await service.approve_section("job-1", "1.4")
+
+        assert result == {"approved": 1, "blocked": 1}
+        approved = [
+            call.args[1]
+            for call in service.segments.update_segment.await_args_list
+        ]
+        assert approved == [1]
+
+    @pytest.mark.anyio
+    async def test_a_flagged_segment_never_reaches_the_memory(self):
+        """A wrong figure remembered here would seed the next document."""
+        service = self._service_with(
+            _flagged(1, "De totale activa bedroegen 400.000."),
+        )
+        service._remember = AsyncMock()
+
+        await service.approve_section("job-1", "1.4")
+
+        assert service._remember.await_args.args[1] == []
+
+    @pytest.mark.anyio
+    async def test_a_warning_still_approves(self):
+        """Only errors block the export; a glossary warning is advisory."""
+        row = _seg(1, "1.4", "Vertaald.", "translated")
+        row.finding = {"severity": "warning", "type": "glossary"}
+        service = self._service_with(row)
+
+        result = await service.approve_section("job-1", "1.4")
+
+        assert result == {"approved": 1, "blocked": 0}
+
+
+class TestRecheck:
+    """Replaying QA over the stored rows — no second translation."""
+
+    def _service_with(
+        self, *rows, **job_overrides
+    ) -> DocumentTranslationService:
+        service = _service()
+        service.jobs.get_by_id.return_value = _job_model(**job_overrides)
+        service.jobs.update.return_value = _job_model(
+            **{**job_overrides, "localise_numbers": True}
+        )
+        service.segments.find_by_job.return_value = list(rows)
+        service._load_glossary = AsyncMock(return_value=([], []))
+        return service
+
+    @pytest.mark.anyio
+    async def test_market_notation_clears_a_notation_only_finding(self):
+        """The figure did not change value, only its spelling — and the
+        export writes it that way now, so it must stop blocking."""
+        service = self._service_with(
+            _flagged(1, "De totale activa bedroegen 319.915.", "approved"),
+        )
+
+        result = await service.recheck("job-1", localise_numbers=True)
+
+        assert result == {
+            "findings": 0,
+            "blocking": 0,
+            "localiseNumbers": True,
+        }
+        service.jobs.update.assert_any_await(
+            "job-1", {"localise_numbers": True}
+        )
+        service.segments.set_findings.assert_awaited_once_with("job-1", {})
+
+    @pytest.mark.anyio
+    async def test_a_real_mismatch_survives_the_recheck(self):
+        service = self._service_with(
+            _flagged(1, "De totale activa bedroegen 400.000.", "approved"),
+        )
+
+        result = await service.recheck("job-1", localise_numbers=True)
+
+        assert result["blocking"] == 1
+        written = service.segments.set_findings.await_args.args[1]
+        assert written[1]["type"] == "number"
+
+    @pytest.mark.anyio
+    async def test_approved_rows_are_checked_too(self):
+        """They are exactly the rows the export gate refuses, so skipping
+        them would clear the block instead of resolving it."""
+        service = self._service_with(
+            _flagged(1, "De totale activa bedroegen 400.000.", "approved"),
+        )
+
+        result = await service.recheck("job-1")
+
+        assert result["blocking"] == 1
+
+    @pytest.mark.anyio
+    async def test_a_running_job_is_not_rechecked(self):
+        """The worker owns the findings while it writes them."""
+        service = self._service_with(status="translating")
+
+        with pytest.raises(HTTPException) as exc:
+            await service.recheck("job-1")
+
+        assert exc.value.status_code == 409
+        service.segments.set_findings.assert_not_awaited()
+
+    @pytest.mark.anyio
+    async def test_the_jobs_own_setting_is_kept_when_none_is_given(self):
+        service = self._service_with(
+            _flagged(1, "De totale activa bedroegen 319.915.", "approved"),
+            localise_numbers=True,
+        )
+
+        result = await service.recheck("job-1")
+
+        assert result["blocking"] == 0
+        service.jobs.update.assert_awaited_once_with(
+            "job-1", {"qa_findings": []}
+        )

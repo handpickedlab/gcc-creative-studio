@@ -129,6 +129,13 @@ export interface ApiSegment {
   finding?: ApiFinding | null;
 }
 
+/** What a replay of the quality checks left standing. */
+export interface ApiRecheck {
+  findings: number;
+  blocking: number;
+  localiseNumbers: boolean;
+}
+
 export interface ApiReuseEstimate {
   total: number;
   reusable: number;
@@ -212,8 +219,8 @@ export class DocumentTranslationsService {
   approveSection(
     jobId: string,
     sectionId: string,
-  ): Observable<{approved: number}> {
-    return this.http.post<{approved: number}>(
+  ): Observable<{approved: number; blocked: number}> {
+    return this.http.post<{approved: number; blocked: number}>(
       `${this.base}/${jobId}/sections/${encodeURIComponent(sectionId)}/approve`,
       {},
     );
@@ -239,6 +246,16 @@ export class DocumentTranslationsService {
       `${this.base}/${jobId}/segments/${segIndex}/retranslate`,
       {instruction: instruction || null},
     );
+  }
+
+  /**
+   * Replays the quality checks over the stored translations — no model call,
+   * so changing the notation costs nothing but the round trip.
+   */
+  recheck(jobId: string, localiseNumbers?: boolean): Observable<ApiRecheck> {
+    return this.http.post<ApiRecheck>(`${this.base}/${jobId}/recheck`, {
+      localiseNumbers: localiseNumbers ?? null,
+    });
   }
 
   /** The translated .docx, as a blob so the browser can save it. */

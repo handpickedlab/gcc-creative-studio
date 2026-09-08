@@ -8,7 +8,7 @@
  */
 
 import {ComponentFixture, TestBed} from '@angular/core/testing';
-import {Subject, of} from 'rxjs';
+import {Subject, of, throwError} from 'rxjs';
 import {NO_ERRORS_SCHEMA} from '@angular/core';
 import {DocumentsComponent} from './documents.component';
 import {
@@ -16,6 +16,7 @@ import {
   ApiSegment,
   DocumentTranslationsService,
 } from './document-translations.service';
+import {viewSegments} from './documents.adapter';
 
 function seg(over: Partial<ApiSegment> = {}): ApiSegment {
   return {
@@ -307,5 +308,149 @@ describe('DocumentsComponent — notation', () => {
     cmp.restartRun();
 
     expect(start).toHaveBeenCalledOnceWith('j1', 'FR', true);
+  });
+});
+
+/**
+ * A reviewer who bulk-approves a section takes its findings with it. The
+ * export gate counts approved rows too, so the workspace has to keep showing
+ * a blocking finding wherever it sits — it read "All clear" next to a 409.
+ */
+describe('DocumentsComponent — a blocking finding that was approved away', () => {
+  let cmp: DocumentsComponent;
+  let recheck: jasmine.Spy;
+  let listSegments: jasmine.Spy;
+
+  const REVIEW: ApiJob = {...JOB, status: 'review', targetMarket: 'LU'};
+  const flagged = seg({
+    id: 2,
+    segIndex: 2,
+    status: 'approved',
+    sourceText: 'Total assets were 319,915.',
+    translation: 'Le total des actifs était de 319 915.',
+    finding: {
+      segmentIndex: 2,
+      type: 'number',
+      severity: 'error',
+      msg: 'missing: 319,915',
+    },
+  });
+
+  beforeEach(async () => {
+    recheck = jasmine
+      .createSpy('recheck')
+      .and.returnValue(of({findings: 0, blocking: 0, localiseNumbers: true}));
+    listSegments = jasmine
+      .createSpy('listSegments')
+      .and.returnValue(of([flagged]));
+    await TestBed.configureTestingModule({
+      declarations: [DocumentsComponent],
+      providers: [
+        {
+          provide: DocumentTranslationsService,
+          useValue: {
+            listJobs: () => of([]),
+            listSegments,
+            getJob: () => of(REVIEW),
+            recheck,
+          },
+        },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    cmp = TestBed.createComponent(DocumentsComponent).componentInstance;
+    cmp.job = REVIEW;
+    cmp.sections = [{id: '1.1', title: 'About Hunkemöller', n: 3}];
+    cmp.activeSec = '1.1';
+    cmp.segs = {'1.1': viewSegments([flagged])};
+    cmp.refreshView();
+  });
+
+  it('still blocks the export once the segment is approved', () => {
+    expect(cmp.criticals.length).toBe(1);
+    expect(cmp.exportBlocked).toBeTrue();
+    expect(cmp.navCritical).toBe(1);
+  });
+
+  it('keeps the segment reachable under "needs attention"', () => {
+    cmp.filter = 'attention';
+
+    cmp.refreshView();
+
+    expect(cmp.visibleCount).toBe(1);
+  });
+
+  it('offers the market notation for a run started without it', () => {
+    expect(cmp.notationOffer).toBeTrue();
+    // French groups with a non-breaking space, which is the point.
+    expect(cmp.jobNotationExample).toContain('janvier 2026');
+    expect(cmp.jobNotationExample).toContain('915');
+  });
+
+  it('re-checks with the notation on and reloads the findings', () => {
+    cmp.recheck(true);
+
+    expect(recheck).toHaveBeenCalledOnceWith('j1', true);
+    expect(cmp.job?.localiseNumbers).toBeTrue();
+    expect(listSegments).toHaveBeenCalled();
+    expect(cmp.toast).toBe('Checks pass — the export is ready');
+  });
+
+  it('says how many findings survived a re-check', () => {
+    recheck.and.returnValue(
+      of({findings: 3, blocking: 2, localiseNumbers: true}),
+    );
+
+    cmp.recheck(true);
+
+    expect(cmp.toast).toBe('2 findings still block the export');
+  });
+
+  it('has nothing to offer once the job already renotates', () => {
+    cmp.job = {...REVIEW, localiseNumbers: true};
+
+    expect(cmp.notationOffer).toBeFalse();
+  });
+});
+
+/**
+ * The export is fetched as a blob, so its error body is one too — the API's
+ * own explanation used to be dropped for Angular's "409 OK".
+ */
+describe('DocumentsComponent — a refused download', () => {
+  let cmp: DocumentsComponent;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [DocumentsComponent],
+      providers: [
+        {
+          provide: DocumentTranslationsService,
+          useValue: {
+            listJobs: () => of([]),
+            listSegments: () => of([]),
+            exportDocx: () =>
+              throwError(() => ({
+                status: 409,
+                message: 'Http failure response for /export: 409 OK',
+                error: new Blob(
+                  [JSON.stringify({detail: '12 blocking QA findings.'})],
+                  {type: 'application/json'},
+                ),
+              })),
+          },
+        },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    cmp = TestBed.createComponent(DocumentsComponent).componentInstance;
+    cmp.job = {...JOB, status: 'review'};
+  });
+
+  it('reads the reason out of the blob', async () => {
+    cmp.doExport();
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(cmp.toast).toBe('Exporting failed — 12 blocking QA findings.');
   });
 });
