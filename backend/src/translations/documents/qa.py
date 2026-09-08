@@ -94,7 +94,16 @@ def check_numbers(
     for seg in segments:
         if seg.translation is None:
             continue
-        source, target = _numbers(seg.text), _numbers(seg.translation)
+        # A figure written the market's way is not one token — "319 915,00"
+        # reads as "319" and "915,00" — so a French or Swiss translation
+        # could never match its English source. Put it back into the
+        # source's notation before counting.
+        reading = (
+            locale_format.delocalise(seg.translation, fmt)
+            if fmt
+            else seg.translation
+        )
+        source, target = _numbers(seg.text), _numbers(reading)
         if source == target:
             continue
         variants = (

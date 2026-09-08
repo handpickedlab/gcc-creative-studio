@@ -357,6 +357,63 @@ def number_plan(
     return plan
 
 
+# Separators a translation may actually reach for. The export writes the
+# market's own character, but a model asked for French notation types
+# whatever space its tokenizer produces, and both apostrophes appear in
+# Swiss copy — a check that only accepted the canonical one would flag
+# every figure it was handed.
+_SPACE_GROUPERS = "\u00a0\u202f\u2009 "
+_APOSTROPHE_GROUPERS = "'\u2019"
+
+
+def _group_chars(fmt: LocaleFormat) -> str:
+    if fmt.thousands in _SPACE_GROUPERS:
+        return _SPACE_GROUPERS
+    if fmt.thousands in _APOSTROPHE_GROUPERS:
+        return _APOSTROPHE_GROUPERS
+    return fmt.thousands
+
+
+def _delocalise_pattern(fmt: LocaleFormat) -> re.Pattern:
+    """Matches a figure written the market's way, whole.
+
+    A leading group of at most three digits and every further group of
+    exactly three is what makes this safe to run over prose: "in 2026 915
+    employees" cannot merge (2026 is four digits), while "319 915,00" is
+    the one reading its shape allows.
+    """
+    sep = f"[{re.escape(_group_chars(fmt))}]"
+    dec = re.escape(fmt.decimal)
+    # The guards may only exclude digits: for a space-grouping market the
+    # separator is also the space that ends the word before the figure and
+    # the one that starts the next, so excluding it matched nothing at all.
+    # Trailing `sep\d{3}` keeps a greedy match from stopping mid-figure.
+    return re.compile(
+        rf"(?<!\d)\d{{1,3}}(?:{sep}\d{{3}})+(?:{dec}\d+)?"
+        rf"(?!\d)(?!{sep}\d{{3}})"
+    )
+
+
+def delocalise(text: str, fmt: LocaleFormat) -> str:
+    """Rewrites market-notation figures back into their English reading.
+
+    The QA number check compares figures as tokens, and a space- or
+    apostrophe-grouped figure is not one token: "319 915,00" reads as
+    "319" and "915,00", so a French or Swiss translation could never be
+    matched against its English source however faithful it was. Undoing
+    the notation first puts both sides in the same alphabet.
+    """
+
+    def swap(match: re.Match) -> str:
+        token = match.group()
+        integer, _, fraction = token.partition(fmt.decimal)
+        digits = "".join(c for c in integer if c.isdigit())
+        grouped = f"{int(digits):,}" if digits else integer
+        return f"{grouped}.{fraction}" if fraction else grouped
+
+    return _delocalise_pattern(fmt).sub(swap, text)
+
+
 def apply_plan(text: str, plan: dict[str, str]) -> str:
     """Rewrites whole figures of `text` that the plan covers."""
     if not plan:
