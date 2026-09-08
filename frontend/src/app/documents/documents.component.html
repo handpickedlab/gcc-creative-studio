@@ -678,7 +678,7 @@
             <span class="segtxt" [class.k-h1]="seg.kind === 'h1'" [class.k-h2]="seg.kind === 'h2'">
               <ng-container *ngTemplateOutlet="hlText; context: {text: seg.tgt}"></ng-container>
             </span>
-            <ng-container *ngIf="!seg.approved">
+            <ng-container *ngIf="!seg.approved || (seg.finding && blocksExport(seg.finding))">
               <ng-container *ngTemplateOutlet="findingBar; context: {sec: sec, seg: seg}"></ng-container>
             </ng-container>
           </ng-template>

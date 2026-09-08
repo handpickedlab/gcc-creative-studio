@@ -346,3 +346,89 @@ def test_qa_dates_survive_localisation():
         [_segment("As at January 31, 2026", "Per 31 januari 2026")], NL
     )
     assert findings == []
+
+
+# --- figures the market groups with a space or an apostrophe -------------
+#
+# Live bug (2026-09-08): the French (LU) annual report came back with 46
+# blocking number findings that no re-check could clear. The QA check reads
+# figures as tokens and `319 915,00` is not one token — it reads as "319"
+# and "915,00" — so every space-grouped figure looked like a lost figure
+# plus two invented ones. Only markets that group with a period or a comma
+# (NL, DE) ever matched, which is why the Dutch verification looked clean.
+
+CHDE = locale_format.for_market("CHDE")
+
+
+@pytest.mark.parametrize(
+    "translation",
+    [
+        f"un total de 319{NBSP}915,00 EUR",
+        "un total de 319 915,00 EUR",
+        "un total de 319 915,00 EUR",
+    ],
+)
+def test_qa_accepts_a_space_grouped_figure_however_it_was_typed(translation):
+    """The export writes a real NBSP, but a model types whatever space its
+    tokenizer produces — and the figure is the same figure."""
+    findings = qa.check_numbers(
+        [_segment("a total of 319,915.00 EUR", translation)], FR
+    )
+    assert findings == []
+
+
+def test_qa_accepts_an_apostrophe_grouped_figure():
+    findings = qa.check_numbers(
+        [_segment("a total of 319,915.00 EUR", "total von 319'915.00 EUR")],
+        CHDE,
+    )
+    assert findings == []
+
+
+def test_qa_still_catches_a_wrong_space_grouped_figure():
+    findings = qa.check_numbers(
+        [_segment("a total of 319,915.00 EUR", "un total de 400 000,00 EUR")],
+        FR,
+    )
+    assert [f.check for f in findings] == ["number"]
+
+
+def test_qa_still_catches_a_figure_dropped_from_a_french_sentence():
+    findings = qa.check_numbers(
+        [_segment("a total of 319,915.00 EUR", "un total élevé")], FR
+    )
+    assert [f.check for f in findings] == ["number"]
+
+
+def test_a_year_next_to_a_figure_is_not_swallowed():
+    """A four-digit leading group cannot head a grouped figure, so
+    "en 2026 915 salariés" stays two numbers."""
+    assert (
+        locale_format.delocalise("en 2026 915 salariés", FR)
+        == "en 2026 915 salariés"
+    )
+
+
+def test_a_french_date_is_not_read_as_a_grouped_figure():
+    assert locale_format.delocalise("le 31 janvier 2026", FR) == (
+        "le 31 janvier 2026"
+    )
+
+
+def test_a_long_french_figure_keeps_every_group():
+    assert locale_format.delocalise("de 1 234 567,89 EUR", FR) == (
+        "de 1,234,567.89 EUR"
+    )
+
+
+def test_delocalising_leaves_a_figure_already_in_english_notation():
+    assert locale_format.delocalise("a total of 319,915.00", FR) == (
+        "a total of 319,915.00"
+    )
+
+
+def test_a_bare_decimal_is_not_a_grouped_figure():
+    """Renotating `4,6` back is the variants map's job, not this one."""
+    assert locale_format.delocalise("un ratio de 4,6 fois", FR) == (
+        "un ratio de 4,6 fois"
+    )
