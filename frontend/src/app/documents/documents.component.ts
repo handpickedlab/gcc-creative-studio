@@ -186,6 +186,7 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   toast = '';
   exported = false;
+  exporting = false;
   rechecking = false;
 
   /* intake */
@@ -1271,9 +1272,14 @@ export class DocumentsComponent implements OnInit, OnDestroy {
 
   doExport() {
     const job = this.job;
-    if (!job) return;
+    if (!job || this.exporting) return;
+    // The server re-reads the source document and writes every translation
+    // back into it, which takes long enough that a button doing nothing
+    // reads as a broken one.
+    this.exporting = true;
     this.api.exportDocx(job.id).subscribe({
       next: res => {
+        this.exporting = false;
         const blob = res.body;
         if (!blob) {
           this.flash('Export returned no file');
@@ -1293,7 +1299,10 @@ export class DocumentsComponent implements OnInit, OnDestroy {
         this.exported = true;
         this.flash(`${name} downloaded`);
       },
-      error: this.failed('Exporting'),
+      error: err => {
+        this.exporting = false;
+        this.failed('Exporting')(err);
+      },
     });
   }
 

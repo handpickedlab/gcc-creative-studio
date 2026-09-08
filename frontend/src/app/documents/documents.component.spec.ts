@@ -454,3 +454,71 @@ describe('DocumentsComponent — a refused download', () => {
     expect(cmp.toast).toBe('Exporting failed — 12 blocking QA findings.');
   });
 });
+
+/**
+ * The export is one long server call — it re-reads the source document and
+ * writes every translation back into it. A button that does nothing until
+ * the file lands reads as a broken button.
+ */
+describe('DocumentsComponent — a download in flight', () => {
+  let cmp: DocumentsComponent;
+  let response: Subject<{body: Blob | null; headers: {get(n: string): null}}>;
+
+  beforeEach(async () => {
+    response = new Subject();
+    await TestBed.configureTestingModule({
+      declarations: [DocumentsComponent],
+      providers: [
+        {
+          provide: DocumentTranslationsService,
+          useValue: {
+            listJobs: () => of([]),
+            listSegments: () => of([]),
+            exportDocx: () => response,
+          },
+        },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    cmp = TestBed.createComponent(DocumentsComponent).componentInstance;
+    cmp.job = {...JOB, status: 'review'};
+  });
+
+  it('marks itself busy the moment it is asked', () => {
+    cmp.doExport();
+
+    expect(cmp.exporting).toBeTrue();
+  });
+
+  it('ignores a second click while the first is still running', () => {
+    const spy = spyOn(
+      TestBed.inject(DocumentTranslationsService),
+      'exportDocx',
+    ).and.returnValue(response as never);
+
+    cmp.doExport();
+    cmp.doExport();
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops being busy once the file arrives', () => {
+    spyOn(window.URL, 'createObjectURL').and.returnValue('blob:x');
+    spyOn(window.URL, 'revokeObjectURL');
+    cmp.doExport();
+
+    response.next({body: new Blob(['x']), headers: {get: () => null}});
+
+    expect(cmp.exporting).toBeFalse();
+    expect(cmp.exported).toBeTrue();
+  });
+
+  it('stops being busy when the export is refused', () => {
+    cmp.doExport();
+
+    response.error({status: 409, message: 'boom', error: {detail: 'nope'}});
+
+    expect(cmp.exporting).toBeFalse();
+    expect(cmp.toast).toBe('Exporting failed — nope');
+  });
+});
