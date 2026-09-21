@@ -999,12 +999,27 @@ export class DocumentsComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.intake = 'error';
-        const detail = (err as {error?: {detail?: string}})?.error?.detail;
-        this.intakeError =
-          detail ||
-          `${file.name} could not be parsed. Open it in Word, save a fresh copy (File → Save As) and upload that.`;
+        this.intakeError = this.intakeMessage(file, err);
       },
     });
+  }
+
+  /**
+   * Why the upload failed, in the reviewer's terms.
+   *
+   * The API explains itself whenever it answers at all. What it cannot
+   * explain is never arriving: a body refused by the platform, or a signed
+   * upload that does not reach storage, comes back without a status and
+   * without a body. Reading that as an unreadable document sent reviewers to
+   * re-save a file that was never opened.
+   */
+  private intakeMessage(file: File, err: unknown): string {
+    const e = err as {status?: number; error?: {detail?: string}};
+    if (e?.error?.detail) return e.error.detail;
+    if (!e?.status || e.status === 0) {
+      return `${file.name} never reached the service — the upload was cut off before it arrived. Check your connection and try again.`;
+    }
+    return `${file.name} could not be parsed. Open it in Word, save a fresh copy (File → Save As) and upload that.`;
   }
 
   /* ── preflight ──────────────────────────────────────────────── */

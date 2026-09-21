@@ -8,6 +8,10 @@
  */
 
 import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {
+  HttpClientTestingModule,
+  HttpTestingController,
+} from '@angular/common/http/testing';
 import {Subject, of, throwError} from 'rxjs';
 import {NO_ERRORS_SCHEMA} from '@angular/core';
 import {DocumentsComponent} from './documents.component';
@@ -621,5 +625,59 @@ describe('DocumentsComponent — copy the stored outline never named', () => {
   it('refuses to approve a section the API cannot name', () => {
     expect(cmp.canApproveSection('')).toBeFalse();
     expect(cmp.canApproveSection('1')).toBeTrue();
+  });
+});
+
+/** A document big enough that the request body would never carry it. */
+describe('DocumentTranslationsService — uploading a large report', () => {
+  function bigFile(bytes: number): File {
+    const file = new File(['x'], 'Full Consolidated FS 2025-2026.docx');
+    Object.defineProperty(file, 'size', {value: bytes});
+    return file;
+  }
+
+  let http: HttpTestingController;
+  let api: DocumentTranslationsService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [DocumentTranslationsService],
+    });
+    http = TestBed.inject(HttpTestingController);
+    api = TestBed.inject(DocumentTranslationsService);
+  });
+
+  afterEach(() => http.verify());
+
+  it('posts a small one straight to the API', () => {
+    api.createJob(bigFile(2 * 1024 * 1024)).subscribe();
+
+    const req = http.expectOne(r => r.url.endsWith('/document-translations'));
+    expect(req.request.body instanceof FormData).toBeTrue();
+    req.flush(JOB);
+  });
+
+  it('sends a 55MB one to storage and registers the object', () => {
+    let job: ApiJob | undefined;
+    api.createJob(bigFile(55 * 1024 * 1024)).subscribe(j => (job = j));
+
+    const mint = http.expectOne(r => r.url.endsWith('/upload-url'));
+    expect(mint.request.body.sizeBytes).toBe(55 * 1024 * 1024);
+    mint.flush({uploadUrl: 'https://storage/signed', gcsUri: 'gs://b/o.docx'});
+
+    const put = http.expectOne('https://storage/signed');
+    expect(put.request.method).toBe('PUT');
+    // The URL is signed for this content type; anything else fails the check.
+    expect(put.request.headers.get('Content-Type')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    put.flush(null);
+
+    const finalize = http.expectOne(r => r.url.endsWith('/finalize-upload'));
+    expect(finalize.request.body.gcsUri).toBe('gs://b/o.docx');
+    finalize.flush(JOB);
+
+    expect(job).toEqual(JOB);
   });
 });

@@ -6,9 +6,10 @@
  * parameters are FastAPI arguments and stay snake_case.
  */
 
-import {HttpClient, HttpParams} from '@angular/common/http';
+import {HttpClient, HttpHeaders, HttpParams} from '@angular/common/http';
 import {Injectable, inject} from '@angular/core';
 import {Observable} from 'rxjs';
+import {switchMap} from 'rxjs/operators';
 import {environment} from '../../environments/environment';
 
 /** A section as the backend summarises it for the review outline. */
@@ -136,11 +137,27 @@ export interface ApiRecheck {
   localiseNumbers: boolean;
 }
 
+/** Where the browser may PUT the .docx, bypassing the backend entirely. */
+export interface ApiUploadUrl {
+  uploadUrl: string;
+  gcsUri: string;
+}
+
 export interface ApiReuseEstimate {
   total: number;
   reusable: number;
   pct: number;
 }
+
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/**
+ * Below this a file rides the request body, which keeps the path every small
+ * document already uses. Cloud Run's own ceiling is 32 MiB; the margin covers
+ * multipart overhead.
+ */
+const DIRECT_POST_LIMIT_BYTES = 24 * 1024 * 1024;
 
 @Injectable({providedIn: 'root'})
 export class DocumentTranslationsService {
@@ -155,11 +172,48 @@ export class DocumentTranslationsService {
     return this.http.get<ApiJob>(`${this.base}/${jobId}`);
   }
 
-  /** Uploads the .docx and parses it; the job comes back with its outline. */
+  /**
+   * Uploads the .docx and parses it; the job comes back with its outline.
+   *
+   * A big report never travels through the backend. Cloud Run caps a request
+   * body at 32 MiB and answers past it with a 413 of its own — no JSON, no
+   * CORS headers — so the browser sees a bare network failure and the file
+   * looks unreadable when nothing ever read it. The FY25-26 consolidated
+   * statements are 55MB. Those go straight to storage on a signed URL and the
+   * backend is handed the object instead.
+   */
   createJob(file: File): Observable<ApiJob> {
+    if (file.size > DIRECT_POST_LIMIT_BYTES) return this.uploadToStorage(file);
     const body = new FormData();
     body.append('file', file, file.name);
     return this.http.post<ApiJob>(this.base, body);
+  }
+
+  private uploadToStorage(file: File): Observable<ApiJob> {
+    return this.http
+      .post<ApiUploadUrl>(`${this.base}/upload-url`, {
+        filename: file.name,
+        sizeBytes: file.size,
+      })
+      .pipe(
+        switchMap(({uploadUrl, gcsUri}) =>
+          this.http
+            .put(uploadUrl, file, {
+              // The URL is signed for this exact content type; the browser's
+              // own guess for a .docx is sometimes empty, which would not
+              // match the signature.
+              headers: new HttpHeaders({'Content-Type': DOCX_MIME}),
+            })
+            .pipe(
+              switchMap(() =>
+                this.http.post<ApiJob>(`${this.base}/finalize-upload`, {
+                  gcsUri,
+                  filename: file.name,
+                }),
+              ),
+            ),
+        ),
+      );
   }
 
   reuseEstimate(
