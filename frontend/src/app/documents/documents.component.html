@@ -355,7 +355,7 @@
           <span class="sn">{{ visibleCount }}{{ filter !== 'all' || q ? ' of ' + meta.n : '' }} segments{{ meta.t ? ' · ' + meta.t + ' tables' : '' }}</span>
           <div class="grow"></div>
           <span class="done" *ngIf="sectionRemaining === 0">✓ Section approved</span>
-          <button class="btn soft sm" *ngIf="sectionRemaining > 0" (click)="approveSection(activeSec)">Approve remaining {{ sectionRemaining }}</button>
+          <button class="btn soft sm" *ngIf="sectionRemaining > 0 && canApproveSection(activeSec)" (click)="approveSection(activeSec)">Approve remaining {{ sectionRemaining }}</button>
         </div>
 
         <!-- segment list -->
@@ -381,7 +381,7 @@
                     <span class="sn">{{ b.count }}{{ filter !== 'all' || q ? ' of ' + b.meta.n : '' }} segments</span>
                     <div class="grow"></div>
                     <span class="done" *ngIf="b.remaining === 0">✓ approved</span>
-                    <button class="btn soft sm" *ngIf="b.remaining > 0" (click)="approveSection(b.meta.id)">Approve remaining {{ b.remaining }}</button>
+                    <button class="btn soft sm" *ngIf="b.remaining > 0 && canApproveSection(b.meta.id)" (click)="approveSection(b.meta.id)">Approve remaining {{ b.remaining }}</button>
                   </div>
                   <ng-container *ngTemplateOutlet="groupList; context: {sec: b.meta.id, groups: b.groups}"></ng-container>
                 </div>
