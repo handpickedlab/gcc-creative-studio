@@ -32,6 +32,7 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from src.translations.documents.model import (
+    FRONT_MATTER_ID,
     DocumentTree,
     Section,
     Segment,
@@ -135,7 +136,10 @@ class DocxTranslationEngine:
                 kind=kind,
                 paragraph=paragraph,
                 section_path=path,
-                section_id=review_section().id,
+                # Copy before the first heading has no review section of
+                # its own; naming it keeps it addressable, where an empty id
+                # reads as "every section" to the routes that filter on one.
+                section_id=review_section().id or FRONT_MATTER_ID,
                 table_index=table_index,
                 row_index=row_index,
                 heading_level=(

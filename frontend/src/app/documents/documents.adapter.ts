@@ -68,6 +68,57 @@ export function allSectionsOf(chapters: Chapter[]): SectionMeta[] {
   return chapters.flatMap(c => c.sections);
 }
 
+/** Holds section ids the outline never named and no chapter claims. */
+export const UNPLACED_CHAPTER_ID = '__unplaced';
+
+const TRANSLATABLE: ApiSegment['kind'][] = ['heading', 'prose', 'table_label'];
+
+/**
+ * Adds a section for every `sectionId` the segments actually use that the
+ * outline does not already name.
+ *
+ * The workspace navigates sections, and `segmentsBySection` buckets by them,
+ * so a segment filed under an id the outline leaves out is dropped on the
+ * floor: absent from review, absent from the QA report, and still counted by
+ * the export gate. That is how a document could read "All clear" and refuse
+ * its own download in the same breath. The parser now emits an outline that
+ * covers every id, but a job keeps the outline it was parsed with, so the
+ * strays are recovered here for everything uploaded before that.
+ */
+export function withUnmappedSections(
+  chapters: Chapter[],
+  api: ApiSegment[],
+): Chapter[] {
+  const known = new Set(chapters.flatMap(c => c.sections.map(s => s.id)));
+  /** stray section id → its translatable count, in document order. */
+  const strays = new Map<string, number>();
+  for (const seg of [...api].sort((a, b) => a.segIndex - b.segIndex)) {
+    const id = seg.sectionId || '';
+    if (known.has(id)) continue;
+    const counts = TRANSLATABLE.includes(seg.kind) ? 1 : 0;
+    strays.set(id, (strays.get(id) ?? 0) + counts);
+  }
+  if (strays.size === 0) return chapters;
+
+  const out = chapters.map(c => ({...c, sections: [...c.sections]}));
+  const unplaced: SectionMeta[] = [];
+  for (const [id, n] of strays) {
+    const chapter = out.find(c => c.id === id);
+    // A chapter's own copy belongs at the top of that chapter, not in a bin
+    // at the end of the document.
+    if (chapter) chapter.sections.unshift({id, title: chapter.title, n});
+    else unplaced.push({id, title: id || 'Front matter', n});
+  }
+  if (unplaced.length) {
+    out.push({
+      id: UNPLACED_CHAPTER_ID,
+      title: 'Not in the outline',
+      sections: unplaced,
+    });
+  }
+  return out;
+}
+
 function kindOf(api: ApiSegment): Segment['kind'] {
   if (api.kind === 'heading') return (api.headingLevel ?? 1) <= 1 ? 'h1' : 'h2';
   if (api.kind === 'table_label') return 'trow';

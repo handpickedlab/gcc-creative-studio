@@ -522,3 +522,104 @@ describe('DocumentsComponent — a download in flight', () => {
     expect(cmp.toast).toBe('Exporting failed — nope');
   });
 });
+
+/**
+ * The outline a job was parsed with named only its level-2 headings, so
+ * everything sitting directly under a chapter — the chapter heading, the
+ * run-in before the first sub-heading, a whole chapter without sub-headings —
+ * was bucketed under an id the workspace never listed and dropped on the
+ * floor. The QA report read "All clear" while the export gate, which reads
+ * the segment rows, refused the download over findings in exactly that copy.
+ */
+describe('DocumentsComponent — copy the stored outline never named', () => {
+  let cmp: DocumentsComponent;
+
+  const chapterOwn = seg({
+    id: 1,
+    segIndex: 1,
+    sectionId: '1',
+    sourceText: 'Total assets were 319,915.',
+    translation: 'Le total des actifs était de 915.',
+    finding: {
+      segmentIndex: 1,
+      type: 'number',
+      severity: 'error',
+      msg: 'missing: 319,915',
+    },
+  });
+  const inASection = seg({id: 2, segIndex: 2, sectionId: '1.1'});
+  const frontMatter = seg({
+    id: 3,
+    segIndex: 3,
+    sectionId: '',
+    sourceText: 'Shero Holdco B.V. — Annual Report 2023-2024',
+  });
+
+  /** The outline as it was stored: the chapter's own copy is not in it. */
+  const REVIEW: ApiJob = {
+    ...JOB,
+    status: 'review',
+    stats: {
+      chapters: [
+        {
+          id: '1',
+          title: 'Consolidated financial statements',
+          segments: 2,
+          translatable: 2,
+          tables: 0,
+          sections: [
+            {
+              id: '1.1',
+              title: 'Accounting policies',
+              segments: 1,
+              translatable: 1,
+              tables: 0,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      declarations: [DocumentsComponent],
+      providers: [
+        {
+          provide: DocumentTranslationsService,
+          useValue: {
+            listJobs: () => of([]),
+            listSegments: () => of([chapterOwn, inASection, frontMatter]),
+          },
+        },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    cmp = TestBed.createComponent(DocumentsComponent).componentInstance;
+    cmp.openJob({job: REVIEW} as never);
+  });
+
+  it('rescues the chapter’s own copy into that chapter', () => {
+    expect(cmp.tree[0].sections.map(s => s.id)).toEqual(['1', '1.1']);
+  });
+
+  it('gives front matter a home rather than dropping it', () => {
+    expect(cmp.sections.map(s => s.id)).toContain('');
+    expect(cmp.segs[''].length).toBe(1);
+  });
+
+  it('shows the finding that was blocking the export', () => {
+    expect(cmp.criticals.length).toBe(1);
+    expect(cmp.qaGroups.length).toBe(1);
+    expect(cmp.exportBlocked).toBeTrue();
+  });
+
+  it('counts the rescued copy as still open for review', () => {
+    expect(cmp.dr.total).toBe(3);
+  });
+
+  it('refuses to approve a section the API cannot name', () => {
+    expect(cmp.canApproveSection('')).toBeFalse();
+    expect(cmp.canApproveSection('1')).toBeTrue();
+  });
+});

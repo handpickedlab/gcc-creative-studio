@@ -56,6 +56,13 @@ def classify_text(text: str, *, in_table: bool, is_heading: bool) -> SegmentKind
 
 _NUMBER_PREFIX = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")
 
+# Copy that precedes the first heading — a cover page, a colophon — belongs to
+# no heading, but it is still copy someone has to review. It gets a section id
+# of its own rather than an empty one: an empty id reads as "no section" to
+# every filter and route that takes one.
+FRONT_MATTER_ID = "front-matter"
+FRONT_MATTER_TITLE = "Front matter"
+
 
 def make_section_id(
     title: str, positional: str, taken: set[str]
@@ -147,19 +154,26 @@ class DocumentTree:
         Deeper headings fold into their level-2 parent — the review workspace
         navigates two levels, not the document's full nesting. Counts are per
         section, including everything folded into it.
+
+        Every section id a segment carries appears here as a *section*, which
+        is the only level the workspace renders. A chapter's own copy — its
+        heading, and the run-in before the first sub-heading — is therefore
+        listed as that chapter's first section, and front matter becomes a
+        chapter of its own. Leaving either out does not merely hide them: the
+        export gate still counts the findings on copy no reviewer can open.
         """
         by_section: dict[str, list[Segment]] = {}
         for seg in self.segments:
             by_section.setdefault(seg.section_id, []).append(seg)
 
-        def summarise(node: Section) -> dict:
-            segs = by_section.get(node.id, [])
+        def summarise(section_id: str, title: str) -> dict:
+            segs = by_section.get(section_id, [])
             tables = {
                 s.table_index for s in segs if s.table_index is not None
             }
             return {
-                "id": node.id,
-                "title": node.title,
+                "id": section_id,
+                "title": title,
                 "segments": len(segs),
                 "translatable": len(
                     [s for s in segs if s.kind.translatable]
@@ -168,13 +182,15 @@ class DocumentTree:
             }
 
         chapters = []
+        if by_section.get(FRONT_MATTER_ID):
+            front = summarise(FRONT_MATTER_ID, FRONT_MATTER_TITLE)
+            chapters.append({**front, "sections": [dict(front)]})
         for chapter in self.root.children:
-            sections = [summarise(child) for child in chapter.children]
-            own = summarise(chapter)
-            chapters.append(
-                {
-                    **own,
-                    "sections": sections,
-                }
-            )
+            own = summarise(chapter.id, chapter.title)
+            sections = [dict(own)] if own["segments"] else []
+            sections += [
+                summarise(child.id, child.title)
+                for child in chapter.children
+            ]
+            chapters.append({**own, "sections": sections})
         return chapters

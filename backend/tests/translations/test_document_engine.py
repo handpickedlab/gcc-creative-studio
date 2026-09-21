@@ -20,7 +20,11 @@ from docx import Document
 
 from src.translations.documents import qa
 from src.translations.documents.docx_engine import DocxTranslationEngine
-from src.translations.documents.model import SegmentKind, classify_text
+from src.translations.documents.model import (
+    FRONT_MATTER_ID,
+    SegmentKind,
+    classify_text,
+)
 from src.translations.documents.translator import (
     GlossaryEntry,
     PseudoTranslator,
@@ -304,8 +308,9 @@ class TestOutline:
         engine = DocxTranslationEngine(_fixture_docx())
         chapters = engine.tree.outline()
         assert [c["id"] for c in chapters] == ["1"]
-        assert [s["id"] for s in chapters[0]["sections"]] == ["2.19"]
-        assert chapters[0]["sections"][0]["tables"] == 1
+        # The chapter leads with its own copy, then its sub-headings.
+        assert [s["id"] for s in chapters[0]["sections"]] == ["1", "2.19"]
+        assert chapters[0]["sections"][1]["tables"] == 1
 
     def test_position_supplies_the_number_when_the_text_lacks_one(self):
         """Word usually renders section numbers from automatic numbering, so
@@ -322,7 +327,63 @@ class TestOutline:
 
         chapters = DocxTranslationEngine(buffer).tree.outline()
         assert [c["id"] for c in chapters] == ["1"]
-        assert [s["id"] for s in chapters[0]["sections"]] == ["1.1", "1.2"]
+        assert [s["id"] for s in chapters[0]["sections"]] == [
+            "1",
+            "1.1",
+            "1.2",
+        ]
+
+    def test_every_section_a_segment_carries_is_listed(self):
+        """The workspace renders sections, so one the outline leaves out is
+        copy no reviewer can open — while the export gate still counts the
+        findings on it. That read as "All clear" next to a blocked download.
+        """
+        doc = Document()
+        doc.add_paragraph("Shero Holdco B.V. — Annual Report 2023-2024")
+        doc.add_heading("Consolidated financial statements", level=1)
+        doc.add_paragraph("Revenue amounted to 319,915 thousand euro.")
+        doc.add_heading("1.1 Accounting policies", level=2)
+        doc.add_paragraph("Consistent with 2022.")
+        doc.add_heading("Notes to the balance sheet", level=1)
+        doc.add_paragraph("Note 4.6 explains the movement of 141,764.")
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+
+        tree = DocxTranslationEngine(buffer).tree
+        listed = {s["id"] for c in tree.outline() for s in c["sections"]}
+
+        assert {s.section_id for s in tree.segments} <= listed
+
+    def test_front_matter_becomes_a_chapter_of_its_own(self):
+        doc = Document()
+        doc.add_paragraph("Annual Report 2023-2024")
+        doc.add_heading("Management Board Report", level=1)
+        doc.add_paragraph("Body.")
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+
+        chapters = DocxTranslationEngine(buffer).tree.outline()
+
+        assert chapters[0]["id"] == FRONT_MATTER_ID
+        assert chapters[0]["sections"][0]["translatable"] == 1
+
+    def test_a_chapter_without_copy_of_its_own_gains_no_section(self):
+        """Only a real bucket earns a row; an empty one is navigation noise."""
+        doc = Document()
+        doc.add_heading("Management Board Report", level=1)
+        doc.add_heading("CEO Statement", level=2)
+        doc.add_paragraph("Body.")
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+
+        chapters = DocxTranslationEngine(buffer).tree.outline()
+
+        # The chapter heading itself is copy, so "1" is listed; what is
+        # excluded is a chapter that holds nothing but its sub-headings.
+        assert [s["id"] for s in chapters[0]["sections"]] == ["1", "1.1"]
 
     def test_segments_carry_their_review_section(self):
         engine = DocxTranslationEngine(_fixture_docx())
